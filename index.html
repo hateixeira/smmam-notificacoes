@@ -9,7 +9,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
         
         /* TELAS DE AUTENTICAÇÃO E ESPERA */
-        #auth-container { display: flex; flex-direction: column; max-width: 400px; margin: 60px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #auth-container { display: flex; flex-direction: column; max-width: 420px; margin: 50px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         #auth-container h2 { color: #1b365d; border-bottom: none; margin-bottom: 20px; padding-bottom: 0; text-align: center; }
         #auth-container input { margin-bottom: 12px; padding: 12px; font-size: 13px; width: 100%; box-sizing: border-box; }
         .auth-links { margin-top: 15px; font-size: 13px; color: #1b365d; display: flex; justify-content: space-between; cursor: pointer; font-weight: 600; }
@@ -19,18 +19,20 @@
         #waiting-room h2 { color: #d97706; margin-top:0; border-bottom:none; }
         #waiting-room p { color: #475569; line-height: 1.6; margin-bottom: 25px; }
 
-        /* WORKSPACE PRINCIPAL */
+        /* WORKSPACE PRINCIPAL & ADMIN */
         .workspace { display: none; grid-template-columns: 1fr; gap: 20px; max-width: 1550px; margin: 0 auto; }
         @media (min-width: 1200px) { .workspace { grid-template-columns: 480px 1fr; } }
+        #admin-workspace { display: none; max-width: 1200px; margin: 0 auto; }
+        
         .form-container, .panel-container { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
-        h2 { color: #1b365d; margin-top: 0; border-bottom: 2px solid #1b365d; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        h2 { color: #1b365d; margin-top: 0; border-bottom: 2px solid #1b365d; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap:10px; }
         
         .form-group { margin-bottom: 12px; }
         .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
         .form-row .form-group { flex: 1; min-width: 120px; }
         label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; }
-        input[type="text"], input[type="date"], input[type="email"], input[type="password"], textarea { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 13px; transition: border-color 0.2s; }
-        input:focus { outline: none; border-color: #1b365d; box-shadow: 0 0 0 2px rgba(27,54,93,0.1); }
+        input[type="text"], input[type="date"], input[type="email"], input[type="password"], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 13px; transition: border-color 0.2s; }
+        input:focus, select:focus { outline: none; border-color: #1b365d; box-shadow: 0 0 0 2px rgba(27,54,93,0.1); }
         .checkbox-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f9f9f9; padding: 10px; border-radius: 4px; border: 1px solid #eee; }
         .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
         
@@ -42,7 +44,7 @@
         .btn-secondary { background-color: #64748b; } .btn-secondary:hover { background-color: #475569; }
         .btn-success { background-color: #16a34a; } .btn-success:hover { background-color: #15803d; }
         .btn-danger { background-color: #dc2626; } .btn-danger:hover { background-color: #b91c1c; }
-        .btn-logout { background-color: #f1f5f9; color: #334155; padding: 6px 12px; font-size: 12px; border: 1px solid #cbd5e1; margin-left: 10px; } .btn-logout:hover { background-color: #e2e8f0; }
+        .btn-outline { background-color: #f1f5f9; color: #334155; padding: 6px 12px; font-size: 12px; border: 1px solid #cbd5e1; flex: none; } .btn-outline:hover { background-color: #e2e8f0; }
         
         .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
         .search-box { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
@@ -80,6 +82,12 @@
         .badge-prazo { background: #dcfce7; color: #166534; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: fit-content; border: 1px solid #bbf7d0;}
         .badge-vencido { background: #fee2e2; color: #991b1b; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: fit-content; border: 1px solid #fecaca;}
         
+        /* Selects do Admin */
+        .select-status { padding: 4px; font-size: 12px; border-radius: 4px; font-weight: bold; }
+        .status-pendente { background-color: #fef08a; color: #854d0e; border: 1px solid #fde047; }
+        .status-aprovado { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .status-bloqueado { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        
         #toast { visibility: hidden; min-width: 250px; background-color: #16a34a; color: #fff; text-align: center; border-radius: 4px; padding: 12px; position: fixed; z-index: 1000; left: 50%; top: 20px; transform: translateX(-50%); box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.3s, visibility 0.3s; }
         #toast.show { visibility: visible; opacity: 1; }
         #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; font-weight: bold; color: #1b365d; }
@@ -105,7 +113,7 @@
             body * { visibility: hidden; }
             #print-area, #print-area * { visibility: visible; }
             #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 190mm; }
-            .workspace, #toast, #loading-overlay, #auth-container, #waiting-room { display: none !important; }
+            .workspace, #admin-workspace, #toast, #loading-overlay, #auth-container, #waiting-room { display: none !important; }
         }
     </style>
 </head>
@@ -122,18 +130,17 @@
     <div id="auth-container">
         <h2 id="authTitle">Acesso - SMMAM</h2>
         
-        <!-- Formulário de Login -->
         <div id="login-fields">
             <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
             <input type="password" id="authPassword" placeholder="Senha">
             <button class="btn-primary" onclick="realizarLogin()" style="width: 100%;">Entrar no Sistema</button>
         </div>
 
-        <!-- Formulário de Cadastro Completo -->
         <div id="register-fields" style="display:none;">
             <input type="text" id="regNome" placeholder="Nome Completo">
+            <input type="text" id="regCargo" placeholder="Cargo (Ex: Fiscal, Agente Administrativo)">
             <input type="text" id="regCpf" placeholder="CPF" maxlength="14">
-            <input type="text" id="regTelefone" placeholder="Telefone" maxlength="15">
+            <input type="text" id="regTelefone" placeholder="Telefone Celular" maxlength="15">
             <input type="text" id="regMatricula" placeholder="Nº da Matrícula / RE">
             <input type="email" id="regEmail" placeholder="E-mail Institucional">
             <input type="password" id="regPassword" placeholder="Crie uma Senha (mín. 6 caracteres)">
@@ -153,7 +160,37 @@
         <button class="btn-secondary" onclick="realizarLogout()" style="width: 200px; margin: 0 auto;">Sair</button>
     </div>
 
-    <!-- WORKSPACE PRINCIPAL -->
+    <!-- PAINEL ADMIN (GESTÃO DE USUÁRIOS) -->
+    <div id="admin-workspace">
+        <div class="panel-container">
+            <h2>
+                Gestão de Usuários e Permissões
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-primary btn-outline" onclick="fecharPainelAdmin()">⬅️ Voltar ao Sistema</button>
+                </div>
+            </h2>
+            <p style="font-size: 13px; color: #64748b; margin-top: -5px; margin-bottom: 20px;">Aprove novos servidores e defina o que cada um pode fazer no sistema.</p>
+            
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Servidor / Cargo</th>
+                            <th>Contato</th>
+                            <th>Matrícula</th>
+                            <th>Status de Acesso</th>
+                            <th>Nível de Permissão</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaUsuariosCorpo">
+                        <!-- Gerado dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- WORKSPACE PRINCIPAL (NOTIFICAÇÕES) -->
     <div class="workspace" id="main-workspace">
         
         <!-- FORMULÁRIO -->
@@ -262,7 +299,7 @@
                     <div class="form-group"><label>RE / Matrícula *</label><input type="text" id="matricula" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
                 </div>
 
-                <div class="btn-actions">
+                <div class="btn-actions" id="areaBotoesSalvar">
                     <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar na Nuvem</button>
                     <button type="button" class="btn-secondary" onclick="limparFormulario()">🔄 Novo / Limpar</button>
                 </div>
@@ -274,12 +311,12 @@
             <h2 style="font-size: 18px;">
                 Gerenciador de Notificações
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <span id="userLoggedDisplay" style="font-size: 11px; color: #64748b; font-weight: normal;"></span>
+                    <button id="btnAdminTop" class="btn-outline" onclick="abrirPainelAdmin()" style="display:none; font-weight:bold;">⚙️ Gestão de Usuários</button>
+                    <span id="userLoggedDisplay" style="font-size: 11px; color: #64748b; font-weight: normal; margin-left: 10px;"></span>
                     <button class="btn-logout" onclick="realizarLogout()">Sair</button>
                 </div>
             </h2>
 
-            <!-- DASHBOARD DE ESTATÍSTICAS -->
             <div class="dashboard-cards">
                 <div class="card card-total">
                     <div class="num" id="dashTotal">0</div>
@@ -315,7 +352,7 @@
                     <button class="btn-primary" onclick="exportarVipp()" style="flex: 2;">📦 Exportar VIPP</button>
                     <button class="btn-secondary" onclick="document.getElementById('importFile').click()" title="Importar notificações">📥 Importar DB</button>
                     <button class="btn-secondary" onclick="exportarBackup()" title="Baixar JSON">📤 Backup JSON</button>
-                    <button class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir</button>
+                    <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()" style="display:none;">🗑️ Excluir Selecionadas</button>
                 </div>
             </div>
 
@@ -494,7 +531,7 @@
         </table>
     </div>
 
-    <!-- SCRIPT DO SISTEMA -->
+    <!-- SCRIPT DO SISTEMA COM FIREBASE -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -520,9 +557,9 @@
         window.colunaOrdenacao = '';
         window.ordemCrescente = true;
         window.filtroStatusAtual = 'Todos';
+        
         let usuarioLogado = null;
         let perfilUsuario = null;
-        const SENHA_ADMIN = "smmam2026"; // Será substituída na fase de RBAC completo
 
         const mostrarLoading = (mostrar, msg = "Sincronizando Banco de Dados...") => {
             document.getElementById('loading-msg').innerText = msg;
@@ -534,6 +571,25 @@
             toast.innerText = msg;
             toast.className = "show";
             setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        // --- APLICAÇÃO DE PERMISSÕES NA INTERFACE (RBAC) ---
+        function aplicarRestricoesDeTela() {
+            if(!perfilUsuario) return;
+            const nivel = perfilUsuario.nivel; // 'leitor', 'fiscal', 'admin'
+            
+            // 1. Botão Salvar Notificação (Leitor não pode ver)
+            if(nivel === 'leitor') document.getElementById('areaBotoesSalvar').style.display = 'none';
+            else document.getElementById('areaBotoesSalvar').style.display = 'flex';
+
+            // 2. Botão Excluir e Painel Admin (Só Admin pode ver)
+            if(nivel === 'admin') {
+                document.getElementById('btnExcluirLote').style.display = 'block';
+                document.getElementById('btnAdminTop').style.display = 'block';
+            } else {
+                document.getElementById('btnExcluirLote').style.display = 'none';
+                document.getElementById('btnAdminTop').style.display = 'none';
+            }
         }
 
         // --- MUDANÇA DE TELA DE LOGIN/CADASTRO ---
@@ -569,43 +625,45 @@
             if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15);
         });
 
-        // --- AUTENTICAÇÃO E ROTEAMENTO (O CÉREBRO DA IDENTIDADE) ---
+        // --- AUTENTICAÇÃO E IDENTIDADE ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 usuarioLogado = user;
                 mostrarLoading(true, "Lendo credenciais e permissões...");
                 
                 try {
-                    // Busca a ficha do usuário na nova coleção
                     const userDocRef = doc(db, "usuarios", user.uid);
                     const docSnap = await getDoc(userDocRef);
 
                     if (docSnap.exists()) {
                         perfilUsuario = docSnap.data();
 
-                        if (perfilUsuario.status === 'pendente') {
-                            // Manda para a Sala de Espera
+                        if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
                             document.getElementById('auth-container').style.display = 'none';
                             document.getElementById('main-workspace').style.display = 'none';
+                            document.getElementById('admin-workspace').style.display = 'none';
                             document.getElementById('waiting-room').style.display = 'block';
+                            if(perfilUsuario.status === 'bloqueado') document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
                         } else if (perfilUsuario.status === 'aprovado') {
-                            // Libera o Sistema e preenche nome/matricula automaticamente
                             document.getElementById('auth-container').style.display = 'none';
                             document.getElementById('waiting-room').style.display = 'none';
+                            document.getElementById('admin-workspace').style.display = 'none';
                             document.getElementById('main-workspace').style.display = 'grid';
-                            document.getElementById('userLoggedDisplay').innerText = `👤 ${perfilUsuario.nome} (${perfilUsuario.nivel.toUpperCase()})`;
                             
-                            // Auto-preencher o form
+                            document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>${perfilUsuario.nome}</strong> (${perfilUsuario.nivel.toUpperCase()})`;
+                            
+                            // Preenche os dados da notificação automaticamente com os dados do fiscal
                             document.getElementById('fiscal').value = perfilUsuario.nome;
                             document.getElementById('matricula').value = perfilUsuario.matricula;
 
+                            aplicarRestricoesDeTela();
                             window.carregarDadosNuvem();
                         }
                     } else {
-                        // FALLBACK: O admin (você) criou a conta antes da coleção existir!
-                        // Vamos criar a sua ficha automaticamente como aprovada para você não se trancar fora.
+                        // Caso a conta exista no Firebase, mas não tenha ficha (Admin Legado)
                         const novoPerfil = {
                             nome: "Administrador Legado",
+                            cargo: "Administrador do Sistema",
                             cpf: "000.000.000-00",
                             telefone: "Não informado",
                             matricula: "0000",
@@ -620,7 +678,8 @@
                         document.getElementById('auth-container').style.display = 'none';
                         document.getElementById('waiting-room').style.display = 'none';
                         document.getElementById('main-workspace').style.display = 'grid';
-                        document.getElementById('userLoggedDisplay').innerText = `👤 Admin Legado`;
+                        document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>Admin Legado</strong> (ADMIN)`;
+                        aplicarRestricoesDeTela();
                         window.carregarDadosNuvem();
                     }
                 } catch(e) {
@@ -634,6 +693,7 @@
                 document.getElementById('auth-container').style.display = 'flex';
                 document.getElementById('main-workspace').style.display = 'none';
                 document.getElementById('waiting-room').style.display = 'none';
+                document.getElementById('admin-workspace').style.display = 'none';
             }
         });
 
@@ -648,38 +708,37 @@
 
         window.registrarUsuario = async function() {
             const nome = document.getElementById('regNome').value;
+            const cargo = document.getElementById('regCargo').value;
             const cpf = document.getElementById('regCpf').value;
             const telefone = document.getElementById('regTelefone').value;
             const matricula = document.getElementById('regMatricula').value;
             const email = document.getElementById('regEmail').value;
             const senha = document.getElementById('regPassword').value;
 
-            if(!nome || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
+            if(!nome || !cargo || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
             if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
 
             mostrarLoading(true, "Criando ficha do servidor...");
             
             try {
-                // 1. Cria a conta no Auth do Google
                 const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
                 const user = userCredential.user;
 
-                // 2. Salva a Ficha do Perfil na coleção "usuarios" (Entra na sala de espera)
                 await setDoc(doc(db, "usuarios", user.uid), {
                     nome: nome,
+                    cargo: cargo,
                     cpf: cpf,
                     telefone: telefone,
                     matricula: matricula,
                     email: email,
                     status: "pendente",
-                    nivel: "leitor", // Segurança: Sempre começa com o menor nível possível
+                    nivel: "leitor", // Segurança: Sempre começa como leitor pendente
                     dataCadastro: new Date().toISOString()
                 });
 
                 sendEmailVerification(user);
                 mostrarLoading(false);
-                alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação da Chefia.");
-                // A função onAuthStateChanged vai rodar sozinha e jogar ele pra sala de espera.
+                alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação do Administrador.");
             } catch(error) {
                 mostrarLoading(false);
                 alert("Erro ao criar conta: " + error.message);
@@ -699,7 +758,76 @@
             signOut(auth).then(() => { window.DB = []; document.getElementById('tabelaCorpo').innerHTML = ''; window.limparFormulario(); });
         }
 
-        // --- FILTROS DE STATUS ---
+        // --- GESTÃO DE USUÁRIOS (PAINEL ADMIN) ---
+        window.abrirPainelAdmin = async function() {
+            document.getElementById('main-workspace').style.display = 'none';
+            document.getElementById('admin-workspace').style.display = 'block';
+            
+            mostrarLoading(true, "Carregando usuários...");
+            const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo');
+            corpoUsuarios.innerHTML = '';
+            
+            try {
+                const usersSnapshot = await getDocs(collection(db, "usuarios"));
+                usersSnapshot.forEach(docSnap => {
+                    const u = docSnap.data();
+                    const uid = docSnap.id;
+                    
+                    const selectStatus = `
+                        <select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)">
+                            <option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option>
+                            <option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option>
+                            <option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option>
+                        </select>
+                    `;
+                    
+                    const selectNivel = `
+                        <select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)">
+                            <option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option>
+                            <option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option>
+                            <option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option>
+                        </select>
+                    `;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td>
+                        <td>${u.email}<br><small style="color:#64748b;">${u.telefone}</small></td>
+                        <td>${u.matricula}</td>
+                        <td>${selectStatus}</td>
+                        <td>${selectNivel}</td>
+                    `;
+                    corpoUsuarios.appendChild(tr);
+                });
+            } catch(e) {
+                console.error(e);
+                alert("Erro ao carregar usuários. Verifique se você é Administrador.");
+            }
+            mostrarLoading(false);
+        }
+
+        window.fecharPainelAdmin = function() {
+            document.getElementById('admin-workspace').style.display = 'none';
+            document.getElementById('main-workspace').style.display = 'grid';
+        }
+
+        window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) {
+            try {
+                const userRef = doc(db, "usuarios", uid);
+                await updateDoc(userRef, { [campo]: valorNovo });
+                window.mostrarToast(`Atualizado para ${valorNovo}!`);
+                
+                if(campo === 'status') {
+                    selectElement.className = `select-status status-${valorNovo}`;
+                }
+            } catch(e) {
+                console.error(e);
+                alert("Erro ao atualizar o perfil. Você tem permissão de Administrador?");
+            }
+        }
+
+
+        // --- FILTROS DE STATUS DE NOTIFICAÇÕES ---
         window.aplicarFiltro = function(status, btnElement) {
             window.filtroStatusAtual = status;
             document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
@@ -707,7 +835,7 @@
             window.renderizarPainel();
         }
 
-        // --- MÉTODOS FIREBASE (ARQUITETURA DE SUBCOLEÇÕES) ---
+        // --- MÉTODOS DE NOTIFICAÇÕES (CRUD) ---
         window.carregarDadosNuvem = async function() {
             mostrarLoading(true, "Baixando dados...");
             try {
@@ -720,7 +848,6 @@
                 });
                 window.renderizarPainel();
             } catch (e) {
-                alert("Erro ao conectar no banco de dados. Verifique a internet.");
                 console.error(e);
             }
             mostrarLoading(false);
@@ -728,6 +855,8 @@
 
         window.salvarNotificacao = async function(event) {
             event.preventDefault();
+            if(perfilUsuario.nivel === 'leitor') return alert("Leitores não podem salvar dados.");
+
             mostrarLoading(true, "Salvando dados e anexando fotos...");
             const btn = document.getElementById('btnSalvar');
             btn.disabled = true;
@@ -767,7 +896,7 @@
                 matricula: document.getElementById('matricula').value,
                 qtdFotosSalvas: qtdFotosAnexadas, 
                 
-                editadoPor: perfilUsuario ? perfilUsuario.email : 'Desconhecido',
+                editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido',
                 dataUltimaEdicao: new Date().toISOString()
             };
 
@@ -777,7 +906,8 @@
                     const docRef = doc(db, "notificacoes", editId);
                     await updateDoc(docRef, dados);
                 } else {
-                    dados.criadoPor = perfilUsuario ? perfilUsuario.email : 'Desconhecido';
+                    dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido';
+                    dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : '';
                     dados.dataCriacao = new Date().toISOString();
                     const novoDocRef = await addDoc(notificacoesRef, dados);
                     idDoDocumento = novoDocRef.id;
@@ -797,7 +927,7 @@
                 window.limparFormulario();
                 window.mostrarToast("Salvo com sucesso na nuvem!");
             } catch (e) {
-                alert("Ocorreu um erro ao salvar o banco de dados.");
+                alert("Erro ao salvar o banco de dados. Você tem permissão?");
                 console.error(e);
             }
             btn.disabled = false;
@@ -805,11 +935,10 @@
         }
 
         window.excluirSelecionadas = async function() {
+            if(perfilUsuario.nivel !== 'admin') return alert("Apenas Administradores podem excluir dados.");
+
             const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
             if(marcados.length === 0) { alert('Selecione ao menos um item para excluir.'); return; }
-
-            const senhaDigitada = prompt("AÇÃO RESTRITA: Digite a senha administrativa para excluir:");
-            if (senhaDigitada !== SENHA_ADMIN) { alert("Senha incorreta! Operação cancelada."); return; }
 
             if(confirm(`Tem certeza que deseja apagar ${marcados.length} notificação(ões) DA NUVEM?`)) {
                 mostrarLoading(true, "Excluindo arquivos...");
@@ -940,6 +1069,10 @@
                 if(!statusHtml) statusHtml = '<small style="color:#94a3b8">Sem acompanhamento</small>';
 
                 const tr = document.createElement('tr');
+                
+                // Leitor não vê "Editar", só vê "Detalhes"
+                const linkEditarOuVer = (perfilUsuario && perfilUsuario.nivel === 'leitor') ? `<a onclick="carregarParaEditar('${item.firebaseId}')">Ver Lote</a>` : `<a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>`;
+                
                 tr.innerHTML = `
                     <td><input type="checkbox" class="select-item" value="${item.firebaseId}"></td>
                     <td><strong>${item.numNotif}</strong>${badgeOuvidoria}</td>
@@ -950,7 +1083,7 @@
                     </td>
                     <td>${statusHtml}</td>
                     <td class="action-links">
-                        <a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>
+                        ${linkEditarOuVer}
                         <a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>
                         ${botaoAutuar}
                     </td>
@@ -959,9 +1092,7 @@
             });
         }
 
-        window.abrirModuloAutoInfracao = function() {
-            alert("Módulo de Auto de Infração em construção!\nSerá configurado na segunda-feira com o formulário oficial.");
-        }
+        window.abrirModuloAutoInfracao = function() { alert("Módulo de Auto de Infração em construção!\nSerá configurado na segunda-feira com o formulário oficial."); }
 
         window.ordenarTabela = function(coluna) {
             if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } 
@@ -1004,6 +1135,8 @@
             document.getElementById('obs').value = item.obs || '';
             document.getElementById('lei5198').checked = item.lei5198;
             document.getElementById('lc56').checked = item.lc56;
+            document.getElementById('fiscal').value = item.fiscal || 'HUMBERTO ANTONIO TEIXEIRA';
+            document.getElementById('matricula').value = item.matricula || '12900';
             
             window.fotosTemp = [];
             try {
@@ -1021,7 +1154,6 @@
             document.getElementById('editFirebaseId').value = '';
             document.getElementById('dataNotif').valueAsDate = new Date();
             
-            // Re-preenche com os dados do usuário logado
             if(perfilUsuario) {
                 document.getElementById('fiscal').value = perfilUsuario.nome;
                 document.getElementById('matricula').value = perfilUsuario.matricula;
@@ -1047,7 +1179,7 @@
             window.print(); setTimeout(() => { document.title = tituloOriginal; }, 1000);
         }
 
-        // --- EXPORTAÇÃO EXCEL (GERENCIAL) ---
+        // --- EXPORTAÇÃO EXCEL E VIPP (Mantidas intactas) ---
         window.exportarExcel = function() {
             if(window.itensFiltradosAtual.length === 0) { alert("Não há dados na tela para exportar."); return; }
             let csvContent = "\uFEFF"; 
@@ -1090,7 +1222,6 @@
             }; reader.readAsText(file);
         }
 
-        // EXPORTAÇÃO VIPP XML (SARA 2.3)
         window.exportarVipp = function() {
             const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
             if(marcados.length === 0) { alert('Selecione as notificações que deseja enviar via VIPP Correios.'); return; }
