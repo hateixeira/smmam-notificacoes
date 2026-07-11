@@ -42,12 +42,21 @@
         .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
         .search-box { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
         
+        /* Dashboard Cards */
+        .dashboard-cards { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .card { flex: 1; min-width: 100px; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .card-total { background: #f8fafc; border: 1px solid #e2e8f0; } .card-total .num { color: #1b365d; }
+        .card-prazo { background: #dcfce7; border: 1px solid #bbf7d0; } .card-prazo .num { color: #166534; }
+        .card-vencida { background: #fee2e2; border: 1px solid #fecaca; } .card-vencida .num { color: #991b1b; }
+        .card .num { font-size: 26px; font-weight: bold; line-height: 1; margin-bottom: 5px; }
+        .card .label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; }
+
         /* Filtros de Status */
-        .filter-bar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+        .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
         .filter-btn { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; flex: none; }
         .filter-btn.active { background: #1b365d; color: white; border-color: #1b365d; }
 
-        .table-container { overflow-x: auto; max-height: 700px; border: 1px solid #e2e8f0; border-radius: 4px; }
+        .table-container { overflow-x: auto; max-height: 600px; border: 1px solid #e2e8f0; border-radius: 4px; }
         table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
         table.data-table th, table.data-table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
         table.data-table th { background-color: #f1f5f9; font-weight: 600; position: sticky; top: 0; z-index: 10; }
@@ -55,9 +64,11 @@
         .sortable:hover { background-color: #e2e8f0; }
         .sort-icon { font-size: 10px; color: #64748b; margin-left: 5px; }
         table.data-table tr:hover { background-color: #f8fafc; }
-        .action-links { display: flex; gap: 8px; }
-        .action-links a { color: #1b365d; text-decoration: none; font-weight: bold; cursor: pointer; padding: 4px 8px; border-radius: 4px; background: #e2e8f0; transition: 0.2s;}
+        .action-links { display: flex; gap: 6px; flex-wrap: wrap; }
+        .action-links a { color: #1b365d; text-decoration: none; font-weight: bold; cursor: pointer; padding: 4px 8px; border-radius: 4px; background: #e2e8f0; transition: 0.2s; font-size: 11px; text-align: center; }
         .action-links a:hover { background: #cbd5e1; }
+        .action-links a.btn-autuar { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .action-links a.btn-autuar:hover { background: #fecaca; }
         
         .badge-ouvidoria { background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-top: 4px; display: inline-block; }
         .badge-ar { background: #e0f2fe; color: #0369a1; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 4px; display: block; width: fit-content; border: 1px solid #bae6fd;}
@@ -67,8 +78,6 @@
         #toast { visibility: hidden; min-width: 250px; background-color: #16a34a; color: #fff; text-align: center; border-radius: 4px; padding: 12px; position: fixed; z-index: 1000; left: 50%; top: 20px; transform: translateX(-50%); box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.3s, visibility 0.3s; }
         #toast.show { visibility: visible; opacity: 1; }
         #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; font-weight: bold; color: #1b365d; }
-        
-        /* Indicador de Carregamento de Fotos */
         .foto-loading { font-size: 11px; color: #d97706; font-weight: bold; margin-left: 5px; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
@@ -237,21 +246,43 @@
                 Gerenciador de Notificações
                 <button class="btn-logout" onclick="realizarLogout()">Sair do Sistema</button>
             </h2>
+
+            <!-- DASHBOARD DE ESTATÍSTICAS -->
+            <div class="dashboard-cards">
+                <div class="card card-total">
+                    <div class="num" id="dashTotal">0</div>
+                    <div class="label">Total Cadastrado</div>
+                </div>
+                <div class="card card-prazo">
+                    <div class="num" id="dashPrazo">0</div>
+                    <div class="label">No Prazo</div>
+                </div>
+                <div class="card card-vencida">
+                    <div class="num" id="dashVencida">0</div>
+                    <div class="label">Vencidas</div>
+                </div>
+            </div>
             
             <div class="toolbar">
                 <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por nome, endereço, lote, número ou ouvidoria..." onkeyup="renderizarPainel()">
                 
-                <div class="filter-bar">
-                    <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
-                    <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
-                    <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
-                    <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div class="filter-bar">
+                        <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
+                        <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
+                        <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
+                        <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
+                    </div>
+                    
+                    <div>
+                        <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Baixar relatório dos itens filtrados na tela para Excel">📊 Exportar Planilha Excel</button>
+                    </div>
                 </div>
 
-                <div class="btn-actions" style="margin-top:0;">
+                <div class="btn-actions" style="margin-top:5px;">
                     <button class="btn-primary" onclick="exportarVipp()" style="flex: 2;">📦 Exportar VIPP</button>
                     <button class="btn-secondary" onclick="document.getElementById('importFile').click()" title="Importar notificações">📥 Importar DB</button>
-                    <button class="btn-secondary" onclick="exportarBackup()" title="Baixar cópia">📤 Backup DB</button>
+                    <button class="btn-secondary" onclick="exportarBackup()" title="Baixar JSON">📤 Backup JSON</button>
                     <button class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir</button>
                 </div>
             </div>
@@ -452,7 +483,8 @@
         const notificacoesRef = collection(db, "notificacoes");
 
         window.DB = [];
-        window.fotosTemp = []; // Guarda as fotos carregadas na tela atual
+        window.itensFiltradosAtual = []; // Guarda a lista que está na tela para o Excel
+        window.fotosTemp = []; 
         window.colunaOrdenacao = '';
         window.ordemCrescente = true;
         window.filtroStatusAtual = 'Todos';
@@ -590,7 +622,7 @@
                 lc56: document.getElementById('lc56').checked,
                 fiscal: document.getElementById('fiscal').value,
                 matricula: document.getElementById('matricula').value,
-                qtdFotosSalvas: qtdFotosAnexadas, // Apenas o contador vai pro doc principal
+                qtdFotosSalvas: qtdFotosAnexadas, 
                 
                 editadoPor: usuarioLogado ? usuarioLogado.email : 'Desconhecido',
                 dataUltimaEdicao: new Date().toISOString()
@@ -598,8 +630,6 @@
 
             try {
                 let idDoDocumento = editId;
-
-                // 1. Salva a Notificação Principal
                 if (editId) {
                     const docRef = doc(db, "notificacoes", editId);
                     await updateDoc(docRef, dados);
@@ -610,16 +640,12 @@
                     idDoDocumento = novoDocRef.id;
                 }
 
-                // 2. Salva as Fotos na Subcoleção (Quebra o limite de 1MB)
                 const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
-                
-                // Primeiro, deleta as fotos velhas se for edição (para não duplicar)
                 if (editId) {
                     const fotosAntigas = await getDocs(fotosSubRef);
                     for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); }
                 }
 
-                // Salva as novas fotos (uma por uma)
                 for (let fotoBase64 of window.fotosTemp) {
                     await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 });
                 }
@@ -646,12 +672,9 @@
                 mostrarLoading(true, "Excluindo arquivos...");
                 try {
                     for (let id of marcados) { 
-                        // Exclui as fotos anexadas primeiro
                         const fotosSubRef = collection(db, "notificacoes", id, "evidencias");
                         const fotosParaApagar = await getDocs(fotosSubRef);
                         for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); }
-                        
-                        // Exclui a notificação principal
                         await deleteDoc(doc(db, "notificacoes", id)); 
                     }
                     document.getElementById('selecionarTodos').checked = false;
@@ -673,7 +696,7 @@
                     img.onload = function() {
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
-                        const MAX_WIDTH = 700; // Compressão ainda mais forte para economizar banco de dados
+                        const MAX_WIDTH = 700; 
                         let width = img.width; let height = img.height;
                         if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
                         canvas.width = width; canvas.height = height;
@@ -700,8 +723,25 @@
         }
         window.removerFoto = function(index) { window.fotosTemp.splice(index, 1); window.renderizarPreviewFotos(); }
 
-        // --- RENDERIZAÇÃO E MÁSCARAS ---
+        // --- RENDERIZAÇÃO E DASHBOARD ---
+        window.atualizarDashboard = function() {
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            let noPrazo = 0; let vencidas = 0;
+            
+            window.DB.forEach(i => {
+                if(i.dataPrazo) {
+                    const prazo = new Date(i.dataPrazo + "T00:00:00");
+                    if(prazo < hoje) vencidas++; else noPrazo++;
+                }
+            });
+
+            document.getElementById('dashTotal').innerText = window.DB.length;
+            document.getElementById('dashPrazo').innerText = noPrazo;
+            document.getElementById('dashVencida').innerText = vencidas;
+        }
+
         window.renderizarPainel = function() {
+            window.atualizarDashboard(); // Atualiza os números no topo
             const corpo = document.getElementById('tabelaCorpo');
             corpo.innerHTML = '';
             const filtroTexto = document.getElementById('buscaInput').value.toLowerCase();
@@ -732,17 +772,24 @@
                     return 0;
                 });
             }
+            
+            window.itensFiltradosAtual = filtrados; // Guarda a lista para exportação em Excel
 
             filtrados.forEach(item => {
                 const badgeOuvidoria = item.procOuvidoria ? `<br><span class="badge-ouvidoria">Ouv: ${item.procOuvidoria}</span>` : '';
                 const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
                 
                 let statusHtml = '';
+                let botaoAutuar = '';
+                
                 if(item.codigoAR) { statusHtml += `<span class="badge-ar">AR: ${item.codigoAR}</span>`; }
                 if(item.dataPrazo) {
                     const dataFormatada = item.dataPrazo.split('-').reverse().join('/');
                     const prazo = new Date(item.dataPrazo + "T00:00:00");
-                    if(prazo < hoje) { statusHtml += `<span class="badge-vencido">Vencido: ${dataFormatada}</span>`; } 
+                    if(prazo < hoje) { 
+                        statusHtml += `<span class="badge-vencido">Vencido: ${dataFormatada}</span>`; 
+                        botaoAutuar = `<a class="btn-autuar" onclick="abrirModuloAutoInfracao()">📝 Autuar</a>`;
+                    } 
                     else { statusHtml += `<span class="badge-prazo">No Prazo: ${dataFormatada}</span>`; }
                 }
                 
@@ -760,12 +807,17 @@
                     </td>
                     <td>${statusHtml}</td>
                     <td class="action-links">
-                        <a onclick="carregarParaEditar('${item.firebaseId}')">Ver/Editar</a>
+                        <a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>
                         <a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>
+                        ${botaoAutuar}
                     </td>
                 `;
                 corpo.appendChild(tr);
             });
+        }
+
+        window.abrirModuloAutoInfracao = function() {
+            alert("Módulo de Auto de Infração em construção!\nSerá configurado na segunda-feira com o formulário oficial.");
         }
 
         window.ordenarTabela = function(coluna) {
@@ -812,7 +864,6 @@
             document.getElementById('fiscal').value = item.fiscal || 'HUMBERTO ANTONIO TEIXEIRA';
             document.getElementById('matricula').value = item.matricula || '12900';
             
-            // Busca as fotos que estavam guardadas na "Subcoleção"
             window.fotosTemp = [];
             try {
                 const fotosSubRef = collection(db, "notificacoes", item.firebaseId, "evidencias");
@@ -850,6 +901,37 @@
             window.print(); setTimeout(() => { document.title = tituloOriginal; }, 1000);
         }
 
+        // --- EXPORTAÇÃO EXCEL (GERENCIAL) ---
+        window.exportarExcel = function() {
+            if(window.itensFiltradosAtual.length === 0) { alert("Não há dados na tela para exportar."); return; }
+            
+            // Cabeçalhos (Ajustados para leitura no Excel)
+            let csvContent = "\uFEFF"; // Garante o formato UTF-8 (Acentos)
+            csvContent += "Nº Notificacao;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
+            
+            window.itensFiltradosAtual.forEach(i => {
+                const num = i.numNotif || '';
+                const ouv = i.procOuvidoria || '';
+                const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : '';
+                const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : '';
+                const doc = i.doc || '';
+                const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : '';
+                const bairro = i.bairro || '';
+                const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : '';
+                const ar = i.codigoAR || '';
+                const fiscal = i.fiscal || '';
+                const criador = i.criadoPor || '';
+
+                csvContent += `${num};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute("download", `Relatorio_Fiscalizacao_SMMAM_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
         window.exportarBackup = function() {
             if(window.DB.length === 0) { alert("O banco de dados está vazio."); return; }
             const dataStr = JSON.stringify(window.DB, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `smmam_backup_nuvem_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -866,11 +948,10 @@
                         for (let item of importado) { 
                             delete item.firebaseId; 
                             const fotosAntigas = item.fotos;
-                            delete item.fotos; // Não salva as fotos no doc principal
+                            delete item.fotos; 
 
                             const novoDoc = await addDoc(notificacoesRef, item); 
                             
-                            // Migra as fotos para a subcoleção se houver
                             if(fotosAntigas && fotosAntigas.length > 0) {
                                 const fotosSubRef = collection(db, "notificacoes", novoDoc.id, "evidencias");
                                 for(let fotoBase64 of fotosAntigas) {
