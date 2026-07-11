@@ -8,13 +8,18 @@
         /* Estilos da Interface */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
         
-        /* TELA DE LOGIN */
-        #auth-container { display: flex; flex-direction: column; max-width: 380px; margin: 100px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
-        #auth-container h2 { color: #1b365d; border-bottom: none; margin-bottom: 20px; padding-bottom: 0; }
-        #auth-container input { margin-bottom: 15px; padding: 12px; font-size: 14px; }
-        .auth-links { margin-top: 15px; font-size: 13px; color: #1b365d; display: flex; justify-content: space-between; cursor: pointer; }
+        /* TELAS DE AUTENTICAÇÃO E ESPERA */
+        #auth-container { display: flex; flex-direction: column; max-width: 400px; margin: 60px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #auth-container h2 { color: #1b365d; border-bottom: none; margin-bottom: 20px; padding-bottom: 0; text-align: center; }
+        #auth-container input { margin-bottom: 12px; padding: 12px; font-size: 13px; width: 100%; box-sizing: border-box; }
+        .auth-links { margin-top: 15px; font-size: 13px; color: #1b365d; display: flex; justify-content: space-between; cursor: pointer; font-weight: 600; }
         .auth-links span:hover { text-decoration: underline; }
+        
+        #waiting-room { display: none; max-width: 500px; margin: 100px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
+        #waiting-room h2 { color: #d97706; margin-top:0; border-bottom:none; }
+        #waiting-room p { color: #475569; line-height: 1.6; margin-bottom: 25px; }
 
+        /* WORKSPACE PRINCIPAL */
         .workspace { display: none; grid-template-columns: 1fr; gap: 20px; max-width: 1550px; margin: 0 auto; }
         @media (min-width: 1200px) { .workspace { grid-template-columns: 480px 1fr; } }
         .form-container, .panel-container { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
@@ -37,7 +42,7 @@
         .btn-secondary { background-color: #64748b; } .btn-secondary:hover { background-color: #475569; }
         .btn-success { background-color: #16a34a; } .btn-success:hover { background-color: #15803d; }
         .btn-danger { background-color: #dc2626; } .btn-danger:hover { background-color: #b91c1c; }
-        .btn-logout { background-color: #f1f5f9; color: #334155; padding: 6px 12px; font-size: 12px; border: 1px solid #cbd5e1; } .btn-logout:hover { background-color: #e2e8f0; }
+        .btn-logout { background-color: #f1f5f9; color: #334155; padding: 6px 12px; font-size: 12px; border: 1px solid #cbd5e1; margin-left: 10px; } .btn-logout:hover { background-color: #e2e8f0; }
         
         .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
         .search-box { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
@@ -100,7 +105,7 @@
             body * { visibility: hidden; }
             #print-area, #print-area * { visibility: visible; }
             #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 190mm; }
-            .workspace, #toast, #loading-overlay, #auth-container { display: none !important; }
+            .workspace, #toast, #loading-overlay, #auth-container, #waiting-room { display: none !important; }
         }
     </style>
 </head>
@@ -113,24 +118,48 @@
     <div id="toast">Operação realizada com sucesso!</div>
     <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importarBackup(event)">
 
-    <!-- TELA DE LOGIN -->
+    <!-- TELA DE LOGIN / CADASTRO DA FASE COMERCIAL -->
     <div id="auth-container">
-        <h2>Acesso - SMMAM</h2>
-        <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
-        <input type="password" id="authPassword" placeholder="Senha">
-        <button class="btn-primary" onclick="realizarLogin()">Entrar</button>
+        <h2 id="authTitle">Acesso - SMMAM</h2>
+        
+        <!-- Formulário de Login -->
+        <div id="login-fields">
+            <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
+            <input type="password" id="authPassword" placeholder="Senha">
+            <button class="btn-primary" onclick="realizarLogin()" style="width: 100%;">Entrar no Sistema</button>
+        </div>
+
+        <!-- Formulário de Cadastro Completo -->
+        <div id="register-fields" style="display:none;">
+            <input type="text" id="regNome" placeholder="Nome Completo">
+            <input type="text" id="regCpf" placeholder="CPF" maxlength="14">
+            <input type="text" id="regTelefone" placeholder="Telefone" maxlength="15">
+            <input type="text" id="regMatricula" placeholder="Nº da Matrícula / RE">
+            <input type="email" id="regEmail" placeholder="E-mail Institucional">
+            <input type="password" id="regPassword" placeholder="Crie uma Senha (mín. 6 caracteres)">
+            <button class="btn-success" onclick="registrarUsuario()" style="width: 100%;">Finalizar Cadastro</button>
+        </div>
+
         <div class="auth-links">
-            <span onclick="registrarUsuario()">Criar Conta</span>
+            <span id="btnToggleAuth" onclick="toggleAuthMode()">Servidor Novo? Solicite Acesso</span>
             <span onclick="recuperarSenha()">Esqueci a Senha</span>
         </div>
     </div>
 
+    <!-- TELA DE SALA DE ESPERA -->
+    <div id="waiting-room">
+        <h2>⏳ Acesso em Análise</h2>
+        <p>O seu cadastro foi realizado com sucesso!<br>Para garantir a segurança dos dados, o seu perfil está aguardando a liberação do Administrador do Setor de Fiscalização.</p>
+        <button class="btn-secondary" onclick="realizarLogout()" style="width: 200px; margin: 0 auto;">Sair</button>
+    </div>
+
+    <!-- WORKSPACE PRINCIPAL -->
     <div class="workspace" id="main-workspace">
+        
         <!-- FORMULÁRIO -->
         <div class="form-container">
             <h2>
                 Fiscalização SMMAM
-                <span id="userLoggedDisplay" style="font-size: 12px; color: #64748b; font-weight: normal;"></span>
             </h2>
             <form id="notifForm" onsubmit="salvarNotificacao(event)">
                 <input type="hidden" id="editFirebaseId">
@@ -229,8 +258,8 @@
                 </div>
 
                 <div class="form-row" style="margin-top: 10px;">
-                    <div class="form-group"><label>Notificante *</label><input type="text" id="fiscal" value="HUMBERTO ANTONIO TEIXEIRA" required></div>
-                    <div class="form-group"><label>RE *</label><input type="text" id="matricula" value="12900" required></div>
+                    <div class="form-group"><label>Notificante (Logado) *</label><input type="text" id="fiscal" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
+                    <div class="form-group"><label>RE / Matrícula *</label><input type="text" id="matricula" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
                 </div>
 
                 <div class="btn-actions">
@@ -242,9 +271,12 @@
 
         <!-- PAINEL -->
         <div class="panel-container">
-            <h2>
+            <h2 style="font-size: 18px;">
                 Gerenciador de Notificações
-                <button class="btn-logout" onclick="realizarLogout()">Sair do Sistema</button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <span id="userLoggedDisplay" style="font-size: 11px; color: #64748b; font-weight: normal;"></span>
+                    <button class="btn-logout" onclick="realizarLogout()">Sair</button>
+                </div>
             </h2>
 
             <!-- DASHBOARD DE ESTATÍSTICAS -->
@@ -275,7 +307,7 @@
                     </div>
                     
                     <div>
-                        <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Baixar relatório dos itens filtrados na tela para Excel">📊 Exportar Planilha Excel</button>
+                        <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Baixar relatório Excel">📊 Exportar Planilha Excel</button>
                     </div>
                 </div>
 
@@ -462,10 +494,10 @@
         </table>
     </div>
 
-    <!-- SCRIPT DO SISTEMA COM FIREBASE (FIRESTORE SUBCOLLECTIONS + AUTH) -->
+    <!-- SCRIPT DO SISTEMA -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
         const firebaseConfig = {
@@ -483,13 +515,14 @@
         const notificacoesRef = collection(db, "notificacoes");
 
         window.DB = [];
-        window.itensFiltradosAtual = []; // Guarda a lista que está na tela para o Excel
+        window.itensFiltradosAtual = []; 
         window.fotosTemp = []; 
         window.colunaOrdenacao = '';
         window.ordemCrescente = true;
         window.filtroStatusAtual = 'Todos';
         let usuarioLogado = null;
-        const SENHA_ADMIN = "smmam2026";
+        let perfilUsuario = null;
+        const SENHA_ADMIN = "smmam2026"; // Será substituída na fase de RBAC completo
 
         const mostrarLoading = (mostrar, msg = "Sincronizando Banco de Dados...") => {
             document.getElementById('loading-msg').innerText = msg;
@@ -503,18 +536,104 @@
             setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
-        // --- AUTENTICAÇÃO ---
-        onAuthStateChanged(auth, (user) => {
+        // --- MUDANÇA DE TELA DE LOGIN/CADASTRO ---
+        window.toggleAuthMode = function() {
+            const loginFields = document.getElementById('login-fields');
+            const registerFields = document.getElementById('register-fields');
+            const title = document.getElementById('authTitle');
+            const btnToggle = document.getElementById('btnToggleAuth');
+
+            if(loginFields.style.display === 'none') {
+                loginFields.style.display = 'block';
+                registerFields.style.display = 'none';
+                title.innerText = 'Acesso - SMMAM';
+                btnToggle.innerText = 'Servidor Novo? Solicite Acesso';
+            } else {
+                loginFields.style.display = 'none';
+                registerFields.style.display = 'block';
+                title.innerText = 'Cadastro de Servidor';
+                btnToggle.innerText = 'Já tenho conta (Entrar)';
+            }
+        }
+
+        // --- MÁSCARAS PARA O CADASTRO ---
+        const regCpf = document.getElementById('regCpf');
+        const regTel = document.getElementById('regTelefone');
+        regCpf.addEventListener('input', function(e) {
+            let v = e.target.value.replace(/\D/g, ''); 
+            if (v.length <= 11) { v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); }
+            e.target.value = v;
+        });
+        regTel.addEventListener('input', function(e) {
+            let v = e.target.value.replace(/\D/g, '');
+            if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15);
+        });
+
+        // --- AUTENTICAÇÃO E ROTEAMENTO (O CÉREBRO DA IDENTIDADE) ---
+        onAuthStateChanged(auth, async (user) => {
             if (user) {
                 usuarioLogado = user;
-                document.getElementById('auth-container').style.display = 'none';
-                document.getElementById('main-workspace').style.display = 'grid';
-                document.getElementById('userLoggedDisplay').innerText = `Logado como: ${user.email}`;
-                window.carregarDadosNuvem();
+                mostrarLoading(true, "Lendo credenciais e permissões...");
+                
+                try {
+                    // Busca a ficha do usuário na nova coleção
+                    const userDocRef = doc(db, "usuarios", user.uid);
+                    const docSnap = await getDoc(userDocRef);
+
+                    if (docSnap.exists()) {
+                        perfilUsuario = docSnap.data();
+
+                        if (perfilUsuario.status === 'pendente') {
+                            // Manda para a Sala de Espera
+                            document.getElementById('auth-container').style.display = 'none';
+                            document.getElementById('main-workspace').style.display = 'none';
+                            document.getElementById('waiting-room').style.display = 'block';
+                        } else if (perfilUsuario.status === 'aprovado') {
+                            // Libera o Sistema e preenche nome/matricula automaticamente
+                            document.getElementById('auth-container').style.display = 'none';
+                            document.getElementById('waiting-room').style.display = 'none';
+                            document.getElementById('main-workspace').style.display = 'grid';
+                            document.getElementById('userLoggedDisplay').innerText = `👤 ${perfilUsuario.nome} (${perfilUsuario.nivel.toUpperCase()})`;
+                            
+                            // Auto-preencher o form
+                            document.getElementById('fiscal').value = perfilUsuario.nome;
+                            document.getElementById('matricula').value = perfilUsuario.matricula;
+
+                            window.carregarDadosNuvem();
+                        }
+                    } else {
+                        // FALLBACK: O admin (você) criou a conta antes da coleção existir!
+                        // Vamos criar a sua ficha automaticamente como aprovada para você não se trancar fora.
+                        const novoPerfil = {
+                            nome: "Administrador Legado",
+                            cpf: "000.000.000-00",
+                            telefone: "Não informado",
+                            matricula: "0000",
+                            email: user.email,
+                            status: "aprovado",
+                            nivel: "admin",
+                            dataCadastro: new Date().toISOString()
+                        };
+                        await setDoc(userDocRef, novoPerfil);
+                        perfilUsuario = novoPerfil;
+                        
+                        document.getElementById('auth-container').style.display = 'none';
+                        document.getElementById('waiting-room').style.display = 'none';
+                        document.getElementById('main-workspace').style.display = 'grid';
+                        document.getElementById('userLoggedDisplay').innerText = `👤 Admin Legado`;
+                        window.carregarDadosNuvem();
+                    }
+                } catch(e) {
+                    console.error("Erro na leitura de permissões", e);
+                    alert("Erro ao validar permissões de acesso.");
+                }
+                mostrarLoading(false);
             } else {
                 usuarioLogado = null;
+                perfilUsuario = null;
                 document.getElementById('auth-container').style.display = 'flex';
                 document.getElementById('main-workspace').style.display = 'none';
+                document.getElementById('waiting-room').style.display = 'none';
             }
         });
 
@@ -524,28 +643,52 @@
             if(!email || !senha) return alert("Preencha e-mail e senha.");
             mostrarLoading(true, "Acessando sistema...");
             signInWithEmailAndPassword(auth, email, senha)
-                .then(() => mostrarLoading(false))
-                .catch((error) => { mostrarLoading(false); alert("Erro ao entrar: Verifique credenciais."); });
+                .catch((error) => { mostrarLoading(false); alert("Erro ao entrar: Verifique as credenciais."); });
         }
 
-        window.registrarUsuario = function() {
-            const email = document.getElementById('authEmail').value;
-            const senha = document.getElementById('authPassword').value;
-            if(!email || !senha) return alert("Preencha e-mail e senha para registrar.");
+        window.registrarUsuario = async function() {
+            const nome = document.getElementById('regNome').value;
+            const cpf = document.getElementById('regCpf').value;
+            const telefone = document.getElementById('regTelefone').value;
+            const matricula = document.getElementById('regMatricula').value;
+            const email = document.getElementById('regEmail').value;
+            const senha = document.getElementById('regPassword').value;
+
+            if(!nome || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
             if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
-            mostrarLoading(true, "Criando conta...");
-            createUserWithEmailAndPassword(auth, email, senha)
-                .then((userCredential) => {
-                    sendEmailVerification(userCredential.user);
-                    mostrarLoading(false);
-                    alert("Conta criada! Enviamos um e-mail de validação para você.");
-                })
-                .catch((error) => { mostrarLoading(false); alert("Erro ao criar conta: " + error.message); });
+
+            mostrarLoading(true, "Criando ficha do servidor...");
+            
+            try {
+                // 1. Cria a conta no Auth do Google
+                const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
+                const user = userCredential.user;
+
+                // 2. Salva a Ficha do Perfil na coleção "usuarios" (Entra na sala de espera)
+                await setDoc(doc(db, "usuarios", user.uid), {
+                    nome: nome,
+                    cpf: cpf,
+                    telefone: telefone,
+                    matricula: matricula,
+                    email: email,
+                    status: "pendente",
+                    nivel: "leitor", // Segurança: Sempre começa com o menor nível possível
+                    dataCadastro: new Date().toISOString()
+                });
+
+                sendEmailVerification(user);
+                mostrarLoading(false);
+                alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação da Chefia.");
+                // A função onAuthStateChanged vai rodar sozinha e jogar ele pra sala de espera.
+            } catch(error) {
+                mostrarLoading(false);
+                alert("Erro ao criar conta: " + error.message);
+            }
         }
 
         window.recuperarSenha = function() {
-            const email = document.getElementById('authEmail').value;
-            if(!email) return alert("Digite seu e-mail no campo acima para recuperar a senha.");
+            const email = document.getElementById('authEmail').value || document.getElementById('regEmail').value;
+            if(!email) return alert("Digite seu e-mail em algum dos campos para recuperar a senha.");
             mostrarLoading(true);
             sendPasswordResetEmail(auth, email)
                 .then(() => { mostrarLoading(false); alert("E-mail de redefinição de senha enviado!"); })
@@ -624,7 +767,7 @@
                 matricula: document.getElementById('matricula').value,
                 qtdFotosSalvas: qtdFotosAnexadas, 
                 
-                editadoPor: usuarioLogado ? usuarioLogado.email : 'Desconhecido',
+                editadoPor: perfilUsuario ? perfilUsuario.email : 'Desconhecido',
                 dataUltimaEdicao: new Date().toISOString()
             };
 
@@ -634,7 +777,7 @@
                     const docRef = doc(db, "notificacoes", editId);
                     await updateDoc(docRef, dados);
                 } else {
-                    dados.criadoPor = usuarioLogado ? usuarioLogado.email : 'Desconhecido';
+                    dados.criadoPor = perfilUsuario ? perfilUsuario.email : 'Desconhecido';
                     dados.dataCriacao = new Date().toISOString();
                     const novoDocRef = await addDoc(notificacoesRef, dados);
                     idDoDocumento = novoDocRef.id;
@@ -741,7 +884,7 @@
         }
 
         window.renderizarPainel = function() {
-            window.atualizarDashboard(); // Atualiza os números no topo
+            window.atualizarDashboard(); 
             const corpo = document.getElementById('tabelaCorpo');
             corpo.innerHTML = '';
             const filtroTexto = document.getElementById('buscaInput').value.toLowerCase();
@@ -773,7 +916,7 @@
                 });
             }
             
-            window.itensFiltradosAtual = filtrados; // Guarda a lista para exportação em Excel
+            window.itensFiltradosAtual = filtrados; 
 
             filtrados.forEach(item => {
                 const badgeOuvidoria = item.procOuvidoria ? `<br><span class="badge-ouvidoria">Ouv: ${item.procOuvidoria}</span>` : '';
@@ -861,8 +1004,6 @@
             document.getElementById('obs').value = item.obs || '';
             document.getElementById('lei5198').checked = item.lei5198;
             document.getElementById('lc56').checked = item.lc56;
-            document.getElementById('fiscal').value = item.fiscal || 'HUMBERTO ANTONIO TEIXEIRA';
-            document.getElementById('matricula').value = item.matricula || '12900';
             
             window.fotosTemp = [];
             try {
@@ -879,18 +1020,23 @@
             document.getElementById('notifForm').reset();
             document.getElementById('editFirebaseId').value = '';
             document.getElementById('dataNotif').valueAsDate = new Date();
-            document.getElementById('fiscal').value = "HUMBERTO ANTONIO TEIXEIRA";
-            document.getElementById('matricula').value = "12900";
+            
+            // Re-preenche com os dados do usuário logado
+            if(perfilUsuario) {
+                document.getElementById('fiscal').value = perfilUsuario.nome;
+                document.getElementById('matricula').value = perfilUsuario.matricula;
+            }
+            
             window.fotosTemp = [];
             window.renderizarPreviewFotos();
         }
 
         window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => cb.checked = master.checked); }
 
-        const docInput = document.getElementById('doc'); const cepInput = document.getElementById('cep'); const telefoneInput = document.getElementById('telefone');
-        docInput.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 11) { v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); } else { v = v.substring(0, 14).replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2'); } e.target.value = v; });
+        const docInputForm = document.getElementById('doc'); const cepInput = document.getElementById('cep'); const telefoneInputForm = document.getElementById('telefone');
+        docInputForm.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 11) { v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); } else { v = v.substring(0, 14).replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2'); } e.target.value = v; });
         cepInput.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); e.target.value = v.replace(/^(\d{5})(\d)/, '$1-$2'); });
-        telefoneInput.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15); });
+        telefoneInputForm.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15); });
 
         window.imprimirRegistro = function(firebaseId) {
             const item = window.DB.find(i => i.firebaseId === firebaseId);
@@ -904,32 +1050,13 @@
         // --- EXPORTAÇÃO EXCEL (GERENCIAL) ---
         window.exportarExcel = function() {
             if(window.itensFiltradosAtual.length === 0) { alert("Não há dados na tela para exportar."); return; }
-            
-            // Cabeçalhos (Ajustados para leitura no Excel)
-            let csvContent = "\uFEFF"; // Garante o formato UTF-8 (Acentos)
+            let csvContent = "\uFEFF"; 
             csvContent += "Nº Notificacao;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
-            
             window.itensFiltradosAtual.forEach(i => {
-                const num = i.numNotif || '';
-                const ouv = i.procOuvidoria || '';
-                const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : '';
-                const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : '';
-                const doc = i.doc || '';
-                const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : '';
-                const bairro = i.bairro || '';
-                const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : '';
-                const ar = i.codigoAR || '';
-                const fiscal = i.fiscal || '';
-                const criador = i.criadoPor || '';
-
+                const num = i.numNotif || ''; const ouv = i.procOuvidoria || ''; const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''; const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : ''; const doc = i.doc || ''; const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : ''; const bairro = i.bairro || ''; const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''; const ar = i.codigoAR || ''; const fiscal = i.fiscal || ''; const criador = i.criadoPor || '';
                 csvContent += `${num};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`;
             });
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute("download", `Relatorio_Fiscalizacao_SMMAM_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `Relatorio_Fiscalizacao_SMMAM_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
         window.exportarBackup = function() {
@@ -949,14 +1076,10 @@
                             delete item.firebaseId; 
                             const fotosAntigas = item.fotos;
                             delete item.fotos; 
-
                             const novoDoc = await addDoc(notificacoesRef, item); 
-                            
                             if(fotosAntigas && fotosAntigas.length > 0) {
                                 const fotosSubRef = collection(db, "notificacoes", novoDoc.id, "evidencias");
-                                for(let fotoBase64 of fotosAntigas) {
-                                    await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 });
-                                }
+                                for(let fotoBase64 of fotosAntigas) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); }
                             }
                             adicionados++; 
                         }
