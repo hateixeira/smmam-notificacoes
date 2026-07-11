@@ -66,7 +66,11 @@
         
         #toast { visibility: hidden; min-width: 250px; background-color: #16a34a; color: #fff; text-align: center; border-radius: 4px; padding: 12px; position: fixed; z-index: 1000; left: 50%; top: 20px; transform: translateX(-50%); box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.3s, visibility 0.3s; }
         #toast.show { visibility: visible; opacity: 1; }
-        #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; font-weight: bold; color: #1b365d; }
+        #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; font-weight: bold; color: #1b365d; }
+        
+        /* Indicador de Carregamento de Fotos */
+        .foto-loading { font-size: 11px; color: #d97706; font-weight: bold; margin-left: 5px; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
         /* Espelho A4 */
         #print-area { display: none; width: 190mm; font-family: Arial, sans-serif; font-size: 10.5px; color: #000; background: white; box-sizing: border-box; }
@@ -93,7 +97,10 @@
 </head>
 <body>
 
-    <div id="loading-overlay">⏳ Processando...</div>
+    <div id="loading-overlay">
+        <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+        <div id="loading-msg">Sincronizando Banco de Dados...</div>
+    </div>
     <div id="toast">Operação realizada com sucesso!</div>
     <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importarBackup(event)">
 
@@ -207,7 +214,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Evidências Fotográficas do Terreno</label>
+                    <label>Evidências Fotográficas (Uso Interno) <span id="indicadorFotos" class="foto-loading" style="display:none;">Carregando fotos...</span></label>
                     <input type="file" id="inputFotos" accept="image/*" multiple onchange="processarFotos(event)" style="background: #fff; padding: 5px;">
                     <div id="previewFotos" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
                 </div>
@@ -268,7 +275,7 @@
         </div>
     </div>
 
-    <!-- ESPELHO DE IMPRESSÃO (Omitido visualmente, mas funcionalmente o mesmo) -->
+    <!-- ESPELHO DE IMPRESSÃO (Omitido visualmente no CSS) -->
     <div id="print-area">
         <table class="main-grid">
             <tr>
@@ -424,7 +431,7 @@
         </table>
     </div>
 
-    <!-- SCRIPT DO SISTEMA COM FIREBASE (DB + AUTH) -->
+    <!-- SCRIPT DO SISTEMA COM FIREBASE (FIRESTORE SUBCOLLECTIONS + AUTH) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -445,14 +452,18 @@
         const notificacoesRef = collection(db, "notificacoes");
 
         window.DB = [];
-        window.fotosTemp = [];
+        window.fotosTemp = []; // Guarda as fotos carregadas na tela atual
         window.colunaOrdenacao = '';
         window.ordemCrescente = true;
         window.filtroStatusAtual = 'Todos';
         let usuarioLogado = null;
         const SENHA_ADMIN = "smmam2026";
 
-        const mostrarLoading = (mostrar) => document.getElementById('loading-overlay').style.display = mostrar ? 'flex' : 'none';
+        const mostrarLoading = (mostrar, msg = "Sincronizando Banco de Dados...") => {
+            document.getElementById('loading-msg').innerText = msg;
+            document.getElementById('loading-overlay').style.display = mostrar ? 'flex' : 'none';
+        }
+        
         window.mostrarToast = function(msg) {
             const toast = document.getElementById("toast");
             toast.innerText = msg;
@@ -460,7 +471,7 @@
             setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
-        // --- AUTENTICAÇÃO E IDENTIDADE ---
+        // --- AUTENTICAÇÃO ---
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 usuarioLogado = user;
@@ -479,10 +490,10 @@
             const email = document.getElementById('authEmail').value;
             const senha = document.getElementById('authPassword').value;
             if(!email || !senha) return alert("Preencha e-mail e senha.");
-            mostrarLoading(true);
+            mostrarLoading(true, "Acessando sistema...");
             signInWithEmailAndPassword(auth, email, senha)
                 .then(() => mostrarLoading(false))
-                .catch((error) => { mostrarLoading(false); alert("Erro ao entrar: " + error.message); });
+                .catch((error) => { mostrarLoading(false); alert("Erro ao entrar: Verifique credenciais."); });
         }
 
         window.registrarUsuario = function() {
@@ -490,7 +501,7 @@
             const senha = document.getElementById('authPassword').value;
             if(!email || !senha) return alert("Preencha e-mail e senha para registrar.");
             if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
-            mostrarLoading(true);
+            mostrarLoading(true, "Criando conta...");
             createUserWithEmailAndPassword(auth, email, senha)
                 .then((userCredential) => {
                     sendEmailVerification(userCredential.user);
@@ -510,7 +521,7 @@
         }
 
         window.realizarLogout = function() {
-            signOut(auth).then(() => { window.DB = []; document.getElementById('tabelaCorpo').innerHTML = ''; });
+            signOut(auth).then(() => { window.DB = []; document.getElementById('tabelaCorpo').innerHTML = ''; window.limparFormulario(); });
         }
 
         // --- FILTROS DE STATUS ---
@@ -521,9 +532,9 @@
             window.renderizarPainel();
         }
 
-        // --- MÉTODOS FIREBASE (CRUD) COM AUDITORIA INVISÍVEL ---
+        // --- MÉTODOS FIREBASE (ARQUITETURA DE SUBCOLEÇÕES) ---
         window.carregarDadosNuvem = async function() {
-            mostrarLoading(true);
+            mostrarLoading(true, "Baixando dados...");
             try {
                 const querySnapshot = await getDocs(notificacoesRef);
                 window.DB = [];
@@ -542,10 +553,12 @@
 
         window.salvarNotificacao = async function(event) {
             event.preventDefault();
-            mostrarLoading(true);
+            mostrarLoading(true, "Salvando dados e anexando fotos...");
             const btn = document.getElementById('btnSalvar');
             btn.disabled = true;
+            
             const editId = document.getElementById('editFirebaseId').value;
+            const qtdFotosAnexadas = window.fotosTemp.length;
 
             const dados = {
                 numNotif: document.getElementById('numNotif').value,
@@ -577,27 +590,45 @@
                 lc56: document.getElementById('lc56').checked,
                 fiscal: document.getElementById('fiscal').value,
                 matricula: document.getElementById('matricula').value,
-                fotos: [...window.fotosTemp],
+                qtdFotosSalvas: qtdFotosAnexadas, // Apenas o contador vai pro doc principal
                 
-                // AUDITORIA INVISÍVEL
                 editadoPor: usuarioLogado ? usuarioLogado.email : 'Desconhecido',
                 dataUltimaEdicao: new Date().toISOString()
             };
 
             try {
+                let idDoDocumento = editId;
+
+                // 1. Salva a Notificação Principal
                 if (editId) {
                     const docRef = doc(db, "notificacoes", editId);
                     await updateDoc(docRef, dados);
                 } else {
                     dados.criadoPor = usuarioLogado ? usuarioLogado.email : 'Desconhecido';
                     dados.dataCriacao = new Date().toISOString();
-                    await addDoc(notificacoesRef, dados);
+                    const novoDocRef = await addDoc(notificacoesRef, dados);
+                    idDoDocumento = novoDocRef.id;
                 }
+
+                // 2. Salva as Fotos na Subcoleção (Quebra o limite de 1MB)
+                const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
+                
+                // Primeiro, deleta as fotos velhas se for edição (para não duplicar)
+                if (editId) {
+                    const fotosAntigas = await getDocs(fotosSubRef);
+                    for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); }
+                }
+
+                // Salva as novas fotos (uma por uma)
+                for (let fotoBase64 of window.fotosTemp) {
+                    await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 });
+                }
+
                 await window.carregarDadosNuvem();
                 window.limparFormulario();
-                window.mostrarToast("Salvo na Nuvem com sucesso!");
+                window.mostrarToast("Salvo com sucesso na nuvem!");
             } catch (e) {
-                alert("Erro ao salvar! Se anexou muitas fotos, limite atingido.");
+                alert("Ocorreu um erro ao salvar o banco de dados.");
                 console.error(e);
             }
             btn.disabled = false;
@@ -612,18 +643,26 @@
             if (senhaDigitada !== SENHA_ADMIN) { alert("Senha incorreta! Operação cancelada."); return; }
 
             if(confirm(`Tem certeza que deseja apagar ${marcados.length} notificação(ões) DA NUVEM?`)) {
-                mostrarLoading(true);
+                mostrarLoading(true, "Excluindo arquivos...");
                 try {
-                    for (let id of marcados) { await deleteDoc(doc(db, "notificacoes", id)); }
+                    for (let id of marcados) { 
+                        // Exclui as fotos anexadas primeiro
+                        const fotosSubRef = collection(db, "notificacoes", id, "evidencias");
+                        const fotosParaApagar = await getDocs(fotosSubRef);
+                        for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); }
+                        
+                        // Exclui a notificação principal
+                        await deleteDoc(doc(db, "notificacoes", id)); 
+                    }
                     document.getElementById('selecionarTodos').checked = false;
                     await window.carregarDadosNuvem();
-                    window.mostrarToast("Excluído permanentemente da nuvem!");
+                    window.mostrarToast("Excluído permanentemente!");
                 } catch(e) { alert("Erro ao excluir."); console.error(e); }
                 mostrarLoading(false);
             }
         }
 
-        // --- SISTEMA DE FOTOS COMPRIMIDAS ---
+        // --- SISTEMA DE FOTOS COMPRIMIDAS NA TELA ---
         window.processarFotos = function(event) {
             const files = event.target.files;
             if(!files) return;
@@ -634,12 +673,12 @@
                     img.onload = function() {
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
-                        const MAX_WIDTH = 800;
+                        const MAX_WIDTH = 700; // Compressão ainda mais forte para economizar banco de dados
                         let width = img.width; let height = img.height;
                         if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
                         canvas.width = width; canvas.height = height;
                         ctx.drawImage(img, 0, 0, width, height);
-                        window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.5));
+                        window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.45));
                         window.renderizarPreviewFotos();
                     }
                     img.src = e.target.result;
@@ -676,7 +715,6 @@
                        (item.codigoAR || '').toLowerCase().includes(filtroTexto);
             });
 
-            // Aplicação dos Novos Filtros de Status
             if (window.filtroStatusAtual === 'No Prazo') {
                 filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") >= hoje);
             } else if (window.filtroStatusAtual === 'Vencidos') {
@@ -697,7 +735,7 @@
 
             filtrados.forEach(item => {
                 const badgeOuvidoria = item.procOuvidoria ? `<br><span class="badge-ouvidoria">Ouv: ${item.procOuvidoria}</span>` : '';
-                const iconeFoto = (item.fotos && item.fotos.length > 0) ? ` 📷(${item.fotos.length})` : '';
+                const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
                 
                 let statusHtml = '';
                 if(item.codigoAR) { statusHtml += `<span class="badge-ar">AR: ${item.codigoAR}</span>`; }
@@ -708,9 +746,7 @@
                     else { statusHtml += `<span class="badge-prazo">No Prazo: ${dataFormatada}</span>`; }
                 }
                 
-                // Carimbo de Auditoria Invisível (Aparece pequenininho na listagem)
                 const carimbo = item.criadoPor ? `<br><small style="color:#94a3b8; font-size:10px;">👤 ${item.criadoPor}</small>` : '';
-
                 if(!statusHtml) statusHtml = '<small style="color:#94a3b8">Sem acompanhamento</small>';
 
                 const tr = document.createElement('tr');
@@ -724,7 +760,7 @@
                     </td>
                     <td>${statusHtml}</td>
                     <td class="action-links">
-                        <a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>
+                        <a onclick="carregarParaEditar('${item.firebaseId}')">Ver/Editar</a>
                         <a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>
                     </td>
                 `;
@@ -738,9 +774,13 @@
             window.renderizarPainel();
         }
 
-        window.carregarParaEditar = function(firebaseId) {
+        window.carregarParaEditar = async function(firebaseId) {
             const item = window.DB.find(i => i.firebaseId === firebaseId);
             if (!item) return;
+
+            document.getElementById('indicadorFotos').style.display = 'inline-block';
+            window.scrollTo(0,0);
+
             document.getElementById('editFirebaseId').value = item.firebaseId;
             document.getElementById('numNotif').value = item.numNotif || '';
             document.getElementById('procOuvidoria').value = item.procOuvidoria || '';
@@ -772,9 +812,16 @@
             document.getElementById('fiscal').value = item.fiscal || 'HUMBERTO ANTONIO TEIXEIRA';
             document.getElementById('matricula').value = item.matricula || '12900';
             
-            window.fotosTemp = item.fotos ? [...item.fotos] : [];
+            // Busca as fotos que estavam guardadas na "Subcoleção"
+            window.fotosTemp = [];
+            try {
+                const fotosSubRef = collection(db, "notificacoes", item.firebaseId, "evidencias");
+                const docFotos = await getDocs(fotosSubRef);
+                docFotos.forEach(doc => { window.fotosTemp.push(doc.data().imagemBinaria); });
+            } catch(e) { console.error("Erro ao buscar fotos", e); }
+
+            document.getElementById('indicadorFotos').style.display = 'none';
             window.renderizarPreviewFotos();
-            window.scrollTo(0,0);
         }
 
         window.limparFormulario = function() {
@@ -815,8 +862,23 @@
                 try {
                     const importado = JSON.parse(e.target.result);
                     if (Array.isArray(importado)) {
-                        mostrarLoading(true); let adicionados = 0;
-                        for (let item of importado) { delete item.firebaseId; await addDoc(notificacoesRef, item); adicionados++; }
+                        mostrarLoading(true, "Migrando dados antigos..."); let adicionados = 0;
+                        for (let item of importado) { 
+                            delete item.firebaseId; 
+                            const fotosAntigas = item.fotos;
+                            delete item.fotos; // Não salva as fotos no doc principal
+
+                            const novoDoc = await addDoc(notificacoesRef, item); 
+                            
+                            // Migra as fotos para a subcoleção se houver
+                            if(fotosAntigas && fotosAntigas.length > 0) {
+                                const fotosSubRef = collection(db, "notificacoes", novoDoc.id, "evidencias");
+                                for(let fotoBase64 of fotosAntigas) {
+                                    await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 });
+                                }
+                            }
+                            adicionados++; 
+                        }
                         await window.carregarDadosNuvem(); alert(`${adicionados} registros importados para a Nuvem com sucesso!`);
                     } else { alert("Arquivo inválido."); }
                 } catch(err) { alert("Erro ao importar."); console.error(err); }
