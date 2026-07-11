@@ -4,118 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerador de Notificação - SMMAM</title>
-    <style>
-        /* Estilos da Interface */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
-        
-        /* TELAS DE AUTENTICAÇÃO E ESPERA */
-        #auth-container { display: flex; flex-direction: column; max-width: 420px; margin: 50px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        #auth-container h2 { color: #1b365d; border-bottom: none; margin-bottom: 20px; padding-bottom: 0; text-align: center; }
-        #auth-container input { margin-bottom: 12px; padding: 12px; font-size: 13px; width: 100%; box-sizing: border-box; }
-        .auth-links { margin-top: 15px; font-size: 13px; color: #1b365d; display: flex; justify-content: space-between; cursor: pointer; font-weight: 600; }
-        .auth-links span:hover { text-decoration: underline; }
-        
-        #waiting-room { display: none; max-width: 500px; margin: 100px auto; background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; }
-        #waiting-room h2 { color: #d97706; margin-top:0; border-bottom:none; }
-        #waiting-room p { color: #475569; line-height: 1.6; margin-bottom: 25px; }
-
-        /* WORKSPACE PRINCIPAL & ADMIN */
-        .workspace { display: none; grid-template-columns: 1fr; gap: 20px; max-width: 1550px; margin: 0 auto; }
-        @media (min-width: 1200px) { .workspace { grid-template-columns: 480px 1fr; } }
-        #admin-workspace { display: none; max-width: 1200px; margin: 0 auto; }
-        
-        .form-container, .panel-container { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); box-sizing: border-box; }
-        h2 { color: #1b365d; margin-top: 0; border-bottom: 2px solid #1b365d; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap:10px; }
-        
-        .form-group { margin-bottom: 12px; }
-        .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .form-row .form-group { flex: 1; min-width: 120px; }
-        label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; }
-        input[type="text"], input[type="date"], input[type="email"], input[type="password"], select, textarea { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 13px; transition: border-color 0.2s; }
-        input:focus, select:focus { outline: none; border-color: #1b365d; box-shadow: 0 0 0 2px rgba(27,54,93,0.1); }
-        .checkbox-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f9f9f9; padding: 10px; border-radius: 4px; border: 1px solid #eee; }
-        .checkbox-item { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-        
-        .btn-actions { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
-        button { flex: 1; color: white; border: none; padding: 12px; font-size: 13px; font-weight: bold; border-radius: 4px; cursor: pointer; transition: background 0.2s, transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 5px; }
-        button:active { transform: scale(0.98); }
-        button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .btn-primary { background-color: #1b365d; } .btn-primary:hover { background-color: #11223b; }
-        .btn-secondary { background-color: #64748b; } .btn-secondary:hover { background-color: #475569; }
-        .btn-success { background-color: #16a34a; } .btn-success:hover { background-color: #15803d; }
-        .btn-danger { background-color: #dc2626; } .btn-danger:hover { background-color: #b91c1c; }
-        .btn-outline { background-color: #f1f5f9; color: #334155; padding: 6px 12px; font-size: 12px; border: 1px solid #cbd5e1; flex: none; } .btn-outline:hover { background-color: #e2e8f0; }
-        
-        .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
-        .search-box { padding: 10px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
-        
-        /* Dashboard Cards */
-        .dashboard-cards { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
-        .card { flex: 1; min-width: 100px; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .card-total { background: #f8fafc; border: 1px solid #e2e8f0; } .card-total .num { color: #1b365d; }
-        .card-prazo { background: #dcfce7; border: 1px solid #bbf7d0; } .card-prazo .num { color: #166534; }
-        .card-vencida { background: #fee2e2; border: 1px solid #fecaca; } .card-vencida .num { color: #991b1b; }
-        .card .num { font-size: 26px; font-weight: bold; line-height: 1; margin-bottom: 5px; }
-        .card .label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; }
-
-        /* Filtros de Status */
-        .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
-        .filter-btn { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; flex: none; }
-        .filter-btn.active { background: #1b365d; color: white; border-color: #1b365d; }
-
-        .table-container { overflow-x: auto; max-height: 600px; border: 1px solid #e2e8f0; border-radius: 4px; }
-        table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
-        table.data-table th, table.data-table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
-        table.data-table th { background-color: #f1f5f9; font-weight: 600; position: sticky; top: 0; z-index: 10; }
-        .sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
-        .sortable:hover { background-color: #e2e8f0; }
-        .sort-icon { font-size: 10px; color: #64748b; margin-left: 5px; }
-        table.data-table tr:hover { background-color: #f8fafc; }
-        .action-links { display: flex; gap: 6px; flex-wrap: wrap; }
-        .action-links a { color: #1b365d; text-decoration: none; font-weight: bold; cursor: pointer; padding: 4px 8px; border-radius: 4px; background: #e2e8f0; transition: 0.2s; font-size: 11px; text-align: center; }
-        .action-links a:hover { background: #cbd5e1; }
-        .action-links a.btn-autuar { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-        .action-links a.btn-autuar:hover { background: #fecaca; }
-        
-        .badge-ouvidoria { background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-top: 4px; display: inline-block; }
-        .badge-ar { background: #e0f2fe; color: #0369a1; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 4px; display: block; width: fit-content; border: 1px solid #bae6fd;}
-        .badge-prazo { background: #dcfce7; color: #166534; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: fit-content; border: 1px solid #bbf7d0;}
-        .badge-vencido { background: #fee2e2; color: #991b1b; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: fit-content; border: 1px solid #fecaca;}
-        
-        /* Selects do Admin */
-        .select-status { padding: 4px; font-size: 12px; border-radius: 4px; font-weight: bold; }
-        .status-pendente { background-color: #fef08a; color: #854d0e; border: 1px solid #fde047; }
-        .status-aprovado { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-        .status-bloqueado { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-        
-        #toast { visibility: hidden; min-width: 250px; background-color: #16a34a; color: #fff; text-align: center; border-radius: 4px; padding: 12px; position: fixed; z-index: 1000; left: 50%; top: 20px; transform: translateX(-50%); box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-weight: bold; font-size: 14px; opacity: 0; transition: opacity 0.3s, visibility 0.3s; }
-        #toast.show { visibility: visible; opacity: 1; }
-        #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; font-weight: bold; color: #1b365d; }
-        .foto-loading { font-size: 11px; color: #d97706; font-weight: bold; margin-left: 5px; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-
-        /* Espelho A4 */
-        #print-area { display: none; width: 190mm; font-family: Arial, sans-serif; font-size: 10.5px; color: #000; background: white; box-sizing: border-box; }
-        .main-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        .main-grid td { border: 1px solid #000; padding: 5px 6px; vertical-align: top; box-sizing: border-box; word-wrap: break-word; }
-        .cell-label { font-size: 8.5px; font-weight: bold; display: block; text-transform: uppercase; margin-bottom: 3px; }
-        .cell-value { font-size: 11.5px; font-weight: normal; }
-        .alert-row { text-align: center; font-weight: bold; font-size: 9px; background-color: #fff; text-transform: uppercase; }
-        .section-title { background-color: #e6e6e6; font-weight: bold; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
-        .bullet-rules { margin: 6px 0 4px 15px; padding: 0; line-height: 1.35; }
-        .bullet-rules li { margin-bottom: 3px; }
-        .signature-container { display: flex; justify-content: space-between; margin-top: 35px; padding: 0 10px; }
-        .sig-box { width: 44%; text-align: center; border-top: 1px solid #000; padding-top: 4px; }
-
-        @media print {
-            @page { size: a4 portrait; margin: 15mm 10mm 15mm 10mm; }
-            body { background-color: #fff; padding: 0; margin: 0; }
-            body * { visibility: hidden; }
-            #print-area, #print-area * { visibility: visible; }
-            #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 190mm; }
-            .workspace, #admin-workspace, #toast, #loading-overlay, #auth-container, #waiting-room { display: none !important; }
-        }
-    </style>
+    <!-- Aqui o sistema "puxa" o design que você acabou de criar na pasta css -->
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
@@ -126,7 +16,7 @@
     <div id="toast">Operação realizada com sucesso!</div>
     <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importarBackup(event)">
 
-    <!-- TELA DE LOGIN / CADASTRO DA FASE COMERCIAL -->
+    <!-- TELA DE LOGIN / CADASTRO -->
     <div id="auth-container">
         <h2 id="authTitle">Acesso - SMMAM</h2>
         
@@ -195,9 +85,7 @@
         
         <!-- FORMULÁRIO -->
         <div class="form-container">
-            <h2>
-                Fiscalização SMMAM
-            </h2>
+            <h2>Fiscalização SMMAM</h2>
             <form id="notifForm" onsubmit="salvarNotificacao(event)">
                 <input type="hidden" id="editFirebaseId">
                 
@@ -225,18 +113,12 @@
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group" style="flex: 2;">
-                        <label>Nome do Notificado *</label>
-                        <input type="text" id="nome" placeholder="WALDACYR FRANCISCO SIGNORI" required>
-                    </div>
-                    <div class="form-group" style="flex: 1.2;">
-                        <label>CPF/CNPJ *</label>
-                        <input type="text" id="doc" placeholder="Apenas números" maxlength="18" required>
-                    </div>
+                    <div class="form-group" style="flex: 2;"><label>Nome do Notificado *</label><input type="text" id="nome" required></div>
+                    <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="doc" maxlength="18" required></div>
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group"><label>CEP</label><input type="text" id="cep" placeholder="00000-000" maxlength="9"></div>
+                    <div class="form-group"><label>CEP</label><input type="text" id="cep" maxlength="9"></div>
                     <div class="form-group" style="flex: 2;"><label>Endereço de Correspondência</label><input type="text" id="endereco"></div>
                 </div>
 
@@ -254,10 +136,7 @@
                     <div class="form-group" style="flex: 1.5;"><label>Cad. Imob. *</label><input type="text" id="cadImob" required></div>
                 </div>
 
-                <div class="form-group">
-                    <label>Endereço do Lote Irregular *</label>
-                    <input type="text" id="loteEndereco" required>
-                </div>
+                <div class="form-group"><label>Endereço do Lote Irregular *</label><input type="text" id="loteEndereco" required></div>
 
                 <div class="form-group">
                     <label>Irregularidades</label>
@@ -318,23 +197,13 @@
             </h2>
 
             <div class="dashboard-cards">
-                <div class="card card-total">
-                    <div class="num" id="dashTotal">0</div>
-                    <div class="label">Total Cadastrado</div>
-                </div>
-                <div class="card card-prazo">
-                    <div class="num" id="dashPrazo">0</div>
-                    <div class="label">No Prazo</div>
-                </div>
-                <div class="card card-vencida">
-                    <div class="num" id="dashVencida">0</div>
-                    <div class="label">Vencidas</div>
-                </div>
+                <div class="card card-total"><div class="num" id="dashTotal">0</div><div class="label">Total Cadastrado</div></div>
+                <div class="card card-prazo"><div class="num" id="dashPrazo">0</div><div class="label">No Prazo</div></div>
+                <div class="card card-vencida"><div class="num" id="dashVencida">0</div><div class="label">Vencidas</div></div>
             </div>
             
             <div class="toolbar">
                 <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por nome, endereço, lote, número ou ouvidoria..." onkeyup="renderizarPainel()">
-                
                 <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                     <div class="filter-bar">
                         <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
@@ -342,12 +211,8 @@
                         <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
                         <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
                     </div>
-                    
-                    <div>
-                        <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Baixar relatório Excel">📊 Exportar Planilha Excel</button>
-                    </div>
+                    <div><button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Baixar relatório Excel">📊 Exportar Planilha Excel</button></div>
                 </div>
-
                 <div class="btn-actions" style="margin-top:5px;">
                     <button class="btn-primary" onclick="exportarVipp()" style="flex: 2;">📦 Exportar VIPP</button>
                     <button class="btn-secondary" onclick="document.getElementById('importFile').click()" title="Importar notificações">📥 Importar DB</button>
@@ -367,15 +232,13 @@
                             <th>Ações</th>
                         </tr>
                     </thead>
-                    <tbody id="tabelaCorpo">
-                        <!-- Gerado dinamicamente -->
-                    </tbody>
+                    <tbody id="tabelaCorpo"></tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- ESPELHO DE IMPRESSÃO (Omitido visualmente no CSS) -->
+    <!-- ESPELHO DE IMPRESSÃO -->
     <div id="print-area">
         <table class="main-grid">
             <tr>
@@ -390,99 +253,42 @@
                 </td>
             </tr>
             <tr>
-                <td colspan="4">
-                    <span class="cell-label">3. DATA DA NOTIFICAÇÃO</span>
-                    <div class="cell-value" id="pData"></div>
-                </td>
+                <td colspan="4"><span class="cell-label">3. DATA DA NOTIFICAÇÃO</span><div class="cell-value" id="pData"></div></td>
                 <td colspan="2" style="vertical-align: middle;">
                     <div style="display: flex; justify-content: space-around; font-size: 9.5px; font-weight: bold;">
-                        <span id="pTipoPresencial">( ) Notificação Presencial</span>
-                        <span id="pTipoAR">( ) Notificado por AR</span>
+                        <span id="pTipoPresencial">( ) Notificação Presencial</span><span id="pTipoAR">( ) Notificado por AR</span>
                     </div>
                 </td>
             </tr>
+            <tr><td colspan="6"><span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
             <tr>
-                <td colspan="6">
-                    <span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span>
-                    <div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div>
-                </td>
+                <td colspan="4" style="width: 65%;"><span class="cell-label">6. CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
+                <td colspan="2" style="width: 35%;"><span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span><div class="cell-value">---</div></td>
             </tr>
             <tr>
-                <td colspan="4" style="width: 65%;">
-                    <span class="cell-label">6. CPF OU CNPJ</span>
-                    <div class="cell-value" id="pDoc" style="font-weight: bold;"></div>
-                </td>
-                <td colspan="2" style="width: 35%;">
-                    <span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span>
-                    <div class="cell-value">---</div>
-                </td>
+                <td colspan="4"><span class="cell-label">8. ENDEREÇO DE CORRESPONDÊNCIA</span><div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div></td>
+                <td colspan="2"><span class="cell-label">9. TELEFONE</span><div class="cell-value" id="pTelefone"></div></td>
             </tr>
             <tr>
-                <td colspan="4">
-                    <span class="cell-label">8. ENDEREÇO DE CORRESPONDÊNCIA</span>
-                    <div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div>
-                </td>
-                <td colspan="2">
-                    <span class="cell-label">9. TELEFONE</span>
-                    <div class="cell-value" id="pTelefone"></div>
-                </td>
+                <td colspan="2" style="width: 45%;"><span class="cell-label">10. BAIRRO/DISTRITO</span><div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div></td>
+                <td style="width: 20%;"><span class="cell-label">11. MUNICÍPIO</span><div class="cell-value" style="font-weight: bold;">BENTO GONÇALVES</div></td>
+                <td style="width: 25%;"><span class="cell-label">12. CEP</span><div class="cell-value" id="pCep"></div></td>
+                <td colspan="2" style="width: 10%;"><span class="cell-label">13. UF</span><div class="cell-value" style="font-weight: bold;">RS</div></td>
             </tr>
             <tr>
-                <td colspan="2" style="width: 45%;">
-                    <span class="cell-label">10. BAIRRO/DISTRITO</span>
-                    <div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div>
-                </td>
-                <td style="width: 20%;">
-                    <span class="cell-label">11. MUNICÍPIO</span>
-                    <div class="cell-value" style="font-weight: bold;">BENTO GONÇALVES</div>
-                </td>
-                <td style="width: 25%;">
-                    <span class="cell-label">12. CEP</span>
-                    <div class="cell-value" id="pCep"></div>
-                </td>
-                <td colspan="2" style="width: 10%;">
-                    <span class="cell-label">13. UF</span>
-                    <div class="cell-value" style="font-weight: bold;">RS</div>
-                </td>
+                <td style="width: 15%;"><span class="cell-label">DISTRITO</span><div class="cell-value" id="pCadDistrito" style="font-weight: bold; text-align: center;"></div></td>
+                <td style="width: 15%;"><span class="cell-label">ZONA</span><div class="cell-value" id="pCadZona" style="font-weight: bold; text-align: center;"></div></td>
+                <td style="width: 15%;"><span class="cell-label">QUADRA</span><div class="cell-value" id="pCadQuadra" style="font-weight: bold; text-align: center;"></div></td>
+                <td style="width: 20%;"><span class="cell-label">LOTE</span><div class="cell-value" id="pCadLote" style="font-weight: bold; text-align: center;"></div></td>
+                <td colspan="2" style="width: 35%; background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
             </tr>
-            <tr>
-                <td style="width: 15%;">
-                    <span class="cell-label">DISTRITO</span>
-                    <div class="cell-value" id="pCadDistrito" style="font-weight: bold; text-align: center;"></div>
-                </td>
-                <td style="width: 15%;">
-                    <span class="cell-label">ZONA</span>
-                    <div class="cell-value" id="pCadZona" style="font-weight: bold; text-align: center;"></div>
-                </td>
-                <td style="width: 15%;">
-                    <span class="cell-label">QUADRA</span>
-                    <div class="cell-value" id="pCadQuadra" style="font-weight: bold; text-align: center;"></div>
-                </td>
-                <td style="width: 20%;">
-                    <span class="cell-label">LOTE</span>
-                    <div class="cell-value" id="pCadLote" style="font-weight: bold; text-align: center;"></div>
-                </td>
-                <td colspan="2" style="width: 35%; background-color: #fafafa;">
-                    <span class="cell-label">CADASTRO IMOBILIÁRIO</span>
-                    <div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div>
-                </td>
-            </tr>
-            <tr>
-                <td colspan="6" class="alert-row">
-                    14. O NÃO ATENDIMENTO DO PRESENTE PODERÁ CONSTITUIR CRIME DE DESOBEDIÊNCIA CONFORME O ARTIGO 330 DO CÓDIGO PENAL
-                </td>
-            </tr>
-            <tr>
-                <td colspan="6" class="section-title">15. MOTIVO DA NOTIFICAÇÃO</td>
-            </tr>
+            <tr><td colspan="6" class="alert-row">14. O NÃO ATENDIMENTO DO PRESENTE PODERÁ CONSTITUIR CRIME DE DESOBEDIÊNCIA CONFORME O ARTIGO 330 DO CÓDIGO PENAL</td></tr>
+            <tr><td colspan="6" class="section-title">15. MOTIVO DA NOTIFICAÇÃO</td></tr>
             <tr>
                 <td colspan="6" style="padding: 12px; line-height: 1.45;">
                     <p style="margin: 0 0 10px 0;">Verificação de lote, situado no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS, com presença de:</p>
                     <div style="display: flex; justify-content: space-between; margin: 12px 10px; font-weight: bold; font-size: 10.5px;">
-                        <span id="pIrrMato">( ) Vegetação Rasteira/mato</span>
-                        <span id="pIrrResiduos">( ) Resíduos Sólidos Diversos</span>
-                        <span id="pIrrEntulhos">( ) Entulhos</span>
-                        <span id="pIrrOutros">( ) Outros</span>
+                        <span id="pIrrMato">( ) Vegetação Rasteira/mato</span><span id="pIrrResiduos">( ) Resíduos Sólidos Diversos</span><span id="pIrrEntulhos">( ) Entulhos</span><span id="pIrrOutros">( ) Outros</span>
                     </div>
                     <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
                     <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
@@ -503,17 +309,13 @@
             </tr>
             <tr>
                 <td colspan="4" style="width: 65%;">
-                    <span class="cell-label">16. Nome do Notificante</span>
-                    <div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
-                    <span class="cell-label">17. RE / MATRÍCULA</span>
-                    <div class="cell-value" id="pMatricula"></div>
+                    <span class="cell-label">16. Nome do Notificante</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
+                    <span class="cell-label">17. RE / MATRÍCULA</span><div class="cell-value" id="pMatricula"></div>
                 </td>
                 <td colspan="2" style="width: 35%;">
                     <span class="cell-label">18. Endereço de Apresentação</span>
                     <div class="cell-value" style="font-size: 9.5px; line-height: 1.4;">
-                        <strong>Secretaria Municipal do Meio Ambiente / Setor Fiscalização</strong><br>
-                        Rua 10 de Novembro, 190 – Cidade Alta<br>
-                        Fone/whats: 54 3055-7211
+                        <strong>Secretaria Municipal do Meio Ambiente / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211
                     </div>
                 </td>
             </tr>
@@ -521,17 +323,14 @@
                 <td colspan="6" style="padding: 0; border: none;">
                     <div class="signature-container">
                         <div class="sig-box"><br><span class="cell-label">19. Assinatura do Notificante</span></div>
-                        <div class="sig-box">
-                            <div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;">Recebi o presente em _____/_____/_________</div>
-                            <span class="cell-label">20. Assinatura do Notificado</span>
-                        </div>
+                        <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;">Recebi o presente em _____/_____/_________</div><span class="cell-label">20. Assinatura do Notificado</span></div>
                     </div>
                 </td>
             </tr>
         </table>
     </div>
 
-    <!-- SCRIPT DO SISTEMA COM FIREBASE -->
+    <!-- O MOTOR JAVASCRIPT CONTINUA AQUI POR ENQUANTO -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -573,16 +372,12 @@
             setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
         }
 
-        // --- APLICAÇÃO DE PERMISSÕES NA INTERFACE (RBAC) ---
         function aplicarRestricoesDeTela() {
             if(!perfilUsuario) return;
-            const nivel = perfilUsuario.nivel; // 'leitor', 'fiscal', 'admin'
-            
-            // 1. Botão Salvar Notificação (Leitor não pode ver)
+            const nivel = perfilUsuario.nivel;
             if(nivel === 'leitor') document.getElementById('areaBotoesSalvar').style.display = 'none';
             else document.getElementById('areaBotoesSalvar').style.display = 'flex';
 
-            // 2. Botão Excluir e Painel Admin (Só Admin pode ver)
             if(nivel === 'admin') {
                 document.getElementById('btnExcluirLote').style.display = 'block';
                 document.getElementById('btnAdminTop').style.display = 'block';
@@ -592,7 +387,6 @@
             }
         }
 
-        // --- MUDANÇA DE TELA DE LOGIN/CADASTRO ---
         window.toggleAuthMode = function() {
             const loginFields = document.getElementById('login-fields');
             const registerFields = document.getElementById('register-fields');
@@ -600,381 +394,170 @@
             const btnToggle = document.getElementById('btnToggleAuth');
 
             if(loginFields.style.display === 'none') {
-                loginFields.style.display = 'block';
-                registerFields.style.display = 'none';
-                title.innerText = 'Acesso - SMMAM';
-                btnToggle.innerText = 'Servidor Novo? Solicite Acesso';
+                loginFields.style.display = 'block'; registerFields.style.display = 'none';
+                title.innerText = 'Acesso - SMMAM'; btnToggle.innerText = 'Servidor Novo? Solicite Acesso';
             } else {
-                loginFields.style.display = 'none';
-                registerFields.style.display = 'block';
-                title.innerText = 'Cadastro de Servidor';
-                btnToggle.innerText = 'Já tenho conta (Entrar)';
+                loginFields.style.display = 'none'; registerFields.style.display = 'block';
+                title.innerText = 'Cadastro de Servidor'; btnToggle.innerText = 'Já tenho conta (Entrar)';
             }
         }
 
-        // --- MÁSCARAS PARA O CADASTRO ---
-        const regCpf = document.getElementById('regCpf');
-        const regTel = document.getElementById('regTelefone');
-        regCpf.addEventListener('input', function(e) {
-            let v = e.target.value.replace(/\D/g, ''); 
-            if (v.length <= 11) { v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); }
-            e.target.value = v;
-        });
-        regTel.addEventListener('input', function(e) {
-            let v = e.target.value.replace(/\D/g, '');
-            if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15);
-        });
+        const regCpf = document.getElementById('regCpf'); const regTel = document.getElementById('regTelefone');
+        regCpf.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 11) { v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); } e.target.value = v; });
+        regTel.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15); });
 
-        // --- AUTENTICAÇÃO E IDENTIDADE ---
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 usuarioLogado = user;
                 mostrarLoading(true, "Lendo credenciais e permissões...");
-                
                 try {
                     const userDocRef = doc(db, "usuarios", user.uid);
                     const docSnap = await getDoc(userDocRef);
 
                     if (docSnap.exists()) {
                         perfilUsuario = docSnap.data();
-
                         if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
-                            document.getElementById('auth-container').style.display = 'none';
-                            document.getElementById('main-workspace').style.display = 'none';
-                            document.getElementById('admin-workspace').style.display = 'none';
-                            document.getElementById('waiting-room').style.display = 'block';
+                            document.getElementById('auth-container').style.display = 'none'; document.getElementById('main-workspace').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'none'; document.getElementById('waiting-room').style.display = 'block';
                             if(perfilUsuario.status === 'bloqueado') document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
                         } else if (perfilUsuario.status === 'aprovado') {
-                            document.getElementById('auth-container').style.display = 'none';
-                            document.getElementById('waiting-room').style.display = 'none';
-                            document.getElementById('admin-workspace').style.display = 'none';
-                            document.getElementById('main-workspace').style.display = 'grid';
-                            
+                            document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'none'; document.getElementById('main-workspace').style.display = 'grid';
                             document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>${perfilUsuario.nome}</strong> (${perfilUsuario.nivel.toUpperCase()})`;
-                            
-                            // Preenche os dados da notificação automaticamente com os dados do fiscal
-                            document.getElementById('fiscal').value = perfilUsuario.nome;
-                            document.getElementById('matricula').value = perfilUsuario.matricula;
-
-                            aplicarRestricoesDeTela();
-                            window.carregarDadosNuvem();
+                            document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula;
+                            aplicarRestricoesDeTela(); window.carregarDadosNuvem();
                         }
                     } else {
-                        // Caso a conta exista no Firebase, mas não tenha ficha (Admin Legado)
-                        const novoPerfil = {
-                            nome: "Administrador Legado",
-                            cargo: "Administrador do Sistema",
-                            cpf: "000.000.000-00",
-                            telefone: "Não informado",
-                            matricula: "0000",
-                            email: user.email,
-                            status: "aprovado",
-                            nivel: "admin",
-                            dataCadastro: new Date().toISOString()
-                        };
-                        await setDoc(userDocRef, novoPerfil);
-                        perfilUsuario = novoPerfil;
-                        
-                        document.getElementById('auth-container').style.display = 'none';
-                        document.getElementById('waiting-room').style.display = 'none';
-                        document.getElementById('main-workspace').style.display = 'grid';
+                        const novoPerfil = { nome: "Administrador Legado", cargo: "Administrador do Sistema", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
+                        await setDoc(userDocRef, novoPerfil); perfilUsuario = novoPerfil;
+                        document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('main-workspace').style.display = 'grid';
                         document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>Admin Legado</strong> (ADMIN)`;
-                        aplicarRestricoesDeTela();
-                        window.carregarDadosNuvem();
+                        aplicarRestricoesDeTela(); window.carregarDadosNuvem();
                     }
-                } catch(e) {
-                    console.error("Erro na leitura de permissões", e);
-                    alert("Erro ao validar permissões de acesso.");
-                }
+                } catch(e) { console.error("Erro na leitura de permissões", e); alert("Erro ao validar permissões de acesso."); }
                 mostrarLoading(false);
             } else {
-                usuarioLogado = null;
-                perfilUsuario = null;
-                document.getElementById('auth-container').style.display = 'flex';
-                document.getElementById('main-workspace').style.display = 'none';
-                document.getElementById('waiting-room').style.display = 'none';
-                document.getElementById('admin-workspace').style.display = 'none';
+                usuarioLogado = null; perfilUsuario = null;
+                document.getElementById('auth-container').style.display = 'flex'; document.getElementById('main-workspace').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'none';
             }
         });
 
         window.realizarLogin = function() {
-            const email = document.getElementById('authEmail').value;
-            const senha = document.getElementById('authPassword').value;
+            const email = document.getElementById('authEmail').value; const senha = document.getElementById('authPassword').value;
             if(!email || !senha) return alert("Preencha e-mail e senha.");
             mostrarLoading(true, "Acessando sistema...");
-            signInWithEmailAndPassword(auth, email, senha)
-                .catch((error) => { mostrarLoading(false); alert("Erro ao entrar: Verifique as credenciais."); });
+            signInWithEmailAndPassword(auth, email, senha).catch((error) => { mostrarLoading(false); alert("Erro ao entrar: Verifique as credenciais."); });
         }
 
         window.registrarUsuario = async function() {
-            const nome = document.getElementById('regNome').value;
-            const cargo = document.getElementById('regCargo').value;
-            const cpf = document.getElementById('regCpf').value;
-            const telefone = document.getElementById('regTelefone').value;
-            const matricula = document.getElementById('regMatricula').value;
-            const email = document.getElementById('regEmail').value;
-            const senha = document.getElementById('regPassword').value;
-
+            const nome = document.getElementById('regNome').value; const cargo = document.getElementById('regCargo').value; const cpf = document.getElementById('regCpf').value; const telefone = document.getElementById('regTelefone').value; const matricula = document.getElementById('regMatricula').value; const email = document.getElementById('regEmail').value; const senha = document.getElementById('regPassword').value;
             if(!nome || !cargo || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
             if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
-
             mostrarLoading(true, "Criando ficha do servidor...");
-            
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
                 const user = userCredential.user;
-
-                await setDoc(doc(db, "usuarios", user.uid), {
-                    nome: nome,
-                    cargo: cargo,
-                    cpf: cpf,
-                    telefone: telefone,
-                    matricula: matricula,
-                    email: email,
-                    status: "pendente",
-                    nivel: "leitor", // Segurança: Sempre começa como leitor pendente
-                    dataCadastro: new Date().toISOString()
-                });
-
+                await setDoc(doc(db, "usuarios", user.uid), { nome: nome, cargo: cargo, cpf: cpf, telefone: telefone, matricula: matricula, email: email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() });
                 sendEmailVerification(user);
-                mostrarLoading(false);
-                alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação do Administrador.");
-            } catch(error) {
-                mostrarLoading(false);
-                alert("Erro ao criar conta: " + error.message);
-            }
+                mostrarLoading(false); alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação do Administrador.");
+            } catch(error) { mostrarLoading(false); alert("Erro ao criar conta: " + error.message); }
         }
 
         window.recuperarSenha = function() {
             const email = document.getElementById('authEmail').value || document.getElementById('regEmail').value;
             if(!email) return alert("Digite seu e-mail em algum dos campos para recuperar a senha.");
             mostrarLoading(true);
-            sendPasswordResetEmail(auth, email)
-                .then(() => { mostrarLoading(false); alert("E-mail de redefinição de senha enviado!"); })
-                .catch((error) => { mostrarLoading(false); alert("Erro: " + error.message); });
+            sendPasswordResetEmail(auth, email).then(() => { mostrarLoading(false); alert("E-mail de redefinição de senha enviado!"); }).catch((error) => { mostrarLoading(false); alert("Erro: " + error.message); });
         }
 
-        window.realizarLogout = function() {
-            signOut(auth).then(() => { window.DB = []; document.getElementById('tabelaCorpo').innerHTML = ''; window.limparFormulario(); });
-        }
+        window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; document.getElementById('tabelaCorpo').innerHTML = ''; window.limparFormulario(); }); }
 
-        // --- GESTÃO DE USUÁRIOS (PAINEL ADMIN) ---
         window.abrirPainelAdmin = async function() {
-            document.getElementById('main-workspace').style.display = 'none';
-            document.getElementById('admin-workspace').style.display = 'block';
-            
+            document.getElementById('main-workspace').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'block';
             mostrarLoading(true, "Carregando usuários...");
-            const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo');
-            corpoUsuarios.innerHTML = '';
-            
+            const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); corpoUsuarios.innerHTML = '';
             try {
                 const usersSnapshot = await getDocs(collection(db, "usuarios"));
                 usersSnapshot.forEach(docSnap => {
-                    const u = docSnap.data();
-                    const uid = docSnap.id;
-                    
-                    const selectStatus = `
-                        <select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)">
-                            <option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option>
-                            <option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option>
-                            <option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option>
-                        </select>
-                    `;
-                    
-                    const selectNivel = `
-                        <select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)">
-                            <option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option>
-                            <option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option>
-                            <option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option>
-                        </select>
-                    `;
-
+                    const u = docSnap.data(); const uid = docSnap.id;
+                    const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
+                    const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td>
-                        <td>${u.email}<br><small style="color:#64748b;">${u.telefone}</small></td>
-                        <td>${u.matricula}</td>
-                        <td>${selectStatus}</td>
-                        <td>${selectNivel}</td>
-                    `;
+                    tr.innerHTML = `<td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td>${u.email}<br><small style="color:#64748b;">${u.telefone}</small></td><td>${u.matricula}</td><td>${selectStatus}</td><td>${selectNivel}</td>`;
                     corpoUsuarios.appendChild(tr);
                 });
-            } catch(e) {
-                console.error(e);
-                alert("Erro ao carregar usuários. Verifique se você é Administrador.");
-            }
+            } catch(e) { console.error(e); alert("Erro ao carregar usuários. Verifique se você é Administrador."); }
             mostrarLoading(false);
         }
 
-        window.fecharPainelAdmin = function() {
-            document.getElementById('admin-workspace').style.display = 'none';
-            document.getElementById('main-workspace').style.display = 'grid';
-        }
+        window.fecharPainelAdmin = function() { document.getElementById('admin-workspace').style.display = 'none'; document.getElementById('main-workspace').style.display = 'grid'; }
 
         window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) {
             try {
                 const userRef = doc(db, "usuarios", uid);
                 await updateDoc(userRef, { [campo]: valorNovo });
                 window.mostrarToast(`Atualizado para ${valorNovo}!`);
-                
-                if(campo === 'status') {
-                    selectElement.className = `select-status status-${valorNovo}`;
-                }
-            } catch(e) {
-                console.error(e);
-                alert("Erro ao atualizar o perfil. Você tem permissão de Administrador?");
-            }
+                if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`;
+            } catch(e) { console.error(e); alert("Erro ao atualizar o perfil. Você tem permissão de Administrador?"); }
         }
 
+        window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 
-        // --- FILTROS DE STATUS DE NOTIFICAÇÕES ---
-        window.aplicarFiltro = function(status, btnElement) {
-            window.filtroStatusAtual = status;
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            btnElement.classList.add('active');
-            window.renderizarPainel();
-        }
-
-        // --- MÉTODOS DE NOTIFICAÇÕES (CRUD) ---
         window.carregarDadosNuvem = async function() {
             mostrarLoading(true, "Baixando dados...");
             try {
-                const querySnapshot = await getDocs(notificacoesRef);
-                window.DB = [];
-                querySnapshot.forEach((documento) => {
-                    let data = documento.data();
-                    data.firebaseId = documento.id;
-                    window.DB.push(data);
-                });
+                const querySnapshot = await getDocs(notificacoesRef); window.DB = [];
+                querySnapshot.forEach((documento) => { let data = documento.data(); data.firebaseId = documento.id; window.DB.push(data); });
                 window.renderizarPainel();
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error(e); }
             mostrarLoading(false);
         }
 
         window.salvarNotificacao = async function(event) {
             event.preventDefault();
             if(perfilUsuario.nivel === 'leitor') return alert("Leitores não podem salvar dados.");
-
             mostrarLoading(true, "Salvando dados e anexando fotos...");
-            const btn = document.getElementById('btnSalvar');
-            btn.disabled = true;
-            
-            const editId = document.getElementById('editFirebaseId').value;
-            const qtdFotosAnexadas = window.fotosTemp.length;
-
+            const btn = document.getElementById('btnSalvar'); btn.disabled = true;
+            const editId = document.getElementById('editFirebaseId').value; const qtdFotosAnexadas = window.fotosTemp.length;
             const dados = {
-                numNotif: document.getElementById('numNotif').value,
-                procOuvidoria: document.getElementById('procOuvidoria').value,
-                codigoAR: document.getElementById('codigoAR').value.toUpperCase(),
-                dataPrazo: document.getElementById('dataPrazo').value,
-                dataNotif: document.getElementById('dataNotif').value,
-                tipoAR: document.getElementById('tipoAR').checked,
-                tipoPresencial: document.getElementById('tipoPresencial').checked,
-                nome: document.getElementById('nome').value,
-                doc: document.getElementById('doc').value,
-                endereco: document.getElementById('endereco').value,
-                telefone: document.getElementById('telefone').value,
-                bairro: document.getElementById('bairro').value,
-                cep: document.getElementById('cep').value,
-                cadDistrito: document.getElementById('cadDistrito').value,
-                cadZona: document.getElementById('cadZona').value,
-                cadQuadra: document.getElementById('cadQuadra').value,
-                cadLote: document.getElementById('cadLote').value,
-                cadImob: document.getElementById('cadImob').value,
-                loteEndereco: document.getElementById('loteEndereco').value,
-                irrMato: document.getElementById('irrMato').checked,
-                irrResiduos: document.getElementById('irrResiduos').checked,
-                irrEntulhos: document.getElementById('irrEntulhos').checked,
-                irrOutros: document.getElementById('irrOutros').checked,
-                ref: document.getElementById('ref').value,
-                obs: document.getElementById('obs').value,
-                lei5198: document.getElementById('lei5198').checked,
-                lc56: document.getElementById('lc56').checked,
-                fiscal: document.getElementById('fiscal').value,
-                matricula: document.getElementById('matricula').value,
-                qtdFotosSalvas: qtdFotosAnexadas, 
-                
-                editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido',
-                dataUltimaEdicao: new Date().toISOString()
+                numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString()
             };
-
             try {
                 let idDoDocumento = editId;
-                if (editId) {
-                    const docRef = doc(db, "notificacoes", editId);
-                    await updateDoc(docRef, dados);
-                } else {
-                    dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido';
-                    dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : '';
-                    dados.dataCriacao = new Date().toISOString();
-                    const novoDocRef = await addDoc(notificacoesRef, dados);
-                    idDoDocumento = novoDocRef.id;
-                }
-
+                if (editId) { const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); } 
+                else { dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; }
                 const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
-                if (editId) {
-                    const fotosAntigas = await getDocs(fotosSubRef);
-                    for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); }
-                }
-
-                for (let fotoBase64 of window.fotosTemp) {
-                    await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 });
-                }
-
-                await window.carregarDadosNuvem();
-                window.limparFormulario();
-                window.mostrarToast("Salvo com sucesso na nuvem!");
-            } catch (e) {
-                alert("Erro ao salvar o banco de dados. Você tem permissão?");
-                console.error(e);
-            }
-            btn.disabled = false;
-            mostrarLoading(false);
+                if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
+                for (let fotoBase64 of window.fotosTemp) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); }
+                await window.carregarDadosNuvem(); window.limparFormulario(); window.mostrarToast("Salvo com sucesso na nuvem!");
+            } catch (e) { alert("Erro ao salvar o banco de dados. Você tem permissão?"); console.error(e); }
+            btn.disabled = false; mostrarLoading(false);
         }
 
         window.excluirSelecionadas = async function() {
             if(perfilUsuario.nivel !== 'admin') return alert("Apenas Administradores podem excluir dados.");
-
             const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
             if(marcados.length === 0) { alert('Selecione ao menos um item para excluir.'); return; }
-
             if(confirm(`Tem certeza que deseja apagar ${marcados.length} notificação(ões) DA NUVEM?`)) {
                 mostrarLoading(true, "Excluindo arquivos...");
                 try {
                     for (let id of marcados) { 
-                        const fotosSubRef = collection(db, "notificacoes", id, "evidencias");
-                        const fotosParaApagar = await getDocs(fotosSubRef);
-                        for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); }
-                        await deleteDoc(doc(db, "notificacoes", id)); 
+                        const fotosSubRef = collection(db, "notificacoes", id, "evidencias"); const fotosParaApagar = await getDocs(fotosSubRef);
+                        for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); 
                     }
-                    document.getElementById('selecionarTodos').checked = false;
-                    await window.carregarDadosNuvem();
-                    window.mostrarToast("Excluído permanentemente!");
+                    document.getElementById('selecionarTodos').checked = false; await window.carregarDadosNuvem(); window.mostrarToast("Excluído permanentemente!");
                 } catch(e) { alert("Erro ao excluir."); console.error(e); }
                 mostrarLoading(false);
             }
         }
 
-        // --- SISTEMA DE FOTOS COMPRIMIDAS NA TELA ---
         window.processarFotos = function(event) {
-            const files = event.target.files;
-            if(!files) return;
+            const files = event.target.files; if(!files) return;
             for(let file of files) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const img = new Image();
                     img.onload = function() {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        const MAX_WIDTH = 700; 
-                        let width = img.width; let height = img.height;
-                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                        canvas.width = width; canvas.height = height;
-                        ctx.drawImage(img, 0, 0, width, height);
-                        window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.45));
-                        window.renderizarPreviewFotos();
+                        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const MAX_WIDTH = 700; let width = img.width; let height = img.height;
+                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height); window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.45)); window.renderizarPreviewFotos();
                     }
                     img.src = e.target.result;
                 }
@@ -984,183 +567,55 @@
         }
 
         window.renderizarPreviewFotos = function() {
-            const container = document.getElementById('previewFotos');
-            container.innerHTML = '';
+            const container = document.getElementById('previewFotos'); container.innerHTML = '';
             window.fotosTemp.forEach((foto, index) => {
-                const div = document.createElement('div');
-                div.style.position = 'relative';
-                div.innerHTML = `<img src="${foto}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;"><button type="button" onclick="removerFoto(${index})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`;
-                container.appendChild(div);
+                const div = document.createElement('div'); div.style.position = 'relative';
+                div.innerHTML = `<img src="${foto}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;"><button type="button" onclick="removerFoto(${index})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`; container.appendChild(div);
             });
         }
         window.removerFoto = function(index) { window.fotosTemp.splice(index, 1); window.renderizarPreviewFotos(); }
 
-        // --- RENDERIZAÇÃO E DASHBOARD ---
         window.atualizarDashboard = function() {
-            const hoje = new Date(); hoje.setHours(0,0,0,0);
-            let noPrazo = 0; let vencidas = 0;
-            
-            window.DB.forEach(i => {
-                if(i.dataPrazo) {
-                    const prazo = new Date(i.dataPrazo + "T00:00:00");
-                    if(prazo < hoje) vencidas++; else noPrazo++;
-                }
-            });
-
-            document.getElementById('dashTotal').innerText = window.DB.length;
-            document.getElementById('dashPrazo').innerText = noPrazo;
-            document.getElementById('dashVencida').innerText = vencidas;
+            const hoje = new Date(); hoje.setHours(0,0,0,0); let noPrazo = 0; let vencidas = 0;
+            window.DB.forEach(i => { if(i.dataPrazo) { const prazo = new Date(i.dataPrazo + "T00:00:00"); if(prazo < hoje) vencidas++; else noPrazo++; } });
+            document.getElementById('dashTotal').innerText = window.DB.length; document.getElementById('dashPrazo').innerText = noPrazo; document.getElementById('dashVencida').innerText = vencidas;
         }
 
         window.renderizarPainel = function() {
-            window.atualizarDashboard(); 
-            const corpo = document.getElementById('tabelaCorpo');
-            corpo.innerHTML = '';
-            const filtroTexto = document.getElementById('buscaInput').value.toLowerCase();
-            const hoje = new Date(); hoje.setHours(0,0,0,0);
-
-            let filtrados = window.DB.filter(item => {
-                return (item.nome || '').toLowerCase().includes(filtroTexto) || 
-                       (item.numNotif || '').toLowerCase().includes(filtroTexto) || 
-                       (item.loteEndereco || '').toLowerCase().includes(filtroTexto) || 
-                       (item.procOuvidoria || '').toLowerCase().includes(filtroTexto) ||
-                       (item.codigoAR || '').toLowerCase().includes(filtroTexto);
-            });
-
-            if (window.filtroStatusAtual === 'No Prazo') {
-                filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") >= hoje);
-            } else if (window.filtroStatusAtual === 'Vencidos') {
-                filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") < hoje);
-            } else if (window.filtroStatusAtual === 'Com AR') {
-                filtrados = filtrados.filter(i => i.codigoAR && i.codigoAR.trim() !== "");
-            }
-
-            if (window.colunaOrdenacao) {
-                filtrados.sort((a, b) => {
-                    let valA = (a[window.colunaOrdenacao] || '').toLowerCase();
-                    let valB = (b[window.colunaOrdenacao] || '').toLowerCase();
-                    if (valA < valB) return window.ordemCrescente ? -1 : 1;
-                    if (valA > valB) return window.ordemCrescente ? 1 : -1;
-                    return 0;
-                });
-            }
-            
+            window.atualizarDashboard(); const corpo = document.getElementById('tabelaCorpo'); corpo.innerHTML = ''; const filtroTexto = document.getElementById('buscaInput').value.toLowerCase(); const hoje = new Date(); hoje.setHours(0,0,0,0);
+            let filtrados = window.DB.filter(item => { return (item.nome || '').toLowerCase().includes(filtroTexto) || (item.numNotif || '').toLowerCase().includes(filtroTexto) || (item.loteEndereco || '').toLowerCase().includes(filtroTexto) || (item.procOuvidoria || '').toLowerCase().includes(filtroTexto) || (item.codigoAR || '').toLowerCase().includes(filtroTexto); });
+            if (window.filtroStatusAtual === 'No Prazo') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") >= hoje); } else if (window.filtroStatusAtual === 'Vencidos') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") < hoje); } else if (window.filtroStatusAtual === 'Com AR') { filtrados = filtrados.filter(i => i.codigoAR && i.codigoAR.trim() !== ""); }
+            if (window.colunaOrdenacao) { filtrados.sort((a, b) => { let valA = (a[window.colunaOrdenacao] || '').toLowerCase(); let valB = (b[window.colunaOrdenacao] || '').toLowerCase(); if (valA < valB) return window.ordemCrescente ? -1 : 1; if (valA > valB) return window.ordemCrescente ? 1 : -1; return 0; }); }
             window.itensFiltradosAtual = filtrados; 
-
             filtrados.forEach(item => {
-                const badgeOuvidoria = item.procOuvidoria ? `<br><span class="badge-ouvidoria">Ouv: ${item.procOuvidoria}</span>` : '';
-                const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
-                
-                let statusHtml = '';
-                let botaoAutuar = '';
-                
+                const badgeOuvidoria = item.procOuvidoria ? `<br><span class="badge-ouvidoria">Ouv: ${item.procOuvidoria}</span>` : ''; const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
+                let statusHtml = ''; let botaoAutuar = '';
                 if(item.codigoAR) { statusHtml += `<span class="badge-ar">AR: ${item.codigoAR}</span>`; }
-                if(item.dataPrazo) {
-                    const dataFormatada = item.dataPrazo.split('-').reverse().join('/');
-                    const prazo = new Date(item.dataPrazo + "T00:00:00");
-                    if(prazo < hoje) { 
-                        statusHtml += `<span class="badge-vencido">Vencido: ${dataFormatada}</span>`; 
-                        botaoAutuar = `<a class="btn-autuar" onclick="abrirModuloAutoInfracao()">📝 Autuar</a>`;
-                    } 
-                    else { statusHtml += `<span class="badge-prazo">No Prazo: ${dataFormatada}</span>`; }
-                }
-                
-                const carimbo = item.criadoPor ? `<br><small style="color:#94a3b8; font-size:10px;">👤 ${item.criadoPor}</small>` : '';
-                if(!statusHtml) statusHtml = '<small style="color:#94a3b8">Sem acompanhamento</small>';
-
+                if(item.dataPrazo) { const dataFormatada = item.dataPrazo.split('-').reverse().join('/'); const prazo = new Date(item.dataPrazo + "T00:00:00"); if(prazo < hoje) { statusHtml += `<span class="badge-vencido">Vencido: ${dataFormatada}</span>`; botaoAutuar = `<a class="btn-autuar" onclick="abrirModuloAutoInfracao()">📝 Autuar</a>`; } else { statusHtml += `<span class="badge-prazo">No Prazo: ${dataFormatada}</span>`; } }
+                const carimbo = item.criadoPor ? `<br><small style="color:#94a3b8; font-size:10px;">👤 ${item.criadoPor}</small>` : ''; if(!statusHtml) statusHtml = '<small style="color:#94a3b8">Sem acompanhamento</small>';
                 const tr = document.createElement('tr');
-                
-                // Leitor não vê "Editar", só vê "Detalhes"
                 const linkEditarOuVer = (perfilUsuario && perfilUsuario.nivel === 'leitor') ? `<a onclick="carregarParaEditar('${item.firebaseId}')">Ver Lote</a>` : `<a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>`;
-                
-                tr.innerHTML = `
-                    <td><input type="checkbox" class="select-item" value="${item.firebaseId}"></td>
-                    <td><strong>${item.numNotif}</strong>${badgeOuvidoria}</td>
-                    <td>
-                        <div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div>
-                        <div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div>
-                        ${carimbo}
-                    </td>
-                    <td>${statusHtml}</td>
-                    <td class="action-links">
-                        ${linkEditarOuVer}
-                        <a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>
-                        ${botaoAutuar}
-                    </td>
-                `;
+                tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}"></td><td><strong>${item.numNotif}</strong>${badgeOuvidoria}</td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div>${carimbo}</td><td>${statusHtml}</td><td class="action-links">${linkEditarOuVer}<a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
                 corpo.appendChild(tr);
             });
         }
 
         window.abrirModuloAutoInfracao = function() { alert("Módulo de Auto de Infração em construção!\nSerá configurado na segunda-feira com o formulário oficial."); }
-
-        window.ordenarTabela = function(coluna) {
-            if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } 
-            else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; }
-            window.renderizarPainel();
-        }
+        window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
 
         window.carregarParaEditar = async function(firebaseId) {
-            const item = window.DB.find(i => i.firebaseId === firebaseId);
-            if (!item) return;
-
-            document.getElementById('indicadorFotos').style.display = 'inline-block';
-            window.scrollTo(0,0);
-
-            document.getElementById('editFirebaseId').value = item.firebaseId;
-            document.getElementById('numNotif').value = item.numNotif || '';
-            document.getElementById('procOuvidoria').value = item.procOuvidoria || '';
-            document.getElementById('codigoAR').value = item.codigoAR || '';
-            document.getElementById('dataPrazo').value = item.dataPrazo || '';
-            document.getElementById('dataNotif').value = item.dataNotif || '';
-            document.getElementById('tipoAR').checked = item.tipoAR;
-            document.getElementById('tipoPresencial').checked = item.tipoPresencial;
-            document.getElementById('nome').value = item.nome || '';
-            document.getElementById('doc').value = item.doc || '';
-            document.getElementById('endereco').value = item.endereco || '';
-            document.getElementById('telefone').value = item.telefone || '';
-            document.getElementById('bairro').value = item.bairro || '';
-            document.getElementById('cep').value = item.cep || '';
-            document.getElementById('cadDistrito').value = item.cadDistrito || '';
-            document.getElementById('cadZona').value = item.cadZona || '';
-            document.getElementById('cadQuadra').value = item.cadQuadra || '';
-            document.getElementById('cadLote').value = item.cadLote || '';
-            document.getElementById('cadImob').value = item.cadImob || '';
-            document.getElementById('loteEndereco').value = item.loteEndereco || '';
-            document.getElementById('irrMato').checked = item.irrMato;
-            document.getElementById('irrResiduos').checked = item.irrResiduos;
-            document.getElementById('irrEntulhos').checked = item.irrEntulhos;
-            document.getElementById('irrOutros').checked = item.irrOutros;
-            document.getElementById('ref').value = item.ref || '';
-            document.getElementById('obs').value = item.obs || '';
-            document.getElementById('lei5198').checked = item.lei5198;
-            document.getElementById('lc56').checked = item.lc56;
-            document.getElementById('fiscal').value = item.fiscal || 'HUMBERTO ANTONIO TEIXEIRA';
-            document.getElementById('matricula').value = item.matricula || '12900';
-            
+            const item = window.DB.find(i => i.firebaseId === firebaseId); if (!item) return;
+            document.getElementById('indicadorFotos').style.display = 'inline-block'; window.scrollTo(0,0);
+            document.getElementById('editFirebaseId').value = item.firebaseId; document.getElementById('numNotif').value = item.numNotif || ''; document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; document.getElementById('codigoAR').value = item.codigoAR || ''; document.getElementById('dataPrazo').value = item.dataPrazo || ''; document.getElementById('dataNotif').value = item.dataNotif || ''; document.getElementById('tipoAR').checked = item.tipoAR; document.getElementById('tipoPresencial').checked = item.tipoPresencial; document.getElementById('nome').value = item.nome || ''; document.getElementById('doc').value = item.doc || ''; document.getElementById('endereco').value = item.endereco || ''; document.getElementById('telefone').value = item.telefone || ''; document.getElementById('bairro').value = item.bairro || ''; document.getElementById('cep').value = item.cep || ''; document.getElementById('cadDistrito').value = item.cadDistrito || ''; document.getElementById('cadZona').value = item.cadZona || ''; document.getElementById('cadQuadra').value = item.cadQuadra || ''; document.getElementById('cadLote').value = item.cadLote || ''; document.getElementById('cadImob').value = item.cadImob || ''; document.getElementById('loteEndereco').value = item.loteEndereco || ''; document.getElementById('irrMato').checked = item.irrMato; document.getElementById('irrResiduos').checked = item.irrResiduos; document.getElementById('irrEntulhos').checked = item.irrEntulhos; document.getElementById('irrOutros').checked = item.irrOutros; document.getElementById('ref').value = item.ref || ''; document.getElementById('obs').value = item.obs || ''; document.getElementById('lei5198').checked = item.lei5198; document.getElementById('lc56').checked = item.lc56;
             window.fotosTemp = [];
-            try {
-                const fotosSubRef = collection(db, "notificacoes", item.firebaseId, "evidencias");
-                const docFotos = await getDocs(fotosSubRef);
-                docFotos.forEach(doc => { window.fotosTemp.push(doc.data().imagemBinaria); });
-            } catch(e) { console.error("Erro ao buscar fotos", e); }
-
-            document.getElementById('indicadorFotos').style.display = 'none';
-            window.renderizarPreviewFotos();
+            try { const fotosSubRef = collection(db, "notificacoes", item.firebaseId, "evidencias"); const docFotos = await getDocs(fotosSubRef); docFotos.forEach(doc => { window.fotosTemp.push(doc.data().imagemBinaria); }); } catch(e) { console.error("Erro ao buscar fotos", e); }
+            document.getElementById('indicadorFotos').style.display = 'none'; window.renderizarPreviewFotos();
         }
 
         window.limparFormulario = function() {
-            document.getElementById('notifForm').reset();
-            document.getElementById('editFirebaseId').value = '';
-            document.getElementById('dataNotif').valueAsDate = new Date();
-            
-            if(perfilUsuario) {
-                document.getElementById('fiscal').value = perfilUsuario.nome;
-                document.getElementById('matricula').value = perfilUsuario.matricula;
-            }
-            
-            window.fotosTemp = [];
-            window.renderizarPreviewFotos();
+            document.getElementById('notifForm').reset(); document.getElementById('editFirebaseId').value = ''; document.getElementById('dataNotif').valueAsDate = new Date();
+            if(perfilUsuario) { document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula; }
+            window.fotosTemp = []; window.renderizarPreviewFotos();
         }
 
         window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => cb.checked = master.checked); }
@@ -1171,23 +626,17 @@
         telefoneInputForm.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15); });
 
         window.imprimirRegistro = function(firebaseId) {
-            const item = window.DB.find(i => i.firebaseId === firebaseId);
-            if (!item) return;
+            const item = window.DB.find(i => i.firebaseId === firebaseId); if (!item) return;
             document.getElementById('pNum').innerText = item.numNotif; document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); document.getElementById('pDoc').innerText = item.doc; document.getElementById('pEndereco').innerText = item.endereco || '---'; document.getElementById('pTelefone').innerText = item.telefone || '---'; document.getElementById('pBairro').innerText = item.bairro || '---'; document.getElementById('pCep').innerText = item.cep || '---'; document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; document.getElementById('pCadZona').innerText = item.cadZona || '---'; document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; document.getElementById('pCadLote').innerText = item.cadLote || '---'; document.getElementById('pCadImob').innerText = item.cadImob || ''; document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; document.getElementById('pRef').innerText = item.ref || 'Não informado'; document.getElementById('pObs').innerText = item.obs || 'Nenhuma'; document.getElementById('pFiscal').innerText = item.fiscal || ''; document.getElementById('pMatricula').innerText = item.matricula || '';
             document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Notificação Presencial' : '( ) Notificação Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Notificado por AR' : '( ) Notificado por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação Rasteira/mato' : '( ) Vegetação Rasteira/mato'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos Sólidos Diversos' : '( ) Resíduos Sólidos Diversos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Entulhos' : '( ) Entulhos'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.' : '( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.' : '( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.';
             const tituloOriginal = document.title; document.title = `${item.numNotif} - ${(item.nome || '').toUpperCase()}`;
             window.print(); setTimeout(() => { document.title = tituloOriginal; }, 1000);
         }
 
-        // --- EXPORTAÇÃO EXCEL E VIPP (Mantidas intactas) ---
         window.exportarExcel = function() {
             if(window.itensFiltradosAtual.length === 0) { alert("Não há dados na tela para exportar."); return; }
-            let csvContent = "\uFEFF"; 
-            csvContent += "Nº Notificacao;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
-            window.itensFiltradosAtual.forEach(i => {
-                const num = i.numNotif || ''; const ouv = i.procOuvidoria || ''; const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''; const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : ''; const doc = i.doc || ''; const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : ''; const bairro = i.bairro || ''; const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''; const ar = i.codigoAR || ''; const fiscal = i.fiscal || ''; const criador = i.criadoPor || '';
-                csvContent += `${num};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`;
-            });
+            let csvContent = "\uFEFF"; csvContent += "Nº Notificacao;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
+            window.itensFiltradosAtual.forEach(i => { const num = i.numNotif || ''; const ouv = i.procOuvidoria || ''; const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''; const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : ''; const doc = i.doc || ''; const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : ''; const bairro = i.bairro || ''; const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''; const ar = i.codigoAR || ''; const fiscal = i.fiscal || ''; const criador = i.criadoPor || ''; csvContent += `${num};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`; });
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `Relatorio_Fiscalizacao_SMMAM_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
@@ -1197,46 +646,27 @@
         }
 
         window.importarBackup = async function(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader();
+            const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
             reader.onload = async function(e) {
                 try {
                     const importado = JSON.parse(e.target.result);
                     if (Array.isArray(importado)) {
                         mostrarLoading(true, "Migrando dados antigos..."); let adicionados = 0;
-                        for (let item of importado) { 
-                            delete item.firebaseId; 
-                            const fotosAntigas = item.fotos;
-                            delete item.fotos; 
-                            const novoDoc = await addDoc(notificacoesRef, item); 
-                            if(fotosAntigas && fotosAntigas.length > 0) {
-                                const fotosSubRef = collection(db, "notificacoes", novoDoc.id, "evidencias");
-                                for(let fotoBase64 of fotosAntigas) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); }
-                            }
-                            adicionados++; 
-                        }
+                        for (let item of importado) { delete item.firebaseId; const fotosAntigas = item.fotos; delete item.fotos; const novoDoc = await addDoc(notificacoesRef, item); if(fotosAntigas && fotosAntigas.length > 0) { const fotosSubRef = collection(db, "notificacoes", novoDoc.id, "evidencias"); for(let fotoBase64 of fotosAntigas) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); } } adicionados++; }
                         await window.carregarDadosNuvem(); alert(`${adicionados} registros importados para a Nuvem com sucesso!`);
                     } else { alert("Arquivo inválido."); }
-                } catch(err) { alert("Erro ao importar."); console.error(err); }
-                mostrarLoading(false); event.target.value = ''; 
+                } catch(err) { alert("Erro ao importar."); console.error(err); } mostrarLoading(false); event.target.value = ''; 
             }; reader.readAsText(file);
         }
 
         window.exportarVipp = function() {
-            const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
-            if(marcados.length === 0) { alert('Selecione as notificações que deseja enviar via VIPP Correios.'); return; }
-            const itensExportar = window.DB.filter(item => marcados.includes(item.firebaseId));
-            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<correioslog>\n  <tipo_arquivo>Postagem</tipo_arquivo>\n  <versao_arquivo>2.3</versao_arquivo>\n';
-            xml += '  <remetente>\n    <numero_contrato>9912740833</numero_contrato>\n    <codigo_administrativo>79980660</codigo_administrativo>\n    <nome_remetente>PREFEITURA MUNIC DE BENTO GONCALVES</nome_remetente>\n    <logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente>\n    <numero_remetente>1075</numero_remetente>\n    <bairro_remetente>CIDADE ALTA</bairro_remetente>\n    <cep_remetente>95700010</cep_remetente>\n    <cidade_remetente>BENTO GONCALVES</cidade_remetente>\n    <uf_remetente>RS</uf_remetente>\n  </remetente>\n';
+            const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(marcados.length === 0) { alert('Selecione as notificações que deseja enviar via VIPP Correios.'); return; }
+            const itensExportar = window.DB.filter(item => marcados.includes(item.firebaseId)); let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<correioslog>\n  <tipo_arquivo>Postagem</tipo_arquivo>\n  <versao_arquivo>2.3</versao_arquivo>\n  <remetente>\n    <numero_contrato>9912740833</numero_contrato>\n    <codigo_administrativo>79980660</codigo_administrativo>\n    <nome_remetente>PREFEITURA MUNIC DE BENTO GONCALVES</nome_remetente>\n    <logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente>\n    <numero_remetente>1075</numero_remetente>\n    <bairro_remetente>CIDADE ALTA</bairro_remetente>\n    <cep_remetente>95700010</cep_remetente>\n    <cidade_remetente>BENTO GONCALVES</cidade_remetente>\n    <uf_remetente>RS</uf_remetente>\n  </remetente>\n';
             itensExportar.forEach(i => {
-                const cepLimpo = (i.cep || '').replace(/\D/g, '').padEnd(8, '0');
-                const numEtiqueta = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0');
+                const cepLimpo = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); const numEtiqueta = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0');
                 xml += `  <objeto_postal>\n    <numero_etiqueta>${numEtiqueta}</numero_etiqueta>\n    <codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente>\n    <codigo_servico_postagem>80810</codigo_servico_postagem>\n    <peso>100</peso>\n    <destinatario>\n      <nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario>\n      <logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario>\n      <numero_end_destinatario>S/N</numero_end_destinatario>\n    </destinatario>\n    <nacional>\n      <bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario>\n      <cidade_destinatario>BENTO GONCALVES</cidade_destinatario>\n      <uf_destinatario>RS</uf_destinatario>\n      <cep_destinatario>${cepLimpo}</cep_destinatario>\n    </nacional>\n    <servico_adicional>\n      <codigo_servico_adicional>25</codigo_servico_adicional>\n    </servico_adicional>\n    <servico_adicional>\n      <codigo_servico_adicional>01</codigo_servico_adicional>\n    </servico_adicional>\n    <dimensao_objeto>\n      <tipo_objeto>001</tipo_objeto>\n    </dimensao_objeto>\n  </objeto_postal>\n`;
-            });
-            xml += '</correioslog>';
-            const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
-            const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `importacao_vipp_smmam_${Date.now()}.xml`);
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            }); xml += '</correioslog>';
+            const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `importacao_vipp_smmam_${Date.now()}.xml`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
     </script>
 </body>
