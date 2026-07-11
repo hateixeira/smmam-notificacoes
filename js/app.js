@@ -38,9 +38,28 @@ window.mostrarToast = function(msg) {
     setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
 }
 
+// --- MOTOR DE AUDITORIA (CAIXA PRETA) ---
+async function registrarLog(acaoRealizada, alvo) {
+    if(!perfilUsuario) return;
+    try {
+        await addDoc(collection(db, "logs_auditoria"), {
+            dataHora: new Date().toISOString(),
+            usuario: perfilUsuario.nome,
+            matricula: perfilUsuario.matricula,
+            nivel: perfilUsuario.nivel,
+            acao: acaoRealizada,
+            documentoAlvo: alvo
+        });
+    } catch(e) { 
+        console.error("Erro ao gravar auditoria", e); 
+    }
+}
+
+// --- APLICAÇÃO DE PERMISSÕES NA INTERFACE (RBAC) ---
 function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
     const nivel = perfilUsuario.nivel;
+    
     if(nivel === 'leitor') document.getElementById('areaBotoesSalvar').style.display = 'none';
     else document.getElementById('areaBotoesSalvar').style.display = 'flex';
 
@@ -183,18 +202,42 @@ window.salvarNotificacao = async function(event) {
     mostrarLoading(true, "Salvando dados e anexando fotos...");
     const btn = document.getElementById('btnSalvar'); btn.disabled = true;
     const editId = document.getElementById('editFirebaseId').value; const qtdFotosAnexadas = window.fotosTemp.length;
+    
     const dados = {
         numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString()
     };
+    
     try {
         let idDoDocumento = editId;
-        if (editId) { const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); } 
-        else { dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; }
+        if (editId) { 
+            const docRef = doc(db, "notificacoes", editId); 
+            await updateDoc(docRef, dados); 
+        } else { 
+            dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; 
+            dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; 
+            dados.dataCriacao = new Date().toISOString(); 
+            const novoDocRef = await addDoc(notificacoesRef, dados); 
+            idDoDocumento = novoDocRef.id; 
+        }
+        
         const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
-        if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
+        if (editId) { 
+            const fotosAntigas = await getDocs(fotosSubRef); 
+            for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } 
+        }
         for (let fotoBase64 of window.fotosTemp) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); }
-        await window.carregarDadosNuvem(); window.limparFormulario(); window.mostrarToast("Salvo com sucesso na nuvem!");
-    } catch (e) { alert("Erro ao salvar o banco de dados. Você tem permissão?"); console.error(e); }
+        
+        await window.carregarDadosNuvem(); 
+        window.limparFormulario(); 
+        window.mostrarToast("Salvo com sucesso na nuvem!");
+        
+        // GRAVA A AUDITORIA:
+        await registrarLog(editId ? "Editou Notificação" : "Criou Nova Notificação", dados.numNotif);
+        
+    } catch (e) { 
+        alert("Erro ao salvar o banco de dados. Você tem permissão?"); 
+        console.error(e); 
+    }
     btn.disabled = false; mostrarLoading(false);
 }
 
@@ -202,15 +245,27 @@ window.excluirSelecionadas = async function() {
     if(perfilUsuario.nivel !== 'admin') return alert("Apenas Administradores podem excluir dados.");
     const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
     if(marcados.length === 0) { alert('Selecione ao menos um item para excluir.'); return; }
+    
     if(confirm(`Tem certeza que deseja apagar ${marcados.length} notificação(ões) DA NUVEM?`)) {
         mostrarLoading(true, "Excluindo arquivos...");
         try {
             for (let id of marcados) { 
-                const fotosSubRef = collection(db, "notificacoes", id, "evidencias"); const fotosParaApagar = await getDocs(fotosSubRef);
-                for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); 
+                const fotosSubRef = collection(db, "notificacoes", id, "evidencias"); 
+                const fotosParaApagar = await getDocs(fotosSubRef);
+                for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); } 
+                await deleteDoc(doc(db, "notificacoes", id)); 
             }
-            document.getElementById('selecionarTodos').checked = false; await window.carregarDadosNuvem(); window.mostrarToast("Excluído permanentemente!");
-        } catch(e) { alert("Erro ao excluir."); console.error(e); }
+            document.getElementById('selecionarTodos').checked = false; 
+            await window.carregarDadosNuvem(); 
+            window.mostrarToast("Excluído permanentemente!");
+            
+            // GRAVA A AUDITORIA:
+            await registrarLog("Excluiu Notificações em Lote", marcados.join(", "));
+            
+        } catch(e) { 
+            alert("Erro ao excluir."); 
+            console.error(e); 
+        }
         mostrarLoading(false);
     }
 }
