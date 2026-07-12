@@ -17,8 +17,8 @@ const auth = getAuth(app);
 const notificacoesRef = collection(db, "notificacoes");
 
 window.DB = [];
-window.itensFiltradosAtual = []; 
-window.fotosTemp = []; 
+window.itensFiltradosAtual = [];
+window.fotosTemp = [];
 window.colunaOrdenacao = '';
 window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
@@ -39,7 +39,7 @@ window.mostrarToast = function(msg) {
 }
 
 // ============================================================================
-// INTEGRAÇÕES AUTOMÁTICAS (VIACEP E BASE IPTU)
+// INTEGRAÇÕES AUTOMÁTICAS (VIACEP E BASE IPTU NO FIREBASE)
 // ============================================================================
 
 // 1. VIA CEP - Correios
@@ -61,72 +61,62 @@ if(cepInput) {
     });
 }
 
-// 2. BASE IPTU - JSON Local da Prefeitura
-window.baseIPTU = [];
-async function carregarBaseIPTU() {
-    try {
-        const response = await fetch('base_iptu.json');
-        if(response.ok) {
-            window.baseIPTU = await response.json();
-            console.log(`Base IPTU carregada: ${window.baseIPTU.length} imóveis.`);
-        }
-    } catch(e) { console.log("Arquivo base_iptu.json não encontrado. A busca automática de IPTU ficará inativa."); }
-}
-carregarBaseIPTU(); // Roda sozinho ao abrir o site
-
-// Gatilho: Quando o fiscal terminar de digitar o Lote, o sistema busca os dados
+// 2. BASE IPTU - CONSULTA DIRETA E SEGURA NO FIREBASE
 const cadLoteInput = document.getElementById('cadLote');
 if(cadLoteInput) {
-    cadLoteInput.addEventListener('blur', function() {
-        if(window.baseIPTU.length === 0) return;
+    cadLoteInput.addEventListener('blur', async function() {
+        const dist = document.getElementById('cadDistrito').value.padStart(2, '0');
+        const zona = document.getElementById('cadZona').value;
+        const quad = document.getElementById('cadQuadra').value.padStart(3, '0');
+        const lote = document.getElementById('cadLote').value.padStart(4, '0');
 
-        const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); 
-        const zona = document.getElementById('cadZona').value; 
-        const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); 
-        const lote = document.getElementById('cadLote').value.padStart(4, '0'); 
-
-        // Se faltar algum campo essencial, aborta a busca silenciosamente
+        // Se faltar algum campo essencial, não faz a busca
         if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
 
-        // Monta a lógica da chave: ex: Distrito 01 + Zona 4 + Quadra 308 + Lote 0001 = 0143080001
+        // Monta a chave exata gerada pela prefeitura (Ex: 0143080001)
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
+        
+        mostrarLoading(true, "Buscando dados no Cadastro Imobiliário...");
 
-        // Varre os milhares de registros no JSON em milissegundos
-        const imovelEncontrado = window.baseIPTU.find(item => 
-            item.chaveinscricao && item.chaveinscricao.startsWith(chaveBusca)
-        );
+        try {
+            // Vai no Firebase e puxa apenas 1 registro em vez de ler 43MB
+            const docRef = doc(db, "cadastro_imobiliario", chaveBusca);
+            const docSnap = await getDoc(docRef);
 
-        if(imovelEncontrado) {
-            document.getElementById('nome').value = imovelEncontrado.proprietario_principal || '';
-            document.getElementById('doc').value = imovelEncontrado.cnpj_cpf || '';
-            
-            // Constrói o endereço completo do terreno autuado
-            let endLote = imovelEncontrado.logradouro || '';
-            if(imovelEncontrado.numero && imovelEncontrado.numero !== '0' && imovelEncontrado.numero !== 'S/N' && imovelEncontrado.numero !== 'SN') {
-                endLote += `, ${imovelEncontrado.numero}`;
+            if(docSnap.exists()) {
+                const imovel = docSnap.data();
+                
+                document.getElementById('nome').value = imovel.proprietario_principal || '';
+                document.getElementById('doc').value = imovel.cnpj_cpf || '';
+                
+                let endLote = imovel.logradouro || '';
+                if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') {
+                    endLote += `, ${imovel.numero}`;
+                }
+                if(imovel.complemento) endLote += ` - ${imovel.complemento}`;
+                
+                document.getElementById('loteEndereco').value = endLote;
+                
+                const bairroAtual = document.getElementById('bairro').value;
+                if(!bairroAtual) document.getElementById('bairro').value = imovel.bairro || '';
+                
+                document.getElementById('cadImob').value = imovel.cadastroimobiliario || '';
+
+                // Força a máscara do CPF/CNPJ a ser aplicada no dado recebido
+                document.getElementById('doc').dispatchEvent(new Event('input'));
+
+                window.mostrarToast("Dados do IPTU preenchidos automaticamente!");
+            } else {
+                window.mostrarToast("Lote não encontrado no banco de dados.");
             }
-            if(imovelEncontrado.complemento) {
-                endLote += ` - ${imovelEncontrado.complemento}`;
-            }
-            
-            document.getElementById('loteEndereco').value = endLote;
-            
-            // Evita sobrescrever o bairro de correspondência se já estiver preenchido pelo CEP, 
-            // ou preenche caso esteja vazio.
-            const bairroAtual = document.getElementById('bairro').value;
-            if(!bairroAtual) document.getElementById('bairro').value = imovelEncontrado.bairro || '';
-            
-            document.getElementById('cadImob').value = imovelEncontrado.cadastroimobiliario || '';
-
-            // Força a máscara do CPF/CNPJ a ser aplicada no dado colado
-            document.getElementById('doc').dispatchEvent(new Event('input'));
-
-            window.mostrarToast("Dados do IPTU preenchidos automaticamente!");
+        } catch(e) {
+            console.error("Erro na busca do IPTU", e);
+            window.mostrarToast("Falha na conexão com o banco de imóveis.");
         }
+        mostrarLoading(false);
     });
 }
 // ============================================================================
-
 
 // --- MOTOR DE AUDITORIA (CAIXA PRETA) ---
 async function registrarLog(acaoRealizada, alvo) {
