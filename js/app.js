@@ -56,11 +56,11 @@ window.navegarPara = function(viewId) {
 
 async function registrarLog(acaoRealizada, alvo) {
     if(!perfilUsuario) return;
-    try { await addDoc(collection(db, "logs_auditoria"), { dataHora: new Date().toISOString(), usuario: perfilUsuario.nome, matricula: perfilUsuario.matricula, setor: perfilUsuario.setor || 'SMMAM', nivel: perfilUsuario.nivel, acao: acaoRealizada, documentoAlvo: alvo }); } catch(e) {}
+    try { await addDoc(collection(db, "logs_auditoria"), { dataHora: new Date().toISOString(), usuario: perfilUsuario.nome || 'Desconhecido', matricula: perfilUsuario.matricula || '0000', setor: perfilUsuario.setor || 'SMMAM', nivel: perfilUsuario.nivel || 'leitor', acao: acaoRealizada, documentoAlvo: alvo }); } catch(e) {}
 }
 
 // ============================================================================
-// AUTENTICAÇÃO E PERMISSÕES BLINDADAS
+// AUTENTICAÇÃO E PERMISSÕES (COM AMORTECEDORES)
 // ============================================================================
 window.toggleAuthMode = function() {
     const l = document.getElementById('login-fields'); const r = document.getElementById('register-fields'); const t = document.getElementById('authTitle'); const b = document.getElementById('btnToggleAuth');
@@ -76,30 +76,42 @@ onAuthStateChanged(auth, async (user) => {
             if(configSnap.exists()) window.valorURMGlobal = configSnap.data().valorURM || 0;
             const campoURM = document.getElementById('autoValorURMAtual');
             if(campoURM) campoURM.value = window.valorURMGlobal.toFixed(2);
-        } catch(e) { console.log("Aviso: Configurações de URM não encontradas."); }
+        } catch(e) { console.log("Aviso: Configurações de URM não lidas."); }
 
         try {
             const userDocRef = doc(db, "usuarios", user.uid);
             const docSnap = await getDoc(userDocRef);
             
             if (docSnap.exists()) {
-                perfilUsuario = docSnap.data(); if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
+                perfilUsuario = docSnap.data(); 
+                
+                // --- AMORTECEDORES DE SEGURANÇA PARA CONTAS ANTIGAS ---
+                if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
+                if(!perfilUsuario.status) perfilUsuario.status = 'aprovado';
+                if(!perfilUsuario.nivel) perfilUsuario.nivel = 'admin'; // Se for ficha velha, assume que é você (Admin)
+                if(!perfilUsuario.nome) perfilUsuario.nome = 'Administrador';
+                if(!perfilUsuario.matricula) perfilUsuario.matricula = '0000';
+                // ------------------------------------------------------
+
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
                     document.getElementById('auth-container').style.display = 'none'; document.getElementById('app-layout').style.display = 'none'; document.getElementById('waiting-room').style.display = 'block';
                     if(perfilUsuario.status === 'bloqueado') document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
-                } else if (perfilUsuario.status === 'aprovado') {
+                } else {
                     document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('app-layout').style.display = 'flex';
                     aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
                 }
             } else {
-                // COLETE SALVA-VIDAS: Se por acaso a ficha não for encontrada, ele recria o Administrador e te deixa passar
-                const novoPerfil = { nome: "Administrador Legado", cargo: "Administrador do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
+                const novoPerfil = { nome: "Administrador Legado", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
                 await setDoc(userDocRef, novoPerfil); 
                 perfilUsuario = novoPerfil;
                 document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('app-layout').style.display = 'flex';
                 aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
             }
-        } catch(e) { console.error(e); alert("Erro crítico na leitura. Tente recarregar a página."); }
+        } catch(e) { 
+            console.error(e); 
+            // Mostra o erro exato na tela se acontecer
+            alert("Erro na inicialização: " + e.message + "\n\nTire um print se isso continuar!"); 
+        }
         mostrarLoading(false);
     } else {
         document.getElementById('auth-container').style.display = 'flex'; document.getElementById('app-layout').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none';
@@ -114,8 +126,13 @@ window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; 
 function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
     document.getElementById('sidebar-setor').innerText = perfilUsuario.setor || 'SMMAM';
-    document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${perfilUsuario.nivel.toUpperCase()}</span>`;
-    document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula;
+    
+    // Amortecedor de Maiúsculas
+    const nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
+    
+    document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
+    document.getElementById('fiscal').value = perfilUsuario.nome || ''; 
+    document.getElementById('matricula').value = perfilUsuario.matricula || '';
 
     if(perfilUsuario.nivel === 'leitor') { document.getElementById('areaBotoesSalvarNotif').style.display = 'none'; document.getElementById('areaBotoesSalvarAuto').style.display = 'none'; }
     
@@ -184,7 +201,7 @@ window.buscarLoteConsultaLivre = async function() {
             let endLote = im.logradouro || ''; if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; if(im.complemento) endLote += ` - ${im.complemento}`;
             document.getElementById('resEnd').innerText = endLote; document.getElementById('resBairro').innerText = im.bairro || 'Não inf.'; document.getElementById('resCad').innerText = im.cadastroimobiliario || 'Sem ID';
             boxResult.style.display = 'block'; window.mostrarToast("Localizado!");
-        } else { alert("Nenhum imóvel localizado com esta chave no banco de dados."); }
+        } else { alert("Nenhum imóvel localizado com esta chave."); }
     } catch(e) { alert("Erro de conexão."); }
     mostrarLoading(false);
 }
@@ -199,10 +216,8 @@ window.puxarDadosDaNotificacao = function() {
     const notif = window.DB.find(i => i.numNotif === numPesquisa && i.tipoDocumento !== 'auto');
     if(!notif) return alert("Notificação não encontrada ou ela não pertence ao seu Setor.");
     
-    document.getElementById('autoNome').value = notif.nome;
-    document.getElementById('autoDoc').value = notif.doc;
-    document.getElementById('autoEndOcorrencia').value = notif.loteEndereco;
-    document.getElementById('autoDescricaoLei').value = "Ocorrência vinculada à Notificação " + notif.numNotif;
+    document.getElementById('autoNome').value = notif.nome; document.getElementById('autoDoc').value = notif.doc;
+    document.getElementById('autoEndOcorrencia').value = notif.loteEndereco; document.getElementById('autoDescricaoLei').value = "Ocorrência vinculada à Notificação " + notif.numNotif;
     window.mostrarToast("Dados importados da Notificação!");
 }
 
@@ -275,12 +290,12 @@ window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElemen
 document.querySelector('#configURM').nextElementSibling.addEventListener('click', async function() {
     const valor = parseFloat(document.getElementById('configURM').value); if(!valor || valor <= 0) return alert("Valor inválido.");
     mostrarLoading(true);
-    try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; document.getElementById('autoValorURMAtual').value = valor.toFixed(2); window.mostrarToast("Valor URM salvo e replicado!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
+    try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; document.getElementById('autoValorURMAtual').value = valor.toFixed(2); window.mostrarToast("Valor URM salvo!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
     mostrarLoading(false);
 });
 
 document.getElementById('btnAdminImportarIptu').addEventListener('click', function() {
-    const file = document.getElementById('adminFileJson').files[0]; if(!file) return alert("Selecione o arquivo JSON do IPTU primeiro.");
+    const file = document.getElementById('adminFileJson').files[0]; if(!file) return alert("Selecione o arquivo JSON.");
     const startIndex = parseInt(document.getElementById('adminStartFrom').value) || 0;
     const reader = new FileReader();
     
