@@ -28,30 +28,35 @@ window.valorURMGlobal = 0;
 let usuarioLogado = null;
 let perfilUsuario = null;
 
-// ============================================================================
-// FUNÇÕES BASE
-// ============================================================================
 const mostrarLoading = (mostrar, msg = "Sincronizando...") => {
-    document.getElementById('loading-msg').innerText = msg;
-    document.getElementById('loading-overlay').style.display = mostrar ? 'flex' : 'none';
+    const loader = document.getElementById('loading-overlay');
+    const msgEl = document.getElementById('loading-msg');
+    if(msgEl) msgEl.innerText = msg;
+    if(loader) loader.style.display = mostrar ? 'flex' : 'none';
 }
 
 window.mostrarToast = function(msg) {
-    const toast = document.getElementById("toast"); toast.innerText = msg; toast.className = "show";
-    setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+    const toast = document.getElementById("toast"); 
+    if(toast) {
+        toast.innerText = msg; toast.className = "show";
+        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+    }
 }
 
 window.navegarPara = function(viewId) {
     document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    document.getElementById('view-' + viewId).classList.add('active-view');
-    document.getElementById('nav-' + viewId).classList.add('active');
+    
+    const view = document.getElementById('view-' + viewId);
+    const nav = document.getElementById('nav-' + viewId);
+    if(view) view.classList.add('active-view');
+    if(nav) nav.classList.add('active');
 
     if(viewId === 'inicio') window.renderizarPainel();
     if(viewId === 'relatorios') window.renderizarGraficos();
     if(viewId === 'perfil') window.carregarDadosPerfil();
-    if(viewId === 'configuracoes' && perfilUsuario.nivel === 'admin') window.carregarConfiguracoesAdmin();
-    if(viewId === 'auditoria' && perfilUsuario.nivel === 'admin') window.carregarAuditoria();
+    if(viewId === 'configuracoes' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarConfiguracoesAdmin();
+    if(viewId === 'auditoria' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarAuditoria();
 }
 
 async function registrarLog(acaoRealizada, alvo) {
@@ -59,12 +64,12 @@ async function registrarLog(acaoRealizada, alvo) {
     try { await addDoc(collection(db, "logs_auditoria"), { dataHora: new Date().toISOString(), usuario: perfilUsuario.nome || 'Desconhecido', matricula: perfilUsuario.matricula || '0000', setor: perfilUsuario.setor || 'SMMAM', nivel: perfilUsuario.nivel || 'leitor', acao: acaoRealizada, documentoAlvo: alvo }); } catch(e) {}
 }
 
-// ============================================================================
-// AUTENTICAÇÃO E PERMISSÕES (COM AMORTECEDORES)
-// ============================================================================
 window.toggleAuthMode = function() {
     const l = document.getElementById('login-fields'); const r = document.getElementById('register-fields'); const t = document.getElementById('authTitle'); const b = document.getElementById('btnToggleAuth');
-    if(l.style.display === 'none') { l.style.display = 'block'; r.style.display = 'none'; t.innerText = 'Acesso - Fiscalização'; b.innerText = 'Servidor Novo? Solicite Acesso'; } else { l.style.display = 'none'; r.style.display = 'block'; t.innerText = 'Cadastro de Servidor'; b.innerText = 'Já tenho conta (Entrar)'; }
+    if(l && r && t && b) {
+        if(l.style.display === 'none') { l.style.display = 'block'; r.style.display = 'none'; t.innerText = 'Acesso - Fiscalização'; b.innerText = 'Servidor Novo? Solicite Acesso'; } 
+        else { l.style.display = 'none'; r.style.display = 'block'; t.innerText = 'Cadastro de Servidor'; b.innerText = 'Já tenho conta (Entrar)'; }
+    }
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -76,7 +81,7 @@ onAuthStateChanged(auth, async (user) => {
             if(configSnap.exists()) window.valorURMGlobal = configSnap.data().valorURM || 0;
             const campoURM = document.getElementById('autoValorURMAtual');
             if(campoURM) campoURM.value = window.valorURMGlobal.toFixed(2);
-        } catch(e) { console.log("Aviso: Configurações de URM não lidas."); }
+        } catch(e) { console.log("Aviso: Configurações de URM ignoradas."); }
 
         try {
             const userDocRef = doc(db, "usuarios", user.uid);
@@ -84,37 +89,41 @@ onAuthStateChanged(auth, async (user) => {
             
             if (docSnap.exists()) {
                 perfilUsuario = docSnap.data(); 
-                
-                // --- AMORTECEDORES DE SEGURANÇA PARA CONTAS ANTIGAS ---
                 if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
                 if(!perfilUsuario.status) perfilUsuario.status = 'aprovado';
-                if(!perfilUsuario.nivel) perfilUsuario.nivel = 'admin'; // Se for ficha velha, assume que é você (Admin)
+                if(!perfilUsuario.nivel) perfilUsuario.nivel = 'admin'; 
                 if(!perfilUsuario.nome) perfilUsuario.nome = 'Administrador';
                 if(!perfilUsuario.matricula) perfilUsuario.matricula = '0000';
-                // ------------------------------------------------------
 
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
-                    document.getElementById('auth-container').style.display = 'none'; document.getElementById('app-layout').style.display = 'none'; document.getElementById('waiting-room').style.display = 'block';
-                    if(perfilUsuario.status === 'bloqueado') document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
+                    if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
+                    if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none'; 
+                    if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'block';
+                    if(perfilUsuario.status === 'bloqueado' && document.querySelector('#waiting-room h2')) document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
                 } else {
-                    document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('app-layout').style.display = 'flex';
+                    if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
+                    if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
+                    if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
                     aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
                 }
             } else {
-                const novoPerfil = { nome: "Administrador Legado", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
+                const novoPerfil = { nome: "Administrador", cargo: "Admin", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
                 await setDoc(userDocRef, novoPerfil); 
                 perfilUsuario = novoPerfil;
-                document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('app-layout').style.display = 'flex';
+                if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
+                if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
+                if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
                 aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
             }
         } catch(e) { 
             console.error(e); 
-            // Mostra o erro exato na tela se acontecer
-            alert("Erro na inicialização: " + e.message + "\n\nTire um print se isso continuar!"); 
+            alert("Ocorreu um erro, mas tentamos contornar. Atualize a página e tente de novo!"); 
         }
         mostrarLoading(false);
     } else {
-        document.getElementById('auth-container').style.display = 'flex'; document.getElementById('app-layout').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none';
+        if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'flex'; 
+        if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none'; 
+        if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none';
     }
 });
 
@@ -125,27 +134,41 @@ window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; 
 
 function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
-    document.getElementById('sidebar-setor').innerText = perfilUsuario.setor || 'SMMAM';
     
-    // Amortecedor de Maiúsculas
+    const setorEl = document.getElementById('sidebar-setor');
+    if(setorEl) setorEl.innerText = perfilUsuario.setor || 'SMMAM';
+    
     const nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
     
-    document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
-    document.getElementById('fiscal').value = perfilUsuario.nome || ''; 
-    document.getElementById('matricula').value = perfilUsuario.matricula || '';
-
-    if(perfilUsuario.nivel === 'leitor') { document.getElementById('areaBotoesSalvarNotif').style.display = 'none'; document.getElementById('areaBotoesSalvarAuto').style.display = 'none'; }
+    const userLogEl = document.getElementById('userLoggedDisplay');
+    if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
     
+    const fiscalEl = document.getElementById('fiscal');
+    if(fiscalEl) fiscalEl.value = perfilUsuario.nome || ''; 
+
+    const matEl = document.getElementById('matricula');
+    if(matEl) matEl.value = perfilUsuario.matricula || '';
+
+    const areaSalvarNotif = document.getElementById('areaBotoesSalvarNotif');
+    const areaSalvarAuto = document.getElementById('areaBotoesSalvarAuto');
+
+    if(perfilUsuario.nivel === 'leitor') { 
+        if(areaSalvarNotif) areaSalvarNotif.style.display = 'none'; 
+        if(areaSalvarAuto) areaSalvarAuto.style.display = 'none'; 
+    }
+    
+    const menuAdmin = document.getElementById('menu-admin-area');
+    const btnExcluir = document.getElementById('areaBotoesAdminExcluir');
+
     if(perfilUsuario.nivel === 'admin') {
-        document.getElementById('menu-admin-area').style.display = 'block'; document.getElementById('areaBotoesAdminExcluir').style.display = 'flex';
+        if(menuAdmin) menuAdmin.style.display = 'block'; 
+        if(btnExcluir) btnExcluir.style.display = 'flex';
     } else {
-        document.getElementById('menu-admin-area').style.display = 'none'; document.getElementById('areaBotoesAdminExcluir').style.display = 'none';
+        if(menuAdmin) menuAdmin.style.display = 'none'; 
+        if(btnExcluir) btnExcluir.style.display = 'none';
     }
 }
 
-// ============================================================================
-// MÓDULOS DE INTEGRAÇÃO (CEP E IPTU)
-// ============================================================================
 const cepInput = document.getElementById('cep');
 if(cepInput) {
     cepInput.addEventListener('blur', async function() {
@@ -154,26 +177,30 @@ if(cepInput) {
     });
 }
 
-document.getElementById('cadLote').addEventListener('blur', async function() {
-    const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); const zona = document.getElementById('cadZona').value; const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); const lote = document.getElementById('cadLote').value.padStart(4, '0');
-    if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
-    const chaveBusca = `${dist}${zona}${quad}${lote}`;
-    mostrarLoading(true, "Buscando Imóvel...");
-    try {
-        const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
-        const snap = await getDocs(q);
-        if(!snap.empty) {
-            const imovel = snap.docs[0].data();
-            document.getElementById('nome').value = imovel.proprietario_principal || ''; document.getElementById('doc').value = imovel.cnpj_cpf || '';
-            let endLote = imovel.logradouro || ''; if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') endLote += `, ${imovel.numero}`; if(imovel.complemento) endLote += ` - ${imovel.complemento}`;
-            document.getElementById('loteEndereco').value = endLote; if(!document.getElementById('bairro').value) document.getElementById('bairro').value = imovel.bairro || ''; document.getElementById('cadImob').value = imovel.cadastroimobiliario || '';
-            document.getElementById('doc').dispatchEvent(new Event('input')); window.mostrarToast("Preenchido!");
-        } else { window.mostrarToast("Lote não encontrado."); }
-    } catch(e) {} mostrarLoading(false);
-});
+const cadLoteInput = document.getElementById('cadLote');
+if(cadLoteInput) {
+    cadLoteInput.addEventListener('blur', async function() {
+        const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); const zona = document.getElementById('cadZona').value; const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); const lote = document.getElementById('cadLote').value.padStart(4, '0');
+        if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
+        const chaveBusca = `${dist}${zona}${quad}${lote}`;
+        mostrarLoading(true, "Buscando Imóvel...");
+        try {
+            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
+            const snap = await getDocs(q);
+            if(!snap.empty) {
+                const imovel = snap.docs[0].data();
+                document.getElementById('nome').value = imovel.proprietario_principal || ''; document.getElementById('doc').value = imovel.cnpj_cpf || '';
+                let endLote = imovel.logradouro || ''; if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') endLote += `, ${imovel.numero}`; if(imovel.complemento) endLote += ` - ${imovel.complemento}`;
+                document.getElementById('loteEndereco').value = endLote; if(!document.getElementById('bairro').value) document.getElementById('bairro').value = imovel.bairro || ''; document.getElementById('cadImob').value = imovel.cadastroimobiliario || '';
+                document.getElementById('doc').dispatchEvent(new Event('input')); window.mostrarToast("Preenchido!");
+            } else { window.mostrarToast("Lote não encontrado."); }
+        } catch(e) {} mostrarLoading(false);
+    });
+}
 
 window.buscarStatusCorreios = async function(codigoAR, spanId) {
-    const span = document.getElementById(spanId); span.innerHTML = `<span class="correios-status" style="background:#e2e8f0;color:#64748b;">⏳ API...</span>`;
+    const span = document.getElementById(spanId); if(!span) return;
+    span.innerHTML = `<span class="correios-status" style="background:#e2e8f0;color:#64748b;">⏳ API...</span>`;
     try {
         const response = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
         if(!response.ok) throw new Error('Falha');
@@ -182,16 +209,13 @@ window.buscarStatusCorreios = async function(codigoAR, spanId) {
     } catch(e) { span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" class="correios-status correios-erro">Correios ↗</a>`; }
 }
 
-// ============================================================================
-// CONSULTA CADASTRAL LIVRE
-// ============================================================================
 window.buscarLoteConsultaLivre = async function() {
     const dist = document.getElementById('consDistrito').value.padStart(2, '0'); const zona = document.getElementById('consZona').value; const quad = document.getElementById('consQuadra').value.padStart(3, '0'); const lote = document.getElementById('consLote').value.padStart(4, '0');
     if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return alert("Preencha todos os campos do lote.");
     const chaveBusca = `${dist}${zona}${quad}${lote}`;
     
     mostrarLoading(true, "Pesquisando Cofre IPTU...");
-    const boxResult = document.getElementById('resultadoConsulta'); boxResult.style.display = 'none';
+    const boxResult = document.getElementById('resultadoConsulta'); if(boxResult) boxResult.style.display = 'none';
     try {
         const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
         const snap = await getDocs(q);
@@ -200,19 +224,15 @@ window.buscarLoteConsultaLivre = async function() {
             document.getElementById('resProp').innerText = im.proprietario_principal || 'Não inf.'; document.getElementById('resDoc').innerText = im.cnpj_cpf || 'Não inf.';
             let endLote = im.logradouro || ''; if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; if(im.complemento) endLote += ` - ${im.complemento}`;
             document.getElementById('resEnd').innerText = endLote; document.getElementById('resBairro').innerText = im.bairro || 'Não inf.'; document.getElementById('resCad').innerText = im.cadastroimobiliario || 'Sem ID';
-            boxResult.style.display = 'block'; window.mostrarToast("Localizado!");
+            if(boxResult) boxResult.style.display = 'block'; window.mostrarToast("Localizado!");
         } else { alert("Nenhum imóvel localizado com esta chave."); }
     } catch(e) { alert("Erro de conexão."); }
     mostrarLoading(false);
 }
 
-// ============================================================================
-// MÓDULO AUTO DE INFRAÇÃO E CÁLCULO DE URM
-// ============================================================================
 window.puxarDadosDaNotificacao = function() {
     const numPesquisa = document.getElementById('autoBuscaNotif').value.trim();
     if(!numPesquisa) return alert("Digite o número da notificação para puxar.");
-    
     const notif = window.DB.find(i => i.numNotif === numPesquisa && i.tipoDocumento !== 'auto');
     if(!notif) return alert("Notificação não encontrada ou ela não pertence ao seu Setor.");
     
@@ -222,117 +242,99 @@ window.puxarDadosDaNotificacao = function() {
 }
 
 window.calcularMultaReais = function() {
-    const qtdURM = parseFloat(document.getElementById('autoMultaURM').value) || 0;
+    const elUrm = document.getElementById('autoMultaURM');
+    const elReais = document.getElementById('autoMultaReais');
+    if(!elUrm || !elReais) return;
+    const qtdURM = parseFloat(elUrm.value) || 0;
     const emReais = qtdURM * window.valorURMGlobal;
-    document.getElementById('autoMultaReais').value = "R$ " + emReais.toFixed(2).replace('.', ',');
+    elReais.value = "R$ " + emReais.toFixed(2).replace('.', ',');
 }
 
-// ============================================================================
-// DASHBOARDS E GRÁFICOS (CHART.JS)
-// ============================================================================
-let chartBairrosInstance = null;
-let chartStatusInstance = null;
-
+let chartBairrosInstance = null; let chartStatusInstance = null;
 window.renderizarGraficos = function() {
     if(window.DB.length === 0) return;
 
     let countBairros = {};
-    window.DB.forEach(doc => { 
-        let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO';
-        countBairros[b] = (countBairros[b] || 0) + 1;
-    });
+    window.DB.forEach(doc => { let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO'; countBairros[b] = (countBairros[b] || 0) + 1; });
     const bairrosOrdenados = Object.entries(countBairros).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    const labelsBairros = bairrosOrdenados.map(item => item[0]);
-    const dadosBairros = bairrosOrdenados.map(item => item[1]);
+    const labelsBairros = bairrosOrdenados.map(item => item[0]); const dadosBairros = bairrosOrdenados.map(item => item[1]);
 
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     let stNoPrazo = 0; let stVencido = 0; let stAutos = 0;
-    window.DB.forEach(i => {
-        if(i.tipoDocumento === 'auto') stAutos++;
-        else if(i.dataPrazo) { const pz = new Date(i.dataPrazo + "T00:00:00"); if(pz < hoje) stVencido++; else stNoPrazo++; }
-    });
+    window.DB.forEach(i => { if(i.tipoDocumento === 'auto') stAutos++; else if(i.dataPrazo) { const pz = new Date(i.dataPrazo + "T00:00:00"); if(pz < hoje) stVencido++; else stNoPrazo++; } });
 
     const ctxB = document.getElementById('chartBairros');
-    if(chartBairrosInstance) chartBairrosInstance.destroy();
-    chartBairrosInstance = new Chart(ctxB, {
-        type: 'bar',
-        data: { labels: labelsBairros, datasets: [{ label: 'Qtd de Autuações', data: dadosBairros, backgroundColor: '#3b82f6', borderRadius: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-    });
+    if(ctxB) {
+        if(chartBairrosInstance) chartBairrosInstance.destroy();
+        chartBairrosInstance = new Chart(ctxB, { type: 'bar', data: { labels: labelsBairros, datasets: [{ label: 'Qtd de Autuações', data: dadosBairros, backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+    }
 
     const ctxS = document.getElementById('chartStatus');
-    if(chartStatusInstance) chartStatusInstance.destroy();
-    chartStatusInstance = new Chart(ctxS, {
-        type: 'doughnut',
-        data: { labels: ['No Prazo', 'Vencidos (Irregular)', 'Multas Geradas'], datasets: [{ data: [stNoPrazo, stVencido, stAutos], backgroundColor: ['#10b981', '#ef4444', '#f59e0b'] }] },
-        options: { responsive: true, maintainAspectRatio: false }
-    });
+    if(ctxS) {
+        if(chartStatusInstance) chartStatusInstance.destroy();
+        chartStatusInstance = new Chart(ctxS, { type: 'doughnut', data: { labels: ['No Prazo', 'Vencidos (Irregular)', 'Multas Geradas'], datasets: [{ data: [stNoPrazo, stVencido, stAutos], backgroundColor: ['#10b981', '#ef4444', '#f59e0b'] }] }, options: { responsive: true, maintainAspectRatio: false } });
+    }
 }
 
-// ============================================================================
-// ADMINISTRAÇÃO E IMPORTAÇÃO NATIVA IPTU
-// ============================================================================
 window.carregarConfiguracoesAdmin = async function() {
-    const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); corpoUsuarios.innerHTML = '';
+    const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); if(corpoUsuarios) corpoUsuarios.innerHTML = '';
     try {
         const usersSnapshot = await getDocs(collection(db, "usuarios"));
         usersSnapshot.forEach(docSnap => {
             const u = docSnap.data(); const uid = docSnap.id;
             const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
             const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
-            corpoUsuarios.innerHTML += `<tr><td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td><span style="background:#e2e8f0; padding:3px; border-radius:4px; font-size:11px;">${u.setor || 'SMMAM'}</span></td><td>${u.email}</td><td>${selectStatus}</td><td>${selectNivel}</td></tr>`;
+            if(corpoUsuarios) corpoUsuarios.innerHTML += `<tr><td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td><span style="background:#e2e8f0; padding:3px; border-radius:4px; font-size:11px;">${u.setor || 'SMMAM'}</span></td><td>${u.email}</td><td>${selectStatus}</td><td>${selectNivel}</td></tr>`;
         });
     } catch(e) {}
 }
 
 window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) { try { await updateDoc(doc(db, "usuarios", uid), { [campo]: valorNovo }); window.mostrarToast(`Atualizado!`); if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`; } catch(e) { alert("Sem permissão."); } }
 
-document.querySelector('#configURM').nextElementSibling.addEventListener('click', async function() {
-    const valor = parseFloat(document.getElementById('configURM').value); if(!valor || valor <= 0) return alert("Valor inválido.");
-    mostrarLoading(true);
-    try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; document.getElementById('autoValorURMAtual').value = valor.toFixed(2); window.mostrarToast("Valor URM salvo!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
-    mostrarLoading(false);
-});
+const btnSalvarUrm = document.querySelector('#configURM')?.nextElementSibling;
+if(btnSalvarUrm) {
+    btnSalvarUrm.addEventListener('click', async function() {
+        const valor = parseFloat(document.getElementById('configURM').value); if(!valor || valor <= 0) return alert("Valor inválido.");
+        mostrarLoading(true);
+        try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; const elAtual = document.getElementById('autoValorURMAtual'); if(elAtual) elAtual.value = valor.toFixed(2); window.mostrarToast("Valor URM salvo!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
+        mostrarLoading(false);
+    });
+}
 
-document.getElementById('btnAdminImportarIptu').addEventListener('click', function() {
-    const file = document.getElementById('adminFileJson').files[0]; if(!file) return alert("Selecione o arquivo JSON.");
-    const startIndex = parseInt(document.getElementById('adminStartFrom').value) || 0;
-    const reader = new FileReader();
-    
-    reader.onload = async function(e) {
-        try {
-            const dados = JSON.parse(e.target.result);
-            if(!Array.isArray(dados)) return alert("Arquivo JSON inválido.");
-            if (startIndex >= dados.length) return alert("Número de início maior que o total!");
+const btnImportarIptu = document.getElementById('btnAdminImportarIptu');
+if(btnImportarIptu) {
+    btnImportarIptu.addEventListener('click', function() {
+        const file = document.getElementById('adminFileJson').files[0]; if(!file) return alert("Selecione o arquivo JSON.");
+        const startIndex = parseInt(document.getElementById('adminStartFrom').value) || 0;
+        const reader = new FileReader();
+        
+        reader.onload = async function(e) {
+            try {
+                const dados = JSON.parse(e.target.result);
+                if(!Array.isArray(dados)) return alert("Arquivo JSON inválido.");
+                if (startIndex >= dados.length) return alert("Número de início maior que o total!");
 
-            const progressDiv = document.getElementById('adminProgressoIptu');
-            progressDiv.innerText = `Preparando retomada a partir do registro ${startIndex}...`;
-            document.getElementById('btnAdminImportarIptu').disabled = true;
+                const progressDiv = document.getElementById('adminProgressoIptu');
+                if(progressDiv) progressDiv.innerText = `Preparando retomada a partir do registro ${startIndex}...`;
+                document.getElementById('btnAdminImportarIptu').disabled = true;
 
-            const TAMANHO_LOTE = 400; let enviados = startIndex;
+                const TAMANHO_LOTE = 400; let enviados = startIndex;
 
-            for (let i = startIndex; i < dados.length; i += TAMANHO_LOTE) {
-                const loteAtual = dados.slice(i, i + TAMANHO_LOTE);
-                const batch = writeBatch(db);
-                loteAtual.forEach(imovel => {
-                    if(imovel.chaveinscricao) {
-                        const chaveLimpa = String(imovel.chaveinscricao).trim();
-                        batch.set(doc(db, "cadastro_imobiliario", chaveLimpa), imovel);
-                    }
-                });
-                await batch.commit(); enviados += loteAtual.length;
-                progressDiv.innerText = `⏳ Enviando para Nuvem: ${enviados} de ${dados.length}...`;
-                await new Promise(r => setTimeout(r, 1000));
-            }
-            progressDiv.innerText = `✅ SUCESSO! Base atualizada.`; progressDiv.style.color = 'green';
-        } catch(err) { alert("Erro: " + err.message); }
-    };
-    reader.readAsText(file);
-});
+                for (let i = startIndex; i < dados.length; i += TAMANHO_LOTE) {
+                    const loteAtual = dados.slice(i, i + TAMANHO_LOTE);
+                    const batch = writeBatch(db);
+                    loteAtual.forEach(imovel => { if(imovel.chaveinscricao) { const chaveLimpa = String(imovel.chaveinscricao).trim(); batch.set(doc(db, "cadastro_imobiliario", chaveLimpa), imovel); } });
+                    await batch.commit(); enviados += loteAtual.length;
+                    if(progressDiv) progressDiv.innerText = `⏳ Enviando para Nuvem: ${enviados} de ${dados.length}...`;
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+                if(progressDiv) { progressDiv.innerText = `✅ SUCESSO! Base atualizada.`; progressDiv.style.color = 'green'; }
+            } catch(err) { alert("Erro: " + err.message); }
+        };
+        reader.readAsText(file);
+    });
+}
 
-// ============================================================================
-// CRUD NOTIFICAÇÕES E AUTOS (O NÚCLEO MISTO)
-// ============================================================================
 window.carregarDadosNuvem = async function() {
     mostrarLoading(true, "Baixando demandas...");
     try {
@@ -350,17 +352,17 @@ window.salvarDocumento = async function(event, tipoDoc) {
     event.preventDefault(); if(perfilUsuario.nivel === 'leitor') return alert("Leitores não salvam.");
     mostrarLoading(true, "Salvando na Nuvem...");
     
-    let editId = ''; let dados = {}; let btnForm = null; let base64Array = [];
+    let editId = ''; let dados = {}; let btnForm = null; let base64Array = window.fotosTemp || [];
 
     if(tipoDoc === 'notificacao') {
-        btnForm = document.getElementById('btnSalvarNotif'); editId = document.getElementById('editFirebaseIdNotif').value; base64Array = window.fotosTemp;
+        btnForm = document.getElementById('btnSalvarNotif'); editId = document.getElementById('editFirebaseIdNotif').value;
         dados = { tipoDocumento: 'notificacao', numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), statusRetornoAR: document.getElementById('statusRetornoAR').value, dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
     } else {
-        btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value; base64Array = window.fotosTemp;
+        btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value;
         dados = { tipoDocumento: 'auto', numNotif: document.getElementById('autoNum').value, dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, autoMultaURM: document.getElementById('autoMultaURM').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
     }
     
-    btnForm.disabled = true;
+    if(btnForm) btnForm.disabled = true;
     try {
         let idDoDoc = editId;
         if (editId) { await updateDoc(doc(db, "notificacoes", editId), dados); } 
@@ -372,7 +374,7 @@ window.salvarDocumento = async function(event, tipoDoc) {
         
         await window.carregarDadosNuvem(); window.limparFormularios(); window.mostrarToast("Salvo na Nuvem!"); await registrarLog(editId ? `Editou ${tipoDoc}` : `Criou ${tipoDoc}`, dados.numNotif); window.navegarPara('inicio');
     } catch (e) { alert("Erro ao salvar."); }
-    btnForm.disabled = false; mostrarLoading(false);
+    if(btnForm) btnForm.disabled = false; mostrarLoading(false);
 }
 
 window.excluirSelecionadas = async function() {
@@ -386,7 +388,6 @@ window.excluirSelecionadas = async function() {
     }
 }
 
-// --- FOTOS ---
 window.fotoModalAtual = null;
 window.abrirModalFoto = function(i) { window.fotoModalAtual = window.fotosTemp[i]; document.getElementById('modal-image').src = window.fotoModalAtual; document.getElementById('photo-modal').style.display = 'flex'; }
 window.fecharModalFoto = function() { document.getElementById('photo-modal').style.display = 'none'; }
@@ -395,7 +396,6 @@ window.processarFotos = function(e, containerId) { const files = e.target.files;
 window.renderizarPreviewFotos = function(containerId) { const container = document.getElementById(containerId); if(!container) return; container.innerHTML = ''; window.fotosTemp.forEach((f, i) => { const div = document.createElement('div'); div.style.position = 'relative'; div.innerHTML = `<img src="${f}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;cursor:pointer;" onclick="abrirModalFoto(${i})"><button type="button" onclick="removerFoto(${i}, '${containerId}')" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`; container.appendChild(div); }); }
 window.removerFoto = function(i, cid) { window.fotosTemp.splice(i, 1); window.renderizarPreviewFotos(cid); }
 
-// --- DASHBOARD E TABELA CENTRAL ---
 window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 window.aplicarFiltroTipo = function(tipo, btnElement) { window.filtroTipoDocumento = tipo; document.querySelectorAll('.filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
@@ -408,11 +408,17 @@ window.atualizarDashboardGraficos = function() {
         if(i.codigoAR && i.codigoAR.trim() !== '') { arEnv++; if(i.statusRetornoAR === 'entregue' || i.statusRetornoAR === 'devolvido') arRet++; }
         if(i.dataPrazo) { const prazo = new Date(i.dataPrazo + "T00:00:00"); if(prazo < hoje) venc++; } 
     });
-    document.getElementById('dashTotalNotif').innerText = tNotif; document.getElementById('dashTotalAutos').innerText = tAutos; document.getElementById('dashAREnviados').innerText = arEnv; document.getElementById('dashARRetornados').innerText = arRet; document.getElementById('dashVencidas').innerText = venc; 
+    if(document.getElementById('dashTotalNotif')) document.getElementById('dashTotalNotif').innerText = tNotif; 
+    if(document.getElementById('dashTotalAutos')) document.getElementById('dashTotalAutos').innerText = tAutos; 
+    if(document.getElementById('dashAREnviados')) document.getElementById('dashAREnviados').innerText = arEnv; 
+    if(document.getElementById('dashARRetornados')) document.getElementById('dashARRetornados').innerText = arRet; 
+    if(document.getElementById('dashVencidas')) document.getElementById('dashVencidas').innerText = venc; 
 }
 
 window.renderizarPainel = function() {
-    window.atualizarDashboardGraficos(); const corpo = document.getElementById('tabelaCorpo'); corpo.innerHTML = ''; const filtroTexto = document.getElementById('buscaInput').value.toLowerCase(); const hoje = new Date(); hoje.setHours(0,0,0,0);
+    window.atualizarDashboardGraficos(); const corpo = document.getElementById('tabelaCorpo'); if(!corpo) return; corpo.innerHTML = ''; 
+    const buscaEl = document.getElementById('buscaInput'); const filtroTexto = buscaEl ? buscaEl.value.toLowerCase() : ''; 
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
     let filtrados = window.DB;
     if(window.filtroTipoDocumento !== 'Todos') filtrados = filtrados.filter(item => item.tipoDocumento === window.filtroTipoDocumento);
     filtrados = filtrados.filter(item => { return (item.nome || '').toLowerCase().includes(filtroTexto) || (item.numNotif || '').toLowerCase().includes(filtroTexto) || (item.loteEndereco || '').toLowerCase().includes(filtroTexto) || (item.procOuvidoria || '').toLowerCase().includes(filtroTexto) || (item.codigoAR || '').toLowerCase().includes(filtroTexto); });
@@ -438,30 +444,93 @@ window.carregarParaEditar = async function(id) {
     
     if(item.tipoDocumento === 'auto') {
         window.navegarPara('autos'); window.scrollTo(0,0);
-        document.getElementById('editFirebaseIdAuto').value = item.firebaseId; document.getElementById('autoNum').value = item.numNotif || ''; document.getElementById('autoData').value = item.dataNotif || ''; document.getElementById('autoNome').value = item.nome || ''; document.getElementById('autoDoc').value = item.doc || ''; document.getElementById('autoEndOcorrencia').value = item.loteEndereco || ''; document.getElementById('autoDescricaoLei').value = item.autoDescricaoLei || ''; document.getElementById('autoMultaURM').value = item.autoMultaURM || ''; window.calcularMultaReais();
-        window.fotosTemp = []; document.getElementById('indicadorFotosAuto').style.display = 'inline-block'; try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {} document.getElementById('indicadorFotosAuto').style.display = 'none'; window.renderizarPreviewFotos('previewFotosAuto');
+        if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = item.firebaseId; 
+        if(document.getElementById('autoNum')) document.getElementById('autoNum').value = item.numNotif || ''; 
+        if(document.getElementById('autoData')) document.getElementById('autoData').value = item.dataNotif || ''; 
+        if(document.getElementById('autoNome')) document.getElementById('autoNome').value = item.nome || ''; 
+        if(document.getElementById('autoDoc')) document.getElementById('autoDoc').value = item.doc || ''; 
+        if(document.getElementById('autoEndOcorrencia')) document.getElementById('autoEndOcorrencia').value = item.loteEndereco || ''; 
+        if(document.getElementById('autoDescricaoLei')) document.getElementById('autoDescricaoLei').value = item.autoDescricaoLei || ''; 
+        if(document.getElementById('autoMultaURM')) document.getElementById('autoMultaURM').value = item.autoMultaURM || ''; 
+        window.calcularMultaReais();
+        
+        window.fotosTemp = []; 
+        if(document.getElementById('indicadorFotosAuto')) document.getElementById('indicadorFotosAuto').style.display = 'inline-block'; 
+        try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {} 
+        if(document.getElementById('indicadorFotosAuto')) document.getElementById('indicadorFotosAuto').style.display = 'none'; 
+        window.renderizarPreviewFotos('previewFotosAuto');
         return;
     }
 
     window.navegarPara('notificacoes'); window.scrollTo(0,0);
-    document.getElementById('editFirebaseIdNotif').value = item.firebaseId; document.getElementById('numNotif').value = item.numNotif || ''; document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; document.getElementById('codigoAR').value = item.codigoAR || ''; document.getElementById('statusRetornoAR').value = item.statusRetornoAR || 'aguardando'; document.getElementById('dataPrazo').value = item.dataPrazo || ''; document.getElementById('dataNotif').value = item.dataNotif || ''; document.getElementById('tipoAR').checked = item.tipoAR; document.getElementById('tipoPresencial').checked = item.tipoPresencial; document.getElementById('nome').value = item.nome || ''; document.getElementById('doc').value = item.doc || ''; document.getElementById('endereco').value = item.endereco || ''; document.getElementById('telefone').value = item.telefone || ''; document.getElementById('bairro').value = item.bairro || ''; document.getElementById('cep').value = item.cep || ''; document.getElementById('cadDistrito').value = item.cadDistrito || ''; document.getElementById('cadZona').value = item.cadZona || ''; document.getElementById('cadQuadra').value = item.cadQuadra || ''; document.getElementById('cadLote').value = item.cadLote || ''; document.getElementById('cadImob').value = item.cadImob || ''; document.getElementById('loteEndereco').value = item.loteEndereco || ''; document.getElementById('irrMato').checked = item.irrMato; document.getElementById('irrResiduos').checked = item.irrResiduos; document.getElementById('irrEntulhos').checked = item.irrEntulhos; document.getElementById('irrOutros').checked = item.irrOutros; document.getElementById('ref').value = item.ref || ''; document.getElementById('obs').value = item.obs || ''; document.getElementById('lei5198').checked = item.lei5198; document.getElementById('lc56').checked = item.lc56;
-    window.fotosTemp = []; document.getElementById('indicadorFotosNotif').style.display = 'inline-block';
+    if(document.getElementById('editFirebaseIdNotif')) document.getElementById('editFirebaseIdNotif').value = item.firebaseId; 
+    if(document.getElementById('numNotif')) document.getElementById('numNotif').value = item.numNotif || ''; 
+    if(document.getElementById('procOuvidoria')) document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; 
+    if(document.getElementById('codigoAR')) document.getElementById('codigoAR').value = item.codigoAR || ''; 
+    if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = item.statusRetornoAR || 'aguardando'; 
+    if(document.getElementById('dataPrazo')) document.getElementById('dataPrazo').value = item.dataPrazo || ''; 
+    if(document.getElementById('dataNotif')) document.getElementById('dataNotif').value = item.dataNotif || ''; 
+    if(document.getElementById('tipoAR')) document.getElementById('tipoAR').checked = item.tipoAR; 
+    if(document.getElementById('tipoPresencial')) document.getElementById('tipoPresencial').checked = item.tipoPresencial; 
+    if(document.getElementById('nome')) document.getElementById('nome').value = item.nome || ''; 
+    if(document.getElementById('doc')) document.getElementById('doc').value = item.doc || ''; 
+    if(document.getElementById('endereco')) document.getElementById('endereco').value = item.endereco || ''; 
+    if(document.getElementById('telefone')) document.getElementById('telefone').value = item.telefone || ''; 
+    if(document.getElementById('bairro')) document.getElementById('bairro').value = item.bairro || ''; 
+    if(document.getElementById('cep')) document.getElementById('cep').value = item.cep || ''; 
+    if(document.getElementById('cadDistrito')) document.getElementById('cadDistrito').value = item.cadDistrito || ''; 
+    if(document.getElementById('cadZona')) document.getElementById('cadZona').value = item.cadZona || ''; 
+    if(document.getElementById('cadQuadra')) document.getElementById('cadQuadra').value = item.cadQuadra || ''; 
+    if(document.getElementById('cadLote')) document.getElementById('cadLote').value = item.cadLote || ''; 
+    if(document.getElementById('cadImob')) document.getElementById('cadImob').value = item.cadImob || ''; 
+    if(document.getElementById('loteEndereco')) document.getElementById('loteEndereco').value = item.loteEndereco || ''; 
+    if(document.getElementById('irrMato')) document.getElementById('irrMato').checked = item.irrMato; 
+    if(document.getElementById('irrResiduos')) document.getElementById('irrResiduos').checked = item.irrResiduos; 
+    if(document.getElementById('irrEntulhos')) document.getElementById('irrEntulhos').checked = item.irrEntulhos; 
+    if(document.getElementById('irrOutros')) document.getElementById('irrOutros').checked = item.irrOutros; 
+    if(document.getElementById('ref')) document.getElementById('ref').value = item.ref || ''; 
+    if(document.getElementById('obs')) document.getElementById('obs').value = item.obs || ''; 
+    if(document.getElementById('lei5198')) document.getElementById('lei5198').checked = item.lei5198; 
+    if(document.getElementById('lc56')) document.getElementById('lc56').checked = item.lc56;
+    
+    window.fotosTemp = []; 
+    if(document.getElementById('indicadorFotosNotif')) document.getElementById('indicadorFotosNotif').style.display = 'inline-block';
     try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {}
-    document.getElementById('indicadorFotosNotif').style.display = 'none'; window.renderizarPreviewFotos('previewFotosNotif');
+    if(document.getElementById('indicadorFotosNotif')) document.getElementById('indicadorFotosNotif').style.display = 'none'; 
+    window.renderizarPreviewFotos('previewFotosNotif');
 }
 
 window.limparFormularios = function() { 
-    document.getElementById('notifForm').reset(); document.getElementById('autoForm').reset(); document.getElementById('editFirebaseIdNotif').value = ''; document.getElementById('editFirebaseIdAuto').value = ''; document.getElementById('statusRetornoAR').value = 'aguardando'; document.getElementById('dataNotif').valueAsDate = new Date(); document.getElementById('autoData').valueAsDate = new Date(); document.getElementById('autoMultaReais').value = ''; if(perfilUsuario) { document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula; } window.fotosTemp = []; window.renderizarPreviewFotos('previewFotosNotif'); window.renderizarPreviewFotos('previewFotosAuto'); 
+    if(document.getElementById('notifForm')) document.getElementById('notifForm').reset(); 
+    if(document.getElementById('autoForm')) document.getElementById('autoForm').reset(); 
+    if(document.getElementById('editFirebaseIdNotif')) document.getElementById('editFirebaseIdNotif').value = ''; 
+    if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = ''; 
+    if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = 'aguardando'; 
+    if(document.getElementById('dataNotif')) document.getElementById('dataNotif').valueAsDate = new Date(); 
+    if(document.getElementById('autoData')) document.getElementById('autoData').valueAsDate = new Date(); 
+    if(document.getElementById('autoMultaReais')) document.getElementById('autoMultaReais').value = ''; 
+    if(perfilUsuario) { 
+        if(document.getElementById('fiscal')) document.getElementById('fiscal').value = perfilUsuario.nome; 
+        if(document.getElementById('matricula')) document.getElementById('matricula').value = perfilUsuario.matricula; 
+    } 
+    window.fotosTemp = []; 
+    window.renderizarPreviewFotos('previewFotosNotif'); 
+    window.renderizarPreviewFotos('previewFotosAuto'); 
 }
 
-// --- IMPRESSÃO E EXPORTAÇÃO ---
-window.carregarDadosPerfil = function() { if(!perfilUsuario) return; document.getElementById('perfilNome').value = perfilUsuario.nome; document.getElementById('perfilMatricula').value = perfilUsuario.matricula; document.getElementById('perfilSetorNivel').value = `${perfilUsuario.setor || 'SMMAM'} - ${perfilUsuario.nivel.toUpperCase()}`; document.getElementById('perfilTelefone').value = perfilUsuario.telefone || ''; }
+window.carregarDadosPerfil = function() { 
+    if(!perfilUsuario) return; 
+    if(document.getElementById('perfilNome')) document.getElementById('perfilNome').value = perfilUsuario.nome; 
+    if(document.getElementById('perfilMatricula')) document.getElementById('perfilMatricula').value = perfilUsuario.matricula; 
+    if(document.getElementById('perfilSetorNivel')) document.getElementById('perfilSetorNivel').value = `${perfilUsuario.setor || 'SMMAM'} - ${(perfilUsuario.nivel || 'LEITOR').toUpperCase()}`; 
+    if(document.getElementById('perfilTelefone')) document.getElementById('perfilTelefone').value = perfilUsuario.telefone || ''; 
+}
 
 window.imprimirRegistro = function(id) {
     const item = window.DB.find(i => i.firebaseId === id); if (!item) return; const s = item.setor || 'SMMAM';
-    if(s === 'MOBILIDADE') { document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { document.getElementById('printSecretaria').innerText = "Obras e Posturas"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Mal Deodoro, 70"; } else { document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Fiscalização</strong><br>Rua 10 de Novembro, 190"; }
+    if(s === 'MOBILIDADE') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Obras e Posturas"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Mal Deodoro, 70"; } else { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Fiscalização</strong><br>Rua 10 de Novembro, 190"; }
     let pzTxt = "Imediato"; if(item.dataPrazo) { const d1 = new Date(item.dataNotif + "T00:00:00"); const d2 = new Date(item.dataPrazo + "T00:00:00"); pzTxt = `${Math.ceil(Math.abs(d2 - d1) / 86400000)} dias`; }
-    document.getElementById('pNum').innerText = item.numNotif; document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); document.getElementById('pDoc').innerText = item.doc; document.getElementById('pEndereco').innerText = item.endereco || '---'; document.getElementById('pTelefone').innerText = item.telefone || '---'; document.getElementById('pBairro').innerText = item.bairro || '---'; document.getElementById('pCep').innerText = item.cep || '---'; document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; document.getElementById('pCadZona').innerText = item.cadZona || '---'; document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; document.getElementById('pCadLote').innerText = item.cadLote || '---'; document.getElementById('pCadImob').innerText = item.cadImob || ''; document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; document.getElementById('pRef').innerText = item.ref || '---'; document.getElementById('pObs').innerText = item.obs || '---'; document.getElementById('pFiscal').innerText = item.fiscal || ''; document.getElementById('pMatricula').innerText = item.matricula || ''; document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação' : '( ) Vegetação'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos' : '( ) Resíduos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) Art 6º, L 5.198' : '( ) Art 6º, L 5.198'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) Art 41, LC 56' : '( ) Art 41, LC 56'; document.getElementById('pPrazoImpressao').innerText = pzTxt;
+    if(document.getElementById('pNum')) document.getElementById('pNum').innerText = item.numNotif; if(document.getElementById('pData')) document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); if(document.getElementById('pNome')) document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); if(document.getElementById('pDoc')) document.getElementById('pDoc').innerText = item.doc; if(document.getElementById('pEndereco')) document.getElementById('pEndereco').innerText = item.endereco || '---'; if(document.getElementById('pTelefone')) document.getElementById('pTelefone').innerText = item.telefone || '---'; if(document.getElementById('pBairro')) document.getElementById('pBairro').innerText = item.bairro || '---'; if(document.getElementById('pCep')) document.getElementById('pCep').innerText = item.cep || '---'; if(document.getElementById('pCadDistrito')) document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; if(document.getElementById('pCadZona')) document.getElementById('pCadZona').innerText = item.cadZona || '---'; if(document.getElementById('pCadQuadra')) document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; if(document.getElementById('pCadLote')) document.getElementById('pCadLote').innerText = item.cadLote || '---'; if(document.getElementById('pCadImob')) document.getElementById('pCadImob').innerText = item.cadImob || ''; if(document.getElementById('pLoteEndereco')) document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; if(document.getElementById('pRef')) document.getElementById('pRef').innerText = item.ref || '---'; if(document.getElementById('pObs')) document.getElementById('pObs').innerText = item.obs || '---'; if(document.getElementById('pFiscal')) document.getElementById('pFiscal').innerText = item.fiscal || ''; if(document.getElementById('pMatricula')) document.getElementById('pMatricula').innerText = item.matricula || ''; if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; if(document.getElementById('pIrrMato')) document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação' : '( ) Vegetação'; if(document.getElementById('pIrrResiduos')) document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos' : '( ) Resíduos'; if(document.getElementById('pIrrEntulhos')) document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; if(document.getElementById('pIrrOutros')) document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; if(document.getElementById('pLei5198')) document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) Art 6º, L 5.198' : '( ) Art 6º, L 5.198'; if(document.getElementById('pLc56')) document.getElementById('pLc56').innerText = item.lc56 ? '( X ) Art 41, LC 56' : '( ) Art 41, LC 56'; if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
     window.print();
 }
 
