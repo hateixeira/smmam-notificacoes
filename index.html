@@ -294,27 +294,56 @@
             <div id="view-consulta" class="view-section">
                 <h2>Consulta Rápida ao Cadastro Imobiliário</h2>
                 <div class="panel-container">
-                    <p style="color: #64748b; margin-bottom: 20px;">Pesquise proprietários na base da prefeitura para autuar corretamente.</p>
+                    <p style="color: #64748b; margin-bottom: 20px;">Pesquise propriedades na base da prefeitura. Você pode buscar pelo lote físico ou pelos dados do proprietário.</p>
                     
                     <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">📍 Opção 1: Busca por Lote (Chave)</h3>
                         <div class="form-row" style="align-items: flex-end;">
                             <div class="form-group"><label>Distr.</label><input type="text" id="consDistrito" placeholder="01"></div>
                             <div class="form-group"><label>Zona</label><input type="text" id="consZona" placeholder="5"></div>
                             <div class="form-group"><label>Quadra</label><input type="text" id="consQuadra" placeholder="071"></div>
                             <div class="form-group"><label>Lote</label><input type="text" id="consLote" placeholder="0015"></div>
                             <div class="form-group">
-                                <button class="btn-primary" onclick="buscarLoteConsultaLivre()" style="height: 35px; width: 100%;">🔍 Pesquisar Lote</button>
+                                <button class="btn-primary" onclick="buscarConsultaLivre('lote')" style="height: 35px; width: 100%;">🔍 Pesquisar Lote</button>
                             </div>
                         </div>
+
+                        <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 15px 0;">
+
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👤 Opção 2: Busca por Proprietário</h3>
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group" style="flex: 2;">
+                                <label>Nome do Proprietário (Digite o início do nome)</label>
+                                <input type="text" id="consNome" placeholder="Ex: JOAO DA SILVA">
+                            </div>
+                            <div class="form-group" style="flex: 1.5;">
+                                <label>CPF / CNPJ</label>
+                                <input type="text" id="consDoc" placeholder="Ex: 01997677008">
+                            </div>
+                            <div class="form-group">
+                                <button class="btn-secondary" onclick="buscarConsultaLivre('pessoa')" style="height: 35px; width: 100%;">🔍 Pesquisar Pessoa</button>
+                            </div>
+                        </div>
+
                     </div>
 
-                    <div id="resultadoConsulta" style="display: none; margin-top: 20px; padding: 20px; border-left: 4px solid #16a34a; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-radius: 4px;">
-                        <h3 style="margin-top: 0; color: #16a34a;">✅ Imóvel Localizado</h3>
-                        <p><strong>Proprietário:</strong> <span id="resProp"></span></p>
-                        <p><strong>CPF/CNPJ:</strong> <span id="resDoc"></span></p>
-                        <p><strong>Endereço Lote:</strong> <span id="resEnd"></span></p>
-                        <p><strong>Bairro:</strong> <span id="resBairro"></span></p>
-                        <p><strong>Cód. Imobiliário (Prefeitura):</strong> <span id="resCad"></span></p>
+                    <!-- TABELA DE RESULTADOS -->
+                    <div id="resultadoConsulta" style="display: none; margin-top: 20px;">
+                        <h3 style="margin-top: 0; color: #16a34a; font-size: 16px;">✅ Imóveis Localizados: <span id="qtdResultadosConsulta">0</span></h3>
+                        <div class="table-container" style="max-height: 400px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Proprietário</th>
+                                        <th>CPF/CNPJ</th>
+                                        <th>Inscrição (Chave)</th>
+                                        <th>Endereço do Lote</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaResultadosConsulta"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
