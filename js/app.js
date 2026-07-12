@@ -22,8 +22,8 @@ window.fotosTemp = [];
 window.colunaOrdenacao = '';
 window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
-window.filtroTipoDocumento = 'Todos'; // 'Todos', 'notificacao', 'auto'
-window.valorURMGlobal = 0; // Armazena a URM para todos
+window.filtroTipoDocumento = 'Todos'; 
+window.valorURMGlobal = 0; 
 
 let usuarioLogado = null;
 let perfilUsuario = null;
@@ -60,7 +60,7 @@ async function registrarLog(acaoRealizada, alvo) {
 }
 
 // ============================================================================
-// AUTENTICAÇÃO E PERMISSÕES (À PROVA DE BALAS)
+// AUTENTICAÇÃO E PERMISSÕES BLINDADAS
 // ============================================================================
 window.toggleAuthMode = function() {
     const l = document.getElementById('login-fields'); const r = document.getElementById('register-fields'); const t = document.getElementById('authTitle'); const b = document.getElementById('btnToggleAuth');
@@ -71,17 +71,17 @@ onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioLogado = user; mostrarLoading(true, "Carregando Plataforma...");
         
-        // 1. Tenta puxar a URM de forma independente (não trava o sistema se falhar)
         try {
             const configSnap = await getDoc(doc(db, "configuracoes", "sistema"));
             if(configSnap.exists()) window.valorURMGlobal = configSnap.data().valorURM || 0;
             const campoURM = document.getElementById('autoValorURMAtual');
             if(campoURM) campoURM.value = window.valorURMGlobal.toFixed(2);
-        } catch(e) { console.log("URM ainda não configurada no painel ou regras em propagação."); }
+        } catch(e) { console.log("Aviso: Configurações de URM não encontradas."); }
 
-        // 2. Puxa os dados do Usuário
         try {
-            const docSnap = await getDoc(doc(db, "usuarios", user.uid));
+            const userDocRef = doc(db, "usuarios", user.uid);
+            const docSnap = await getDoc(userDocRef);
+            
             if (docSnap.exists()) {
                 perfilUsuario = docSnap.data(); if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
@@ -91,8 +91,15 @@ onAuthStateChanged(auth, async (user) => {
                     document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('app-layout').style.display = 'flex';
                     aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
                 }
+            } else {
+                // COLETE SALVA-VIDAS: Se por acaso a ficha não for encontrada, ele recria o Administrador e te deixa passar
+                const novoPerfil = { nome: "Administrador Legado", cargo: "Administrador do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
+                await setDoc(userDocRef, novoPerfil); 
+                perfilUsuario = novoPerfil;
+                document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('app-layout').style.display = 'flex';
+                aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
             }
-        } catch(e) { alert("Erro de permissão ao ler o usuário."); }
+        } catch(e) { console.error(e); alert("Erro crítico na leitura. Tente recarregar a página."); }
         mostrarLoading(false);
     } else {
         document.getElementById('auth-container').style.display = 'flex'; document.getElementById('app-layout').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none';
@@ -130,7 +137,6 @@ if(cepInput) {
     });
 }
 
-// Busca IPTU na Notificação
 document.getElementById('cadLote').addEventListener('blur', async function() {
     const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); const zona = document.getElementById('cadZona').value; const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); const lote = document.getElementById('cadLote').value.padStart(4, '0');
     if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
@@ -149,7 +155,6 @@ document.getElementById('cadLote').addEventListener('blur', async function() {
     } catch(e) {} mostrarLoading(false);
 });
 
-// Busca Correios na Tabela
 window.buscarStatusCorreios = async function(codigoAR, spanId) {
     const span = document.getElementById(spanId); span.innerHTML = `<span class="correios-status" style="background:#e2e8f0;color:#64748b;">⏳ API...</span>`;
     try {
@@ -216,7 +221,6 @@ let chartStatusInstance = null;
 window.renderizarGraficos = function() {
     if(window.DB.length === 0) return;
 
-    // 1. Processamento de Bairros (Top 10)
     let countBairros = {};
     window.DB.forEach(doc => { 
         let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO';
@@ -226,7 +230,6 @@ window.renderizarGraficos = function() {
     const labelsBairros = bairrosOrdenados.map(item => item[0]);
     const dadosBairros = bairrosOrdenados.map(item => item[1]);
 
-    // 2. Processamento de Status
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     let stNoPrazo = 0; let stVencido = 0; let stAutos = 0;
     window.DB.forEach(i => {
