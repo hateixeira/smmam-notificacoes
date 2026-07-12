@@ -38,6 +38,96 @@ window.mostrarToast = function(msg) {
     setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
 }
 
+// ============================================================================
+// INTEGRAÇÕES AUTOMÁTICAS (VIACEP E BASE IPTU)
+// ============================================================================
+
+// 1. VIA CEP - Correios
+const cepInput = document.getElementById('cep');
+if(cepInput) {
+    cepInput.addEventListener('blur', async function() {
+        let cepLimpo = this.value.replace(/\D/g, '');
+        if(cepLimpo.length === 8) {
+            try {
+                const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+                const data = await response.json();
+                if(!data.erro) {
+                    document.getElementById('endereco').value = data.logradouro || '';
+                    document.getElementById('bairro').value = data.bairro || '';
+                    window.mostrarToast("Endereço localizado pelo CEP!");
+                }
+            } catch(e) { console.error("Erro na busca de CEP", e); }
+        }
+    });
+}
+
+// 2. BASE IPTU - JSON Local da Prefeitura
+window.baseIPTU = [];
+async function carregarBaseIPTU() {
+    try {
+        const response = await fetch('base_iptu.json');
+        if(response.ok) {
+            window.baseIPTU = await response.json();
+            console.log(`Base IPTU carregada: ${window.baseIPTU.length} imóveis.`);
+        }
+    } catch(e) { console.log("Arquivo base_iptu.json não encontrado. A busca automática de IPTU ficará inativa."); }
+}
+carregarBaseIPTU(); // Roda sozinho ao abrir o site
+
+// Gatilho: Quando o fiscal terminar de digitar o Lote, o sistema busca os dados
+const cadLoteInput = document.getElementById('cadLote');
+if(cadLoteInput) {
+    cadLoteInput.addEventListener('blur', function() {
+        if(window.baseIPTU.length === 0) return;
+
+        const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); 
+        const zona = document.getElementById('cadZona').value; 
+        const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); 
+        const lote = document.getElementById('cadLote').value.padStart(4, '0'); 
+
+        // Se faltar algum campo essencial, aborta a busca silenciosamente
+        if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
+
+        // Monta a lógica da chave: ex: Distrito 01 + Zona 4 + Quadra 308 + Lote 0001 = 0143080001
+        const chaveBusca = `${dist}${zona}${quad}${lote}`;
+
+        // Varre os milhares de registros no JSON em milissegundos
+        const imovelEncontrado = window.baseIPTU.find(item => 
+            item.chaveinscricao && item.chaveinscricao.startsWith(chaveBusca)
+        );
+
+        if(imovelEncontrado) {
+            document.getElementById('nome').value = imovelEncontrado.proprietario_principal || '';
+            document.getElementById('doc').value = imovelEncontrado.cnpj_cpf || '';
+            
+            // Constrói o endereço completo do terreno autuado
+            let endLote = imovelEncontrado.logradouro || '';
+            if(imovelEncontrado.numero && imovelEncontrado.numero !== '0' && imovelEncontrado.numero !== 'S/N' && imovelEncontrado.numero !== 'SN') {
+                endLote += `, ${imovelEncontrado.numero}`;
+            }
+            if(imovelEncontrado.complemento) {
+                endLote += ` - ${imovelEncontrado.complemento}`;
+            }
+            
+            document.getElementById('loteEndereco').value = endLote;
+            
+            // Evita sobrescrever o bairro de correspondência se já estiver preenchido pelo CEP, 
+            // ou preenche caso esteja vazio.
+            const bairroAtual = document.getElementById('bairro').value;
+            if(!bairroAtual) document.getElementById('bairro').value = imovelEncontrado.bairro || '';
+            
+            document.getElementById('cadImob').value = imovelEncontrado.cadastroimobiliario || '';
+
+            // Força a máscara do CPF/CNPJ a ser aplicada no dado colado
+            document.getElementById('doc').dispatchEvent(new Event('input'));
+
+            window.mostrarToast("Dados do IPTU preenchidos automaticamente!");
+        }
+    });
+}
+// ============================================================================
+
+
 // --- MOTOR DE AUDITORIA (CAIXA PRETA) ---
 async function registrarLog(acaoRealizada, alvo) {
     if(!perfilUsuario) return;
@@ -201,11 +291,12 @@ window.carregarDadosNuvem = async function() {
         const querySnapshot = await getDocs(notificacoesRef); 
         window.DB = [];
         const meuSetor = perfilUsuario.setor || 'SMMAM';
+
         querySnapshot.forEach((documento) => { 
             let data = documento.data(); 
             data.firebaseId = documento.id; 
             const setorDoDocumento = data.setor || 'SMMAM';
-            if (setorDoDocumento === meuSetor || perfilUsuario.nivel === 'superadmin') {
+            if (setorDoDocumento === meuSetor || perfilUsuario.nivel === 'admin') {
                 window.DB.push(data); 
             }
         });
@@ -222,13 +313,18 @@ window.salvarNotificacao = async function(event) {
     const editId = document.getElementById('editFirebaseId').value; const qtdFotosAnexadas = window.fotosTemp.length;
     
     const dados = {
-        numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM'
+        numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString(),
+        setor: perfilUsuario.setor || 'SMMAM'
     };
     
     try {
         let idDoDocumento = editId;
-        if (editId) { const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); } 
-        else { dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; }
+        if (editId) { 
+            const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); 
+        } else { 
+            dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); 
+            const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; 
+        }
         
         const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
         if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
@@ -259,33 +355,17 @@ window.excluirSelecionadas = async function() {
     }
 }
 
-// --- CONTROLE DE FOTOS E LIGHTBOX (ZOOM) ---
 window.fotoModalAtual = null;
-
 window.abrirModalFoto = function(index) {
-    const fotoBase64 = window.fotosTemp[index];
-    if(!fotoBase64) return;
-    window.fotoModalAtual = fotoBase64;
-    document.getElementById('modal-image').src = fotoBase64;
-    document.getElementById('photo-modal').style.display = 'flex';
+    const fotoBase64 = window.fotosTemp[index]; if(!fotoBase64) return;
+    window.fotoModalAtual = fotoBase64; document.getElementById('modal-image').src = fotoBase64; document.getElementById('photo-modal').style.display = 'flex';
 }
-
 window.fecharModalFoto = function() {
-    document.getElementById('photo-modal').style.display = 'none';
-    document.getElementById('modal-image').src = '';
-    window.fotoModalAtual = null;
+    document.getElementById('photo-modal').style.display = 'none'; document.getElementById('modal-image').src = ''; window.fotoModalAtual = null;
 }
-
 window.baixarFotoAtual = function() {
-    if(!window.fotoModalAtual) return;
-    const a = document.createElement("a");
-    a.href = window.fotoModalAtual;
-    a.download = `Evidencia_Fiscalizacao_${Date.now()}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if(!window.fotoModalAtual) return; const a = document.createElement("a"); a.href = window.fotoModalAtual; a.download = `Evidencia_Fiscalizacao_${Date.now()}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
-
 window.processarFotos = function(event) {
     const files = event.target.files; if(!files) return;
     for(let file of files) {
@@ -302,24 +382,15 @@ window.processarFotos = function(event) {
     }
     event.target.value = ''; 
 }
-
 window.renderizarPreviewFotos = function() {
     const container = document.getElementById('previewFotos'); container.innerHTML = '';
     window.fotosTemp.forEach((foto, index) => {
         const div = document.createElement('div'); div.style.position = 'relative'; div.style.display = 'inline-block';
-        
-        // Agora a foto tem "cursor:pointer" e o evento onclick que abre a Modal Gigante
-        div.innerHTML = `
-            <img src="${foto}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc; cursor:pointer; transition: transform 0.2s;" onclick="abrirModalFoto(${index})" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Clique para ampliar">
-            <button type="button" onclick="removerFoto(${index})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;" title="Remover Foto">X</button>
-        `;
-        container.appendChild(div);
+        div.innerHTML = `<img src="${foto}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc; cursor:pointer; transition: transform 0.2s;" onclick="abrirModalFoto(${index})" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Clique para ampliar"><button type="button" onclick="removerFoto(${index})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;" title="Remover Foto">X</button>`; container.appendChild(div);
     });
 }
-
 window.removerFoto = function(index) { window.fotosTemp.splice(index, 1); window.renderizarPreviewFotos(); }
 
-// --- DASHBOARD E RENDERIZAÇÃO ---
 window.atualizarDashboard = function() {
     const hoje = new Date(); hoje.setHours(0,0,0,0); let noPrazo = 0; let vencidas = 0;
     window.DB.forEach(i => { if(i.dataPrazo) { const prazo = new Date(i.dataPrazo + "T00:00:00"); if(prazo < hoje) vencidas++; else noPrazo++; } });
@@ -365,9 +436,8 @@ window.limparFormulario = function() {
 
 window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => cb.checked = master.checked); }
 
-const docInputForm = document.getElementById('doc'); const cepInput = document.getElementById('cep'); const telefoneInputForm = document.getElementById('telefone');
+const docInputForm = document.getElementById('doc'); const telefoneInputForm = document.getElementById('telefone');
 if(docInputForm) docInputForm.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 11) { v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); } else { v = v.substring(0, 14).replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2'); } e.target.value = v; });
-if(cepInput) cepInput.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); e.target.value = v.replace(/^(\d{5})(\d)/, '$1-$2'); });
 if(telefoneInputForm) telefoneInputForm.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15); });
 
 window.imprimirRegistro = function(firebaseId) {
@@ -384,25 +454,6 @@ window.exportarExcel = function() {
     let csvContent = "\uFEFF"; csvContent += "Nº Notificacao;Setor;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
     window.itensFiltradosAtual.forEach(i => { const num = i.numNotif || ''; const set = i.setor || 'SMMAM'; const ouv = i.procOuvidoria || ''; const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''; const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : ''; const doc = i.doc || ''; const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : ''; const bairro = i.bairro || ''; const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''; const ar = i.codigoAR || ''; const fiscal = i.fiscal || ''; const criador = i.criadoPor || ''; csvContent += `${num};${set};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`; });
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `Relatorio_Fiscalizacao_${perfilUsuario.setor || 'SMMAM'}_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
-}
-
-window.exportarBackup = function() {
-    if(window.DB.length === 0) { alert("O banco de dados está vazio."); return; }
-    const dataStr = JSON.stringify(window.DB, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `smmam_backup_nuvem_${new Date().toISOString().split('T')[0]}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-}
-
-window.importarBackup = async function(event) {
-    const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const importado = JSON.parse(e.target.result);
-            if (Array.isArray(importado)) {
-                mostrarLoading(true, "Migrando dados antigos..."); let adicionados = 0;
-                for (let item of importado) { delete item.firebaseId; const fotosAntigas = item.fotos; delete item.fotos; const novoDoc = await addDoc(notificacoesRef, item); if(fotosAntigas && fotosAntigas.length > 0) { const fotosSubRef = collection(db, "notificacoes", novoDoc.id, "evidencias"); for(let fotoBase64 of fotosAntigas) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); } } adicionados++; }
-                await window.carregarDadosNuvem(); alert(`${adicionados} registros importados para a Nuvem com sucesso!`);
-            } else { alert("Arquivo inválido."); }
-        } catch(err) { alert("Erro ao importar."); console.error(err); } mostrarLoading(false); event.target.value = ''; 
-    }; reader.readAsText(file);
 }
 
 window.exportarVipp = function() {
