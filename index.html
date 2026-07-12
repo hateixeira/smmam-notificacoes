@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css">
+    <!-- Adicionamos o v=3 para garantir que o navegador baixe qualquer ajuste visual imediato -->
+    <link rel="stylesheet" href="css/style.css?v=3">
     <!-- Biblioteca de Gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -320,20 +321,27 @@
                 </div>
             </div>
 
-            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS -->
+            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS (AQUI ESTÁ A CORREÇÃO DAS JAULAS) -->
             <div id="view-relatorios" class="view-section">
                 <h2>Relatórios e Desempenho</h2>
                 <div class="form-row" style="gap: 20px;">
+                    
                     <!-- Gráfico Bairros -->
-                    <div class="panel-container" style="flex: 2;">
+                    <div class="panel-container" style="flex: 2; display: flex; flex-direction: column;">
                         <h3 style="margin-top: 0; font-size: 15px; text-align: center;">Top 10 Bairros Autuados</h3>
-                        <canvas id="chartBairros" height="250"></canvas>
+                        <div style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="chartBairros"></canvas>
+                        </div>
                     </div>
+
                     <!-- Gráfico Status -->
-                    <div class="panel-container" style="flex: 1;">
+                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column;">
                         <h3 style="margin-top: 0; font-size: 15px; text-align: center;">Status Operacional</h3>
-                        <canvas id="chartStatus" height="250"></canvas>
+                        <div style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="chartStatus"></canvas>
+                        </div>
                     </div>
+
                 </div>
             </div>
 
@@ -393,7 +401,6 @@
                             </div>
                         </div>
 
-                        <!-- O NOVO IMPORTADOR NATIVO! -->
                         <div class="panel-container" style="border: 2px dashed #38bdf8; background: #f0f9ff;">
                             <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">Importar IPTU (JSON)</h3>
                             <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo da Prefeitura direto para o Firebase Cloud.</p>
