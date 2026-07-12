@@ -46,19 +46,26 @@ async function registrarLog(acaoRealizada, alvo) {
             dataHora: new Date().toISOString(),
             usuario: perfilUsuario.nome,
             matricula: perfilUsuario.matricula,
+            setor: perfilUsuario.setor || 'SMMAM',
             nivel: perfilUsuario.nivel,
             acao: acaoRealizada,
             documentoAlvo: alvo
         });
-    } catch(e) { 
-        console.error("Erro ao gravar auditoria", e); 
-    }
+    } catch(e) { console.error("Erro ao gravar auditoria", e); }
 }
 
-// --- APLICAÇÃO DE PERMISSÕES NA INTERFACE (RBAC) ---
+// --- APLICAÇÃO DE PERMISSÕES NA INTERFACE (RBAC E SETOR) ---
 function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
     const nivel = perfilUsuario.nivel;
+    const setor = perfilUsuario.setor || 'SMMAM';
+    
+    // Troca o título principal com base no Setor do usuário
+    let nomeSecretaria = "SMMAM (Meio Ambiente)";
+    if (setor === "MOBILIDADE") nomeSecretaria = "Mobilidade Urbana";
+    if (setor === "OBRAS") nomeSecretaria = "Obras e Posturas";
+    
+    document.getElementById('mainHeaderTitleForm').innerText = `Fiscalização - ${nomeSecretaria}`;
     
     if(nivel === 'leitor') document.getElementById('areaBotoesSalvar').style.display = 'none';
     else document.getElementById('areaBotoesSalvar').style.display = 'flex';
@@ -80,7 +87,7 @@ window.toggleAuthMode = function() {
 
     if(loginFields.style.display === 'none') {
         loginFields.style.display = 'block'; registerFields.style.display = 'none';
-        title.innerText = 'Acesso - SMMAM'; btnToggle.innerText = 'Servidor Novo? Solicite Acesso';
+        title.innerText = 'Acesso - Fiscalização'; btnToggle.innerText = 'Servidor Novo? Solicite Acesso';
     } else {
         loginFields.style.display = 'none'; registerFields.style.display = 'block';
         title.innerText = 'Cadastro de Servidor'; btnToggle.innerText = 'Já tenho conta (Entrar)';
@@ -94,13 +101,16 @@ if(regTel) regTel.addEventListener('input', function(e) { let v = e.target.value
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioLogado = user;
-        mostrarLoading(true, "Lendo credenciais e permissões...");
+        mostrarLoading(true, "Lendo credenciais e setor...");
         try {
             const userDocRef = doc(db, "usuarios", user.uid);
             const docSnap = await getDoc(userDocRef);
 
             if (docSnap.exists()) {
                 perfilUsuario = docSnap.data();
+                // Migração de perfil: Se o perfil antigo não tem setor, define como SMMAM
+                if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
+
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
                     document.getElementById('auth-container').style.display = 'none'; document.getElementById('main-workspace').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'none'; document.getElementById('waiting-room').style.display = 'block';
                     if(perfilUsuario.status === 'bloqueado') document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
@@ -111,7 +121,7 @@ onAuthStateChanged(auth, async (user) => {
                     aplicarRestricoesDeTela(); window.carregarDadosNuvem();
                 }
             } else {
-                const novoPerfil = { nome: "Administrador Legado", cargo: "Administrador do Sistema", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
+                const novoPerfil = { nome: "Administrador Legado", cargo: "Administrador do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
                 await setDoc(userDocRef, novoPerfil); perfilUsuario = novoPerfil;
                 document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('main-workspace').style.display = 'grid';
                 document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>Admin Legado</strong> (ADMIN)`;
@@ -133,16 +143,24 @@ window.realizarLogin = function() {
 }
 
 window.registrarUsuario = async function() {
-    const nome = document.getElementById('regNome').value; const cargo = document.getElementById('regCargo').value; const cpf = document.getElementById('regCpf').value; const telefone = document.getElementById('regTelefone').value; const matricula = document.getElementById('regMatricula').value; const email = document.getElementById('regEmail').value; const senha = document.getElementById('regPassword').value;
-    if(!nome || !cargo || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
+    const nome = document.getElementById('regNome').value; 
+    const cargo = document.getElementById('regCargo').value; 
+    const setor = document.getElementById('regSetor').value;
+    const cpf = document.getElementById('regCpf').value; 
+    const telefone = document.getElementById('regTelefone').value; 
+    const matricula = document.getElementById('regMatricula').value; 
+    const email = document.getElementById('regEmail').value; 
+    const senha = document.getElementById('regPassword').value;
+    
+    if(!nome || !cargo || !setor || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
     if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
     mostrarLoading(true, "Criando ficha do servidor...");
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
         const user = userCredential.user;
-        await setDoc(doc(db, "usuarios", user.uid), { nome: nome, cargo: cargo, cpf: cpf, telefone: telefone, matricula: matricula, email: email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() });
+        await setDoc(doc(db, "usuarios", user.uid), { nome: nome, cargo: cargo, setor: setor, cpf: cpf, telefone: telefone, matricula: matricula, email: email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() });
         sendEmailVerification(user);
-        mostrarLoading(false); alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação do Administrador.");
+        mostrarLoading(false); alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação da Chefia.");
     } catch(error) { mostrarLoading(false); alert("Erro ao criar conta: " + error.message); }
 }
 
@@ -163,10 +181,11 @@ window.abrirPainelAdmin = async function() {
         const usersSnapshot = await getDocs(collection(db, "usuarios"));
         usersSnapshot.forEach(docSnap => {
             const u = docSnap.data(); const uid = docSnap.id;
+            const setorBadge = `<span style="background:#e2e8f0; padding:3px 6px; border-radius:4px; font-size:11px; font-weight:bold;">${u.setor || 'SMMAM'}</span>`;
             const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
             const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td>${u.email}<br><small style="color:#64748b;">${u.telefone}</small></td><td>${u.matricula}</td><td>${selectStatus}</td><td>${selectNivel}</td>`;
+            tr.innerHTML = `<td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td>${setorBadge}</td><td>${u.email}<br><small style="color:#64748b;">Mat: ${u.matricula}</small></td><td>${selectStatus}</td><td>${selectNivel}</td>`;
             corpoUsuarios.appendChild(tr);
         });
     } catch(e) { console.error(e); alert("Erro ao carregar usuários. Verifique se você é Administrador."); }
@@ -187,10 +206,25 @@ window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElemen
 window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 
 window.carregarDadosNuvem = async function() {
-    mostrarLoading(true, "Baixando dados...");
+    mostrarLoading(true, "Baixando dados do setor...");
     try {
-        const querySnapshot = await getDocs(notificacoesRef); window.DB = [];
-        querySnapshot.forEach((documento) => { let data = documento.data(); data.firebaseId = documento.id; window.DB.push(data); });
+        const querySnapshot = await getDocs(notificacoesRef); 
+        window.DB = [];
+        const meuSetor = perfilUsuario.setor || 'SMMAM';
+
+        querySnapshot.forEach((documento) => { 
+            let data = documento.data(); 
+            data.firebaseId = documento.id; 
+            
+            // Lógica de Isolamento Multi-Setor (Migração Silenciosa)
+            // Se o dado for antigo e não tiver setor, o sistema assume SMMAM.
+            const setorDoDocumento = data.setor || 'SMMAM';
+            
+            // Só carrega para a tela se o documento for do mesmo setor do fiscal logado
+            if (setorDoDocumento === meuSetor || perfilUsuario.nivel === 'superadmin') {
+                window.DB.push(data); 
+            }
+        });
         window.renderizarPainel();
     } catch (e) { console.error(e); }
     mostrarLoading(false);
@@ -204,40 +238,26 @@ window.salvarNotificacao = async function(event) {
     const editId = document.getElementById('editFirebaseId').value; const qtdFotosAnexadas = window.fotosTemp.length;
     
     const dados = {
-        numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString()
+        numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString(),
+        setor: perfilUsuario.setor || 'SMMAM' // Grava o setor que originou a notificação
     };
     
     try {
         let idDoDocumento = editId;
         if (editId) { 
-            const docRef = doc(db, "notificacoes", editId); 
-            await updateDoc(docRef, dados); 
+            const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); 
         } else { 
-            dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; 
-            dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; 
-            dados.dataCriacao = new Date().toISOString(); 
-            const novoDocRef = await addDoc(notificacoesRef, dados); 
-            idDoDocumento = novoDocRef.id; 
+            dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); 
+            const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; 
         }
         
         const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
-        if (editId) { 
-            const fotosAntigas = await getDocs(fotosSubRef); 
-            for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } 
-        }
+        if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
         for (let fotoBase64 of window.fotosTemp) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); }
         
-        await window.carregarDadosNuvem(); 
-        window.limparFormulario(); 
-        window.mostrarToast("Salvo com sucesso na nuvem!");
-        
-        // GRAVA A AUDITORIA:
-        await registrarLog(editId ? "Editou Notificação" : "Criou Nova Notificação", dados.numNotif);
-        
-    } catch (e) { 
-        alert("Erro ao salvar o banco de dados. Você tem permissão?"); 
-        console.error(e); 
-    }
+        await window.carregarDadosNuvem(); window.limparFormulario(); window.mostrarToast("Salvo com sucesso na nuvem!");
+        await registrarLog(editId ? "Editou Registro" : "Criou Novo Registro", dados.numNotif);
+    } catch (e) { alert("Erro ao salvar o banco de dados. Você tem permissão?"); console.error(e); }
     btn.disabled = false; mostrarLoading(false);
 }
 
@@ -246,26 +266,16 @@ window.excluirSelecionadas = async function() {
     const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
     if(marcados.length === 0) { alert('Selecione ao menos um item para excluir.'); return; }
     
-    if(confirm(`Tem certeza que deseja apagar ${marcados.length} notificação(ões) DA NUVEM?`)) {
+    if(confirm(`Tem certeza que deseja apagar ${marcados.length} registro(s) DA NUVEM?`)) {
         mostrarLoading(true, "Excluindo arquivos...");
         try {
             for (let id of marcados) { 
-                const fotosSubRef = collection(db, "notificacoes", id, "evidencias"); 
-                const fotosParaApagar = await getDocs(fotosSubRef);
-                for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); } 
-                await deleteDoc(doc(db, "notificacoes", id)); 
+                const fotosSubRef = collection(db, "notificacoes", id, "evidencias"); const fotosParaApagar = await getDocs(fotosSubRef);
+                for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); 
             }
-            document.getElementById('selecionarTodos').checked = false; 
-            await window.carregarDadosNuvem(); 
-            window.mostrarToast("Excluído permanentemente!");
-            
-            // GRAVA A AUDITORIA:
-            await registrarLog("Excluiu Notificações em Lote", marcados.join(", "));
-            
-        } catch(e) { 
-            alert("Erro ao excluir."); 
-            console.error(e); 
-        }
+            document.getElementById('selecionarTodos').checked = false; await window.carregarDadosNuvem(); window.mostrarToast("Excluído permanentemente!");
+            await registrarLog("Excluiu Registros em Lote", marcados.join(", "));
+        } catch(e) { alert("Erro ao excluir."); console.error(e); }
         mostrarLoading(false);
     }
 }
@@ -315,7 +325,7 @@ window.renderizarPainel = function() {
         if(item.dataPrazo) { const dataFormatada = item.dataPrazo.split('-').reverse().join('/'); const prazo = new Date(item.dataPrazo + "T00:00:00"); if(prazo < hoje) { statusHtml += `<span class="badge-vencido">Vencido: ${dataFormatada}</span>`; botaoAutuar = `<a class="btn-autuar" onclick="abrirModuloAutoInfracao()">📝 Autuar</a>`; } else { statusHtml += `<span class="badge-prazo">No Prazo: ${dataFormatada}</span>`; } }
         const carimbo = item.criadoPor ? `<br><small style="color:#94a3b8; font-size:10px;">👤 ${item.criadoPor}</small>` : ''; if(!statusHtml) statusHtml = '<small style="color:#94a3b8">Sem acompanhamento</small>';
         const tr = document.createElement('tr');
-        const linkEditarOuVer = (perfilUsuario && perfilUsuario.nivel === 'leitor') ? `<a onclick="carregarParaEditar('${item.firebaseId}')">Ver Lote</a>` : `<a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>`;
+        const linkEditarOuVer = (perfilUsuario && perfilUsuario.nivel === 'leitor') ? `<a onclick="carregarParaEditar('${item.firebaseId}')">Ver Dados</a>` : `<a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>`;
         tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}"></td><td><strong>${item.numNotif}</strong>${badgeOuvidoria}</td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div>${carimbo}</td><td>${statusHtml}</td><td class="action-links">${linkEditarOuVer}<a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
         corpo.appendChild(tr);
     });
@@ -348,17 +358,43 @@ if(telefoneInputForm) telefoneInputForm.addEventListener('input', function(e) { 
 
 window.imprimirRegistro = function(firebaseId) {
     const item = window.DB.find(i => i.firebaseId === firebaseId); if (!item) return;
+    
+    // DINÂMICA MULTI-SETOR NO ESPELHO A4
+    const setorDoc = item.setor || 'SMMAM';
+    if(setorDoc === 'MOBILIDADE') {
+        document.getElementById('printSecretaria').innerText = "Secretaria de Segurança e Mobilidade Urbana";
+        document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075 – Cidade Alta";
+    } else if(setorDoc === 'OBRAS') {
+        document.getElementById('printSecretaria').innerText = "Secretaria de Obras e Posturas";
+        document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Marechal Deodoro, 70 – Centro";
+    } else {
+        document.getElementById('printSecretaria').innerText = "Secretaria Municipal do Meio Ambiente";
+        document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211";
+    }
+    
+    // Calcula prazo para impressão
+    let prazoTexto = "Imediato";
+    if(item.dataPrazo) {
+        const d1 = new Date(item.dataNotif + "T00:00:00");
+        const d2 = new Date(item.dataPrazo + "T00:00:00");
+        const diffTime = Math.abs(d2 - d1);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        prazoTexto = `${diffDays} dias`;
+    }
+
     document.getElementById('pNum').innerText = item.numNotif; document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); document.getElementById('pDoc').innerText = item.doc; document.getElementById('pEndereco').innerText = item.endereco || '---'; document.getElementById('pTelefone').innerText = item.telefone || '---'; document.getElementById('pBairro').innerText = item.bairro || '---'; document.getElementById('pCep').innerText = item.cep || '---'; document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; document.getElementById('pCadZona').innerText = item.cadZona || '---'; document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; document.getElementById('pCadLote').innerText = item.cadLote || '---'; document.getElementById('pCadImob').innerText = item.cadImob || ''; document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; document.getElementById('pRef').innerText = item.ref || 'Não informado'; document.getElementById('pObs').innerText = item.obs || 'Nenhuma'; document.getElementById('pFiscal').innerText = item.fiscal || ''; document.getElementById('pMatricula').innerText = item.matricula || '';
-    document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Notificação Presencial' : '( ) Notificação Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Notificado por AR' : '( ) Notificado por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação Rasteira/mato' : '( ) Vegetação Rasteira/mato'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos Sólidos Diversos' : '( ) Resíduos Sólidos Diversos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Entulhos' : '( ) Entulhos'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.' : '( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.' : '( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.';
+    document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação Rasteira' : '( ) Vegetação Rasteira'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos / Entulhos' : '( ) Resíduos / Entulhos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.' : '( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.' : '( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.';
+    document.getElementById('pPrazoImpressao').innerText = prazoTexto;
+    
     const tituloOriginal = document.title; document.title = `${item.numNotif} - ${(item.nome || '').toUpperCase()}`;
     window.print(); setTimeout(() => { document.title = tituloOriginal; }, 1000);
 }
 
 window.exportarExcel = function() {
     if(window.itensFiltradosAtual.length === 0) { alert("Não há dados na tela para exportar."); return; }
-    let csvContent = "\uFEFF"; csvContent += "Nº Notificacao;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
-    window.itensFiltradosAtual.forEach(i => { const num = i.numNotif || ''; const ouv = i.procOuvidoria || ''; const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''; const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : ''; const doc = i.doc || ''; const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : ''; const bairro = i.bairro || ''; const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''; const ar = i.codigoAR || ''; const fiscal = i.fiscal || ''; const criador = i.criadoPor || ''; csvContent += `${num};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`; });
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `Relatorio_Fiscalizacao_SMMAM_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    let csvContent = "\uFEFF"; csvContent += "Nº Notificacao;Setor;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
+    window.itensFiltradosAtual.forEach(i => { const num = i.numNotif || ''; const set = i.setor || 'SMMAM'; const ouv = i.procOuvidoria || ''; const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''; const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : ''; const doc = i.doc || ''; const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : ''; const bairro = i.bairro || ''; const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''; const ar = i.codigoAR || ''; const fiscal = i.fiscal || ''; const criador = i.criadoPor || ''; csvContent += `${num};${set};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`; });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `Relatorio_Fiscalizacao_${perfilUsuario.setor || 'SMMAM'}_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
 }
 
 window.exportarBackup = function() {
@@ -387,5 +423,5 @@ window.exportarVipp = function() {
         const cepLimpo = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); const numEtiqueta = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0');
         xml += `  <objeto_postal>\n    <numero_etiqueta>${numEtiqueta}</numero_etiqueta>\n    <codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente>\n    <codigo_servico_postagem>80810</codigo_servico_postagem>\n    <peso>100</peso>\n    <destinatario>\n      <nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario>\n      <logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario>\n      <numero_end_destinatario>S/N</numero_end_destinatario>\n    </destinatario>\n    <nacional>\n      <bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario>\n      <cidade_destinatario>BENTO GONCALVES</cidade_destinatario>\n      <uf_destinatario>RS</uf_destinatario>\n      <cep_destinatario>${cepLimpo}</cep_destinatario>\n    </nacional>\n    <servico_adicional>\n      <codigo_servico_adicional>25</codigo_servico_adicional>\n    </servico_adicional>\n    <servico_adicional>\n      <codigo_servico_adicional>01</codigo_servico_adicional>\n    </servico_adicional>\n    <dimensao_objeto>\n      <tipo_objeto>001</tipo_objeto>\n    </dimensao_objeto>\n  </objeto_postal>\n`;
     }); xml += '</correioslog>';
-    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `importacao_vipp_smmam_${Date.now()}.xml`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `importacao_vipp_fiscalizacao_${Date.now()}.xml`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
 }
