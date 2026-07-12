@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
@@ -61,7 +61,7 @@ if(cepInput) {
     });
 }
 
-// 2. BASE IPTU - CONSULTA DIRETA E SEGURA NO FIREBASE
+// 2. BASE IPTU - CONSULTA INTELIGENTE NO FIREBASE
 const cadLoteInput = document.getElementById('cadLote');
 if(cadLoteInput) {
     cadLoteInput.addEventListener('blur', async function() {
@@ -73,18 +73,25 @@ if(cadLoteInput) {
         // Se faltar algum campo essencial, não faz a busca
         if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
 
-        // Monta a chave exata gerada pela prefeitura (Ex: 0143080001)
+        // Monta a base da chave (os 10 primeiros dígitos)
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
         
         mostrarLoading(true, "Buscando dados no Cadastro Imobiliário...");
 
         try {
-            // Vai no Firebase e puxa apenas 1 registro em vez de ler 43MB
-            const docRef = doc(db, "cadastro_imobiliario", chaveBusca);
-            const docSnap = await getDoc(docRef);
+            // Nova Lógica: Busca qualquer imóvel onde a chave COMECE com os 10 dígitos informados
+            const q = query(
+                collection(db, "cadastro_imobiliario"), 
+                where("chaveinscricao", ">=", chaveBusca), 
+                where("chaveinscricao", "<=", chaveBusca + "\uf8ff"),
+                limit(1) // Traz apenas 1 resultado correspondente ao lote
+            );
+            
+            const querySnapshot = await getDocs(q);
 
-            if(docSnap.exists()) {
-                const imovel = docSnap.data();
+            if(!querySnapshot.empty) {
+                // Pega os dados do primeiro imóvel encontrado no lote
+                const imovel = querySnapshot.docs[0].data();
                 
                 document.getElementById('nome').value = imovel.proprietario_principal || '';
                 document.getElementById('doc').value = imovel.cnpj_cpf || '';
