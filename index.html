@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <!-- Adicionamos o v=3 para garantir que o navegador baixe qualquer ajuste visual imediato -->
-    <link rel="stylesheet" href="css/style.css?v=3">
-    <!-- Biblioteca de Gráficos -->
+    <link rel="stylesheet" href="css/style.css?v=4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -321,25 +319,58 @@
                 </div>
             </div>
 
-            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS (AQUI ESTÁ A CORREÇÃO DAS JAULAS) -->
+            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS (SUPER PAINEL BI) -->
             <div id="view-relatorios" class="view-section">
-                <h2>Relatórios e Desempenho</h2>
-                <div class="form-row" style="gap: 20px;">
+                <h2>Painel Executivo de Gestão</h2>
+                
+                <!-- Andar 1: Evolução Mensal (Linha) -->
+                <div class="panel-container" style="display: flex; flex-direction: column;">
+                    <h3 style="margin-top: 0; font-size: 15px; color: #1b365d;">📈 Evolução de Demandas (Últimos Meses)</h3>
+                    <div style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="chartEvolucao"></canvas>
+                    </div>
+                </div>
+
+                <!-- Andar 2: Fatias (Top Bairros, Tipos e Status) -->
+                <div class="form-row" style="gap: 15px; margin-bottom: 20px;">
                     
-                    <!-- Gráfico Bairros -->
-                    <div class="panel-container" style="flex: 2; display: flex; flex-direction: column;">
-                        <h3 style="margin-top: 0; font-size: 15px; text-align: center;">Top 10 Bairros Autuados</h3>
-                        <div style="position: relative; height: 350px; width: 100%;">
+                    <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">📍 Top 10 Bairros Autuados</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
                             <canvas id="chartBairros"></canvas>
                         </div>
                     </div>
 
-                    <!-- Gráfico Status -->
-                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column;">
-                        <h3 style="margin-top: 0; font-size: 15px; text-align: center;">Status Operacional</h3>
-                        <div style="position: relative; height: 350px; width: 100%;">
+                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">⚠️ Tipos de Infração</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="chartTipos"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">📊 Status Operacional</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
                             <canvas id="chartStatus"></canvas>
                         </div>
+                    </div>
+
+                </div>
+
+                <!-- Andar 3: Produtividade e Projeção Financeira -->
+                <div class="form-row" style="gap: 15px;">
+                    
+                    <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👨‍💼 Produtividade por Servidor</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="chartFiscais"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0; justify-content: center; align-items: center; background: #f8fafc; border: 2px dashed #cbd5e1;">
+                        <h3 style="margin-top: 0; font-size: 14px; color: #64748b;">💰 Projeção de Arrecadação (Multas Ativas)</h3>
+                        <div style="font-size: 40px; font-weight: bold; color: #991b1b; margin: 15px 0;" id="painelFinanceiroValor">R$ 0,00</div>
+                        <p style="font-size: 11px; color: #94a3b8; text-align: center;">Valor bruto calculado sobre a URM vigente aplicado aos Autos de Infração gerados na plataforma.</p>
                     </div>
 
                 </div>
