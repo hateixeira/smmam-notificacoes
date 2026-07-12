@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plataforma de Fiscalização</title>
-    <!-- O sistema puxa o design da pasta css -->
+    <title>Plataforma de Fiscalização - SMMAM</title>
     <link rel="stylesheet" href="css/style.css">
+    <!-- Biblioteca de Gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -15,7 +16,7 @@
     </div>
     <div id="toast">Operação realizada com sucesso!</div>
 
-    <!-- TELAS DE ACESSO (Fora do sistema logado) -->
+    <!-- TELAS DE ACESSO -->
     <div id="auth-container">
         <h2 id="authTitle">Acesso - Fiscalização</h2>
         <div id="login-fields">
@@ -51,16 +52,14 @@
         <button class="btn-secondary" onclick="realizarLogout()" style="width: 200px; margin: 0 auto;">Sair</button>
     </div>
 
-    <!-- ESTRUTURA SPA (SINGLE PAGE APPLICATION) - Visível apenas quando logado -->
+    <!-- ESTRUTURA SPA -->
     <div id="app-layout" style="display: none;">
         
-        <!-- MENU LATERAL (SIDEBAR) -->
         <aside id="sidebar">
             <div class="sidebar-header">
                 <h3>Fiscalização</h3>
                 <span id="sidebar-setor">Carregando...</span>
             </div>
-            
             <nav class="sidebar-nav">
                 <a class="nav-item active" onclick="navegarPara('inicio')" id="nav-inicio">🏠 Tela Inicial</a>
                 <a class="nav-item" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Nova Notificação</a>
@@ -69,28 +68,23 @@
                 <a class="nav-item" onclick="navegarPara('relatorios')" id="nav-relatorios">📈 Relatórios e Gráficos</a>
                 <a class="nav-item" onclick="navegarPara('perfil')" id="nav-perfil">👤 Meu Perfil</a>
                 
-                <!-- Apenas para Administradores -->
                 <div id="menu-admin-area" style="display: none;">
                     <div class="nav-section-title">ADMINISTRAÇÃO</div>
                     <a class="nav-item" onclick="navegarPara('auditoria')" id="nav-auditoria">🛡️ Auditoria do Sistema</a>
                     <a class="nav-item" onclick="navegarPara('configuracoes')" id="nav-configuracoes">⚙️ Configurações</a>
                 </div>
             </nav>
-
             <div class="sidebar-footer">
                 <span id="userLoggedDisplay" style="display:block; margin-bottom: 10px; font-size: 11px;"></span>
                 <button class="btn-logout" onclick="realizarLogout()" style="width: 100%;">Sair do Sistema</button>
             </div>
         </aside>
 
-        <!-- ÁREA CENTRAL DE CONTEÚDO -->
         <main id="main-content">
             
-            <!-- VIEW 1: TELA INICIAL (DASHBOARD LIMPO E TABELA MESTRA) -->
+            <!-- VIEW 1: TELA INICIAL -->
             <div id="view-inicio" class="view-section active-view">
                 <h2>Visão Geral do Setor</h2>
-                
-                <!-- Cards de Resumo -->
                 <div class="dashboard-cards">
                     <div class="card card-total"><div class="num" id="dashTotalNotif">0</div><div class="label">Notificações</div></div>
                     <div class="card card-total"><div class="num" id="dashTotalAutos">0</div><div class="label">Autos / Multas</div></div>
@@ -99,21 +93,16 @@
                     <div class="card card-vencida"><div class="num" id="dashVencidas">0</div><div class="label">Prazos Vencidos</div></div>
                 </div>
 
-                <!-- Tabela Mestra de Demandas -->
                 <div class="panel-container" style="margin-top: 20px;">
-                    
                     <div class="toolbar">
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
-                            <!-- Botões de Tipo de Documento -->
                             <div class="filter-group">
                                 <button class="filter-type-btn active" onclick="aplicarFiltroTipo('Todos', this)">📋 Mostrar Todos</button>
                                 <button class="filter-type-btn" onclick="aplicarFiltroTipo('notificacao', this)">📝 Só Notificações</button>
                                 <button class="filter-type-btn" onclick="aplicarFiltroTipo('auto', this)">🚨 Só Autos</button>
                             </div>
                         </div>
-
                         <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por nome, endereço, lote, número ou ouvidoria..." onkeyup="renderizarPainel()">
-                        
                         <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
                             <div class="filter-bar">
                                 <span style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 5px;">FILTROS:</span>
@@ -127,7 +116,6 @@
                                 <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px;" title="Baixar Excel">📊 Excel</button>
                             </div>
                         </div>
-
                         <div class="btn-actions" id="areaBotoesAdminExcluir" style="display:none; margin-top:5px;">
                             <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir Selecionadas</button>
                         </div>
@@ -155,17 +143,13 @@
             <div id="view-notificacoes" class="view-section">
                 <div class="form-container">
                     <h2 id="mainHeaderTitleForm">Gerar Nova Notificação</h2>
-                    <p style="color: #64748b; margin-bottom: 20px; margin-top: -5px; font-size: 13px;">Preencha os dados abaixo para emitir o aviso de regularização.</p>
-                    
-                    <form id="notifForm" onsubmit="salvarNotificacao(event)">
-                        <input type="hidden" id="editFirebaseId">
-                        
+                    <form id="notifForm" onsubmit="salvarDocumento(event, 'notificacao')">
+                        <input type="hidden" id="editFirebaseIdNotif">
                         <div class="form-row">
-                            <div class="form-group" style="flex: 1.2;"><label>Nº Notificação *</label><input type="text" id="numNotif" placeholder="Ex: 0520B" required></div>
-                            <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria" placeholder="Ex: 1234/26"></div>
+                            <div class="form-group" style="flex: 1.2;"><label>Nº Notificação *</label><input type="text" id="numNotif" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria"></div>
                             <div class="form-group" style="flex: 1.5;"><label>Data *</label><input type="date" id="dataNotif" required></div>
                         </div>
-
                         <div class="form-group">
                             <label>Forma de Notificação *</label>
                             <div class="checkbox-group">
@@ -173,17 +157,14 @@
                                 <div class="checkbox-item"><input type="radio" id="tipoAR" name="tipoNotif" value="AR"><label for="tipoAR">Por AR</label></div>
                             </div>
                         </div>
-
                         <div class="form-row">
                             <div class="form-group" style="flex: 2;"><label>Nome do Notificado *</label><input type="text" id="nome" required></div>
                             <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="doc" maxlength="18" required></div>
                         </div>
-
                         <div class="form-row">
                             <div class="form-group"><label>CEP</label><input type="text" id="cep" maxlength="9"></div>
                             <div class="form-group" style="flex: 2;"><label>Endereço de Correspondência</label><input type="text" id="endereco"></div>
                         </div>
-
                         <div class="form-row">
                             <div class="form-group"><label>Bairro</label><input type="text" id="bairro"></div>
                             <div class="form-group"><label>Telefone</label><input type="text" id="telefone" maxlength="15"></div>
@@ -197,7 +178,6 @@
                             <div class="form-group"><label>Lote</label><input type="text" id="cadLote" placeholder="0015"></div>
                             <div class="form-group" style="flex: 1.5;"><label>Cad. Imob.</label><input type="text" id="cadImob"></div>
                         </div>
-
                         <div class="form-group"><label>Endereço do Local da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
 
                         <div class="form-group">
@@ -209,12 +189,10 @@
                                 <div class="checkbox-item"><input type="checkbox" id="irrOutros"><label for="irrOutros">Outros</label></div>
                             </div>
                         </div>
-
                         <div class="form-row">
                             <div class="form-group"><label>Ponto de Referência</label><input type="text" id="ref"></div>
                             <div class="form-group"><label>Observações</label><input type="text" id="obs"></div>
                         </div>
-
                         <div class="form-group">
                             <label>Base Legal</label>
                             <div class="checkbox-group">
@@ -238,19 +216,14 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Evidências Fotográficas <span id="indicadorFotos" class="foto-loading" style="display:none;">Carregando...</span></label>
-                            <input type="file" id="inputFotos" accept="image/*" multiple onchange="processarFotos(event)" style="background: #fff; padding: 5px;">
-                            <div id="previewFotos" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
+                            <label>Evidências Fotográficas <span id="indicadorFotosNotif" class="foto-loading" style="display:none;">Carregando...</span></label>
+                            <input type="file" id="inputFotosNotif" accept="image/*" multiple onchange="processarFotos(event, 'previewFotosNotif')" style="background: #fff; padding: 5px;">
+                            <div id="previewFotosNotif" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
                         </div>
 
-                        <div class="form-row" style="margin-top: 10px;">
-                            <div class="form-group"><label>Servidor Responsável</label><input type="text" id="fiscal" required readonly style="background-color: #f1f5f9;"></div>
-                            <div class="form-group"><label>RE / Matrícula</label><input type="text" id="matricula" required readonly style="background-color: #f1f5f9;"></div>
-                        </div>
-
-                        <div class="btn-actions" id="areaBotoesSalvar">
-                            <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar e Voltar</button>
-                            <button type="button" class="btn-secondary" onclick="limparFormulario()">🔄 Limpar Tudo</button>
+                        <div class="btn-actions" id="areaBotoesSalvarNotif">
+                            <button type="submit" id="btnSalvarNotif" class="btn-success" style="flex: 2;">☁️ Salvar Notificação</button>
+                            <button type="button" class="btn-secondary" onclick="limparFormularios()">🔄 Limpar</button>
                         </div>
                     </form>
                 </div>
@@ -258,9 +231,63 @@
 
             <!-- VIEW 3: AUTO DE INFRAÇÃO -->
             <div id="view-autos" class="view-section">
-                <h2>Gerador de Auto de Infração (Multa)</h2>
-                <div class="panel-container">
-                    <p style="color: #64748b;">Módulo em construção. Será liberado na segunda-feira para emissão de penalidades financeiras baseadas na URM.</p>
+                <div class="form-container">
+                    <h2 style="color: #991b1b; border-color: #fecaca;">Gerar Auto de Infração (Multa)</h2>
+                    
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e1; margin-bottom: 20px;">
+                        <label>Vincular a uma Notificação Anterior</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="autoBuscaNotif" placeholder="Digite o Nº da Notificação Ex: 0520B">
+                            <button type="button" class="btn-primary" onclick="puxarDadosDaNotificacao()">🔍 Puxar Dados</button>
+                        </div>
+                    </div>
+
+                    <form id="autoForm" onsubmit="salvarDocumento(event, 'auto')">
+                        <input type="hidden" id="editFirebaseIdAuto">
+                        
+                        <div class="form-row">
+                            <div class="form-group"><label>Nº do Auto *</label><input type="text" id="autoNum" required></div>
+                            <div class="form-group"><label>Data da Autuação *</label><input type="date" id="autoData" required></div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;"><label>Nome do Infrator *</label><input type="text" id="autoNome" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="autoDoc" required></div>
+                        </div>
+                        
+                        <div class="form-group"><label>Endereço da Ocorrência *</label><input type="text" id="autoEndOcorrencia" required></div>
+                        <div class="form-group"><label>Enquadramento Legal (Descritivo)</label><input type="text" id="autoDescricaoLei" placeholder="Ex: Artigo 6º, da Lei Municipal 5.198"></div>
+
+                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #991b1b; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Cálculo da Multa Baseado na URM</div>
+                        
+                        <div class="form-row" style="align-items: center;">
+                            <div class="form-group">
+                                <label>Quantidade de URM Aplicada</label>
+                                <input type="number" id="autoMultaURM" step="0.01" value="100" oninput="calcularMultaReais()">
+                            </div>
+                            <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">X</div>
+                            <div class="form-group">
+                                <label>Valor URM do Ano (R$)</label>
+                                <input type="text" id="autoValorURMAtual" disabled style="background:#f1f5f9; font-weight:bold;">
+                            </div>
+                            <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">=</div>
+                            <div class="form-group" style="flex: 1.5;">
+                                <label style="color: #991b1b;">Total da Multa (R$)</label>
+                                <input type="text" id="autoMultaReais" disabled style="background:#fee2e2; color:#991b1b; font-size: 16px; font-weight:bold;">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Evidências Fotográficas <span id="indicadorFotosAuto" class="foto-loading" style="display:none;">Carregando...</span></label>
+                            <input type="file" id="inputFotosAuto" accept="image/*" multiple onchange="processarFotos(event, 'previewFotosAuto')" style="background: #fff; padding: 5px;">
+                            <div id="previewFotosAuto" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
+                        </div>
+
+                        <div class="btn-actions" id="areaBotoesSalvarAuto">
+                            <button type="submit" id="btnSalvarAuto" class="btn-danger" style="flex: 2;">☁️ Gravar Auto de Infração</button>
+                            <button type="button" class="btn-secondary" onclick="limparFormularios()">🔄 Limpar</button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
@@ -268,15 +295,45 @@
             <div id="view-consulta" class="view-section">
                 <h2>Consulta Rápida ao Cadastro Imobiliário</h2>
                 <div class="panel-container">
-                    <p style="color: #64748b;">Módulo de busca inteligente livre. Procure donos de lotes sem gerar notificações.</p>
+                    <p style="color: #64748b; margin-bottom: 20px;">Pesquise proprietários na base da prefeitura para autuar corretamente.</p>
+                    
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group"><label>Distr.</label><input type="text" id="consDistrito" placeholder="01"></div>
+                            <div class="form-group"><label>Zona</label><input type="text" id="consZona" placeholder="5"></div>
+                            <div class="form-group"><label>Quadra</label><input type="text" id="consQuadra" placeholder="071"></div>
+                            <div class="form-group"><label>Lote</label><input type="text" id="consLote" placeholder="0015"></div>
+                            <div class="form-group">
+                                <button class="btn-primary" onclick="buscarLoteConsultaLivre()" style="height: 35px; width: 100%;">🔍 Pesquisar Lote</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="resultadoConsulta" style="display: none; margin-top: 20px; padding: 20px; border-left: 4px solid #16a34a; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-radius: 4px;">
+                        <h3 style="margin-top: 0; color: #16a34a;">✅ Imóvel Localizado</h3>
+                        <p><strong>Proprietário:</strong> <span id="resProp"></span></p>
+                        <p><strong>CPF/CNPJ:</strong> <span id="resDoc"></span></p>
+                        <p><strong>Endereço Lote:</strong> <span id="resEnd"></span></p>
+                        <p><strong>Bairro:</strong> <span id="resBairro"></span></p>
+                        <p><strong>Cód. Imobiliário (Prefeitura):</strong> <span id="resCad"></span></p>
+                    </div>
                 </div>
             </div>
 
             <!-- VIEW 5: RELATÓRIOS E GRÁFICOS -->
             <div id="view-relatorios" class="view-section">
                 <h2>Relatórios e Desempenho</h2>
-                <div class="panel-container">
-                    <p style="color: #64748b;">O dashboard completo com gráficos de produtividade, bairros mais autuados e estatísticas gerais será processado aqui.</p>
+                <div class="form-row" style="gap: 20px;">
+                    <!-- Gráfico Bairros -->
+                    <div class="panel-container" style="flex: 2;">
+                        <h3 style="margin-top: 0; font-size: 15px; text-align: center;">Top 10 Bairros Autuados</h3>
+                        <canvas id="chartBairros" height="250"></canvas>
+                    </div>
+                    <!-- Gráfico Status -->
+                    <div class="panel-container" style="flex: 1;">
+                        <h3 style="margin-top: 0; font-size: 15px; text-align: center;">Status Operacional</h3>
+                        <canvas id="chartStatus" height="250"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -326,6 +383,7 @@
                     </div>
 
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+                        
                         <div class="panel-container">
                             <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Financeiro / Multas</h3>
                             <div class="form-group">
@@ -335,11 +393,20 @@
                             </div>
                         </div>
 
-                        <div class="panel-container">
-                            <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Base de Dados (IPTU)</h3>
-                            <p style="font-size: 12px; color: #64748b; line-height: 1.4;">Para importar a base JSON da Prefeitura, utilize o módulo externo de importação fracionada, devido ao grande volume de dados.</p>
-                            <a href="#" style="font-size: 12px; font-weight: bold; color: #d97706; text-decoration: none;">Acessar Importador Seguro ↗</a>
+                        <!-- O NOVO IMPORTADOR NATIVO! -->
+                        <div class="panel-container" style="border: 2px dashed #38bdf8; background: #f0f9ff;">
+                            <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">Importar IPTU (JSON)</h3>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo da Prefeitura direto para o Firebase Cloud.</p>
+                            
+                            <input type="file" id="adminFileJson" accept=".json" style="margin-bottom: 10px; width: 100%;">
+                            <div class="form-group">
+                                <label style="font-size: 11px;">Retomar a partir de:</label>
+                                <input type="number" id="adminStartFrom" value="0">
+                            </div>
+                            <button class="btn-success" id="btnAdminImportarIptu" style="width: 100%; margin-top: 5px;">🚀 INICIAR UPLOAD</button>
+                            <div id="adminProgressoIptu" style="margin-top: 10px; font-size: 11px; font-weight: bold; color: #d97706;"></div>
                         </div>
+
                     </div>
                 </div>
             </div>
@@ -347,7 +414,7 @@
         </main>
     </div>
 
-    <!-- MODAL DE VISUALIZAÇÃO DE FOTOS -->
+    <!-- MODAL FOTOS -->
     <div id="photo-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <span class="modal-close" onclick="fecharModalFoto()">&times;</span>
@@ -358,7 +425,7 @@
         </div>
     </div>
 
-    <!-- ESPELHO DE IMPRESSÃO (Oculto) -->
+    <!-- ESPELHO IMPRESSÃO NOTIFICAÇÃO -->
     <div id="print-area">
         <table class="main-grid">
             <tr>
@@ -368,12 +435,12 @@
                     <div style="font-size: 11px; margin-top: 2px;">Setor de Fiscalização</div>
                 </td>
                 <td colspan="2" style="width: 35%; background-color: #fafafa; vertical-align: middle;">
-                    <span class="cell-label">2. NOTIFICAÇÃO N°</span>
+                    <span class="cell-label">2. DOCUMENTO N°</span>
                     <div class="cell-value" id="pNum" style="font-weight: bold; font-size: 16px; color: #d32f2f; margin-top: 2px;"></div>
                 </td>
             </tr>
             <tr>
-                <td colspan="4"><span class="cell-label">3. DATA DA NOTIFICAÇÃO</span><div class="cell-value" id="pData"></div></td>
+                <td colspan="4"><span class="cell-label">3. DATA</span><div class="cell-value" id="pData"></div></td>
                 <td colspan="2" style="vertical-align: middle;">
                     <div style="display: flex; justify-content: space-around; font-size: 9.5px; font-weight: bold;">
                         <span id="pTipoPresencial">( ) Notificação Presencial</span><span id="pTipoAR">( ) Notificado por AR</span>
@@ -403,22 +470,15 @@
                 <td colspan="2" style="width: 35%; background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
             </tr>
             <tr><td colspan="6" class="alert-row">14. O NÃO ATENDIMENTO DO PRESENTE PODERÁ CONSTITUIR CRIME DE DESOBEDIÊNCIA CONFORME O ARTIGO 330 DO CÓDIGO PENAL</td></tr>
-            <tr><td colspan="6" class="section-title">15. MOTIVO DA NOTIFICAÇÃO</td></tr>
+            <tr><td colspan="6" class="section-title">15. MOTIVO DO DOCUMENTO</td></tr>
             <tr>
                 <td colspan="6" style="padding: 12px; line-height: 1.45;">
-                    <p style="margin: 0 0 10px 0;">Verificação de irregularidade, situada no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS, com presença de:</p>
-                    <div style="display: flex; justify-content: space-between; margin: 12px 10px; font-weight: bold; font-size: 10.5px;">
-                        <span id="pIrrMato">( ) Vegetação Rasteira/mato</span><span id="pIrrResiduos">( ) Resíduos / Entulhos</span><span id="pIrrEntulhos">( ) Obra / Posturas</span><span id="pIrrOutros">( ) Outros</span>
-                    </div>
+                    <p style="margin: 0 0 10px 0;">Verificação de irregularidade, situada no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS.</p>
                     <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
                     <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
                     <p style="margin: 15px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
-                        <strong>FICA NOTIFICADO POR ESTE INSTRUMENTO</strong>, a providenciar a regularização, no prazo de <strong><span id="pPrazoImpressao"></span></strong>, em conformidade com o:
+                        <strong><span id="pPrazoImpressao"></span></strong>
                     </p>
-                    <div style="margin: 8px 0 4px 5px; line-height: 1.5;">
-                        <div id="pLei5198">( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.</div>
-                        <div id="pLc56">( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.</div>
-                    </div>
                     <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">OBSERVAÇÕES (MEIO AMBIENTE):</p>
                     <ul class="bullet-rules">
                         <li>Vegetais arbóreos, lenhosos e nativos deverão ser preservados.</li>
@@ -443,7 +503,7 @@
                 <td colspan="6" style="padding: 0; border: none;">
                     <div class="signature-container">
                         <div class="sig-box"><br><span class="cell-label">19. Assinatura do Responsável</span></div>
-                        <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;">Recebi o presente em _____/_____/_________</div><span class="cell-label">20. Assinatura do Notificado</span></div>
+                        <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;">Recebi o presente em _____/_____/_________</div><span class="cell-label">20. Assinatura do Munícipe</span></div>
                     </div>
                 </td>
             </tr>
