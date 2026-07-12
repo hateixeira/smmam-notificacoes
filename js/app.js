@@ -115,10 +115,7 @@ onAuthStateChanged(auth, async (user) => {
                 if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
                 aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
             }
-        } catch(e) { 
-            console.error(e); 
-            alert("Ocorreu um erro, mas tentamos contornar. Atualize a página e tente de novo!"); 
-        }
+        } catch(e) { console.error(e); alert("Ocorreu um erro. Atualize a página e tente de novo!"); }
         mostrarLoading(false);
     } else {
         if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'flex'; 
@@ -134,148 +131,144 @@ window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; 
 
 function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
-    
-    const setorEl = document.getElementById('sidebar-setor');
-    if(setorEl) setorEl.innerText = perfilUsuario.setor || 'SMMAM';
-    
+    const setorEl = document.getElementById('sidebar-setor'); if(setorEl) setorEl.innerText = perfilUsuario.setor || 'SMMAM';
     const nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
-    
-    const userLogEl = document.getElementById('userLoggedDisplay');
-    if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
-    
-    const fiscalEl = document.getElementById('fiscal');
-    if(fiscalEl) fiscalEl.value = perfilUsuario.nome || ''; 
-
-    const matEl = document.getElementById('matricula');
-    if(matEl) matEl.value = perfilUsuario.matricula || '';
-
-    const areaSalvarNotif = document.getElementById('areaBotoesSalvarNotif');
-    const areaSalvarAuto = document.getElementById('areaBotoesSalvarAuto');
-
-    if(perfilUsuario.nivel === 'leitor') { 
-        if(areaSalvarNotif) areaSalvarNotif.style.display = 'none'; 
-        if(areaSalvarAuto) areaSalvarAuto.style.display = 'none'; 
-    }
-    
-    const menuAdmin = document.getElementById('menu-admin-area');
-    const btnExcluir = document.getElementById('areaBotoesAdminExcluir');
-
-    if(perfilUsuario.nivel === 'admin') {
-        if(menuAdmin) menuAdmin.style.display = 'block'; 
-        if(btnExcluir) btnExcluir.style.display = 'flex';
-    } else {
-        if(menuAdmin) menuAdmin.style.display = 'none'; 
-        if(btnExcluir) btnExcluir.style.display = 'none';
-    }
+    const userLogEl = document.getElementById('userLoggedDisplay'); if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
+    const fiscalEl = document.getElementById('fiscal'); if(fiscalEl) fiscalEl.value = perfilUsuario.nome || ''; 
+    const matEl = document.getElementById('matricula'); if(matEl) matEl.value = perfilUsuario.matricula || '';
+    const areaSalvarNotif = document.getElementById('areaBotoesSalvarNotif'); const areaSalvarAuto = document.getElementById('areaBotoesSalvarAuto');
+    if(perfilUsuario.nivel === 'leitor') { if(areaSalvarNotif) areaSalvarNotif.style.display = 'none'; if(areaSalvarAuto) areaSalvarAuto.style.display = 'none'; }
+    const menuAdmin = document.getElementById('menu-admin-area'); const btnExcluir = document.getElementById('areaBotoesAdminExcluir');
+    if(perfilUsuario.nivel === 'admin') { if(menuAdmin) menuAdmin.style.display = 'block'; if(btnExcluir) btnExcluir.style.display = 'flex'; } else { if(menuAdmin) menuAdmin.style.display = 'none'; if(btnExcluir) btnExcluir.style.display = 'none'; }
 }
 
 const cepInput = document.getElementById('cep');
-if(cepInput) {
-    cepInput.addEventListener('blur', async function() {
-        let cepLimpo = this.value.replace(/\D/g, '');
-        if(cepLimpo.length === 8) { try { const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`); const data = await response.json(); if(!data.erro) { document.getElementById('endereco').value = data.logradouro || ''; document.getElementById('bairro').value = data.bairro || ''; window.mostrarToast("Endereço localizado!"); } } catch(e) {} }
-    });
-}
+if(cepInput) { cepInput.addEventListener('blur', async function() { let cepLimpo = this.value.replace(/\D/g, ''); if(cepLimpo.length === 8) { try { const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`); const data = await response.json(); if(!data.erro) { document.getElementById('endereco').value = data.logradouro || ''; document.getElementById('bairro').value = data.bairro || ''; window.mostrarToast("Endereço localizado!"); } } catch(e) {} } }); }
 
 const cadLoteInput = document.getElementById('cadLote');
-if(cadLoteInput) {
-    cadLoteInput.addEventListener('blur', async function() {
-        const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); const zona = document.getElementById('cadZona').value; const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); const lote = document.getElementById('cadLote').value.padStart(4, '0');
-        if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
-        const chaveBusca = `${dist}${zona}${quad}${lote}`;
-        mostrarLoading(true, "Buscando Imóvel...");
-        try {
-            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
-            const snap = await getDocs(q);
-            if(!snap.empty) {
-                const imovel = snap.docs[0].data();
-                document.getElementById('nome').value = imovel.proprietario_principal || ''; document.getElementById('doc').value = imovel.cnpj_cpf || '';
-                let endLote = imovel.logradouro || ''; if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') endLote += `, ${imovel.numero}`; if(imovel.complemento) endLote += ` - ${imovel.complemento}`;
-                document.getElementById('loteEndereco').value = endLote; if(!document.getElementById('bairro').value) document.getElementById('bairro').value = imovel.bairro || ''; document.getElementById('cadImob').value = imovel.cadastroimobiliario || '';
-                document.getElementById('doc').dispatchEvent(new Event('input')); window.mostrarToast("Preenchido!");
-            } else { window.mostrarToast("Lote não encontrado."); }
-        } catch(e) {} mostrarLoading(false);
-    });
-}
+if(cadLoteInput) { cadLoteInput.addEventListener('blur', async function() { const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); const zona = document.getElementById('cadZona').value; const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); const lote = document.getElementById('cadLote').value.padStart(4, '0'); if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return; const chaveBusca = `${dist}${zona}${quad}${lote}`; mostrarLoading(true, "Buscando Imóvel..."); try { const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1)); const snap = await getDocs(q); if(!snap.empty) { const imovel = snap.docs[0].data(); document.getElementById('nome').value = imovel.proprietario_principal || ''; document.getElementById('doc').value = imovel.cnpj_cpf || ''; let endLote = imovel.logradouro || ''; if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') endLote += `, ${imovel.numero}`; if(imovel.complemento) endLote += ` - ${imovel.complemento}`; document.getElementById('loteEndereco').value = endLote; if(!document.getElementById('bairro').value) document.getElementById('bairro').value = imovel.bairro || ''; document.getElementById('cadImob').value = imovel.cadastroimobiliario || ''; document.getElementById('doc').dispatchEvent(new Event('input')); window.mostrarToast("Preenchido!"); } else { window.mostrarToast("Lote não encontrado."); } } catch(e) {} mostrarLoading(false); }); }
 
-window.buscarStatusCorreios = async function(codigoAR, spanId) {
-    const span = document.getElementById(spanId); if(!span) return;
-    span.innerHTML = `<span class="correios-status" style="background:#e2e8f0;color:#64748b;">⏳ API...</span>`;
-    try {
-        const response = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
-        if(!response.ok) throw new Error('Falha');
-        const data = await response.json();
-        if(data.isDelivered) { span.innerHTML = `<span class="correios-status correios-entregue">📬 Entregue (API)</span>`; } else { span.innerHTML = `<span class="correios-status correios-transito">🚚 Transito (API)</span>`; }
-    } catch(e) { span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" class="correios-status correios-erro">Correios ↗</a>`; }
-}
+window.buscarStatusCorreios = async function(codigoAR, spanId) { const span = document.getElementById(spanId); if(!span) return; span.innerHTML = `<span class="correios-status" style="background:#e2e8f0;color:#64748b;">⏳ API...</span>`; try { const response = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`); if(!response.ok) throw new Error('Falha'); const data = await response.json(); if(data.isDelivered) { span.innerHTML = `<span class="correios-status correios-entregue">📬 Entregue (API)</span>`; } else { span.innerHTML = `<span class="correios-status correios-transito">🚚 Transito (API)</span>`; } } catch(e) { span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" class="correios-status correios-erro">Correios ↗</a>`; } }
 
-window.buscarLoteConsultaLivre = async function() {
-    const dist = document.getElementById('consDistrito').value.padStart(2, '0'); const zona = document.getElementById('consZona').value; const quad = document.getElementById('consQuadra').value.padStart(3, '0'); const lote = document.getElementById('consLote').value.padStart(4, '0');
-    if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return alert("Preencha todos os campos do lote.");
-    const chaveBusca = `${dist}${zona}${quad}${lote}`;
-    
-    mostrarLoading(true, "Pesquisando Cofre IPTU...");
-    const boxResult = document.getElementById('resultadoConsulta'); if(boxResult) boxResult.style.display = 'none';
-    try {
-        const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
-        const snap = await getDocs(q);
-        if(!snap.empty) {
-            const im = snap.docs[0].data();
-            document.getElementById('resProp').innerText = im.proprietario_principal || 'Não inf.'; document.getElementById('resDoc').innerText = im.cnpj_cpf || 'Não inf.';
-            let endLote = im.logradouro || ''; if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; if(im.complemento) endLote += ` - ${im.complemento}`;
-            document.getElementById('resEnd').innerText = endLote; document.getElementById('resBairro').innerText = im.bairro || 'Não inf.'; document.getElementById('resCad').innerText = im.cadastroimobiliario || 'Sem ID';
-            if(boxResult) boxResult.style.display = 'block'; window.mostrarToast("Localizado!");
-        } else { alert("Nenhum imóvel localizado com esta chave."); }
-    } catch(e) { alert("Erro de conexão."); }
-    mostrarLoading(false);
-}
+window.buscarLoteConsultaLivre = async function() { const dist = document.getElementById('consDistrito').value.padStart(2, '0'); const zona = document.getElementById('consZona').value; const quad = document.getElementById('consQuadra').value.padStart(3, '0'); const lote = document.getElementById('consLote').value.padStart(4, '0'); if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return alert("Preencha todos os campos do lote."); const chaveBusca = `${dist}${zona}${quad}${lote}`; mostrarLoading(true, "Pesquisando Cofre IPTU..."); const boxResult = document.getElementById('resultadoConsulta'); if(boxResult) boxResult.style.display = 'none'; try { const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1)); const snap = await getDocs(q); if(!snap.empty) { const im = snap.docs[0].data(); document.getElementById('resProp').innerText = im.proprietario_principal || 'Não inf.'; document.getElementById('resDoc').innerText = im.cnpj_cpf || 'Não inf.'; let endLote = im.logradouro || ''; if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; if(im.complemento) endLote += ` - ${im.complemento}`; document.getElementById('resEnd').innerText = endLote; document.getElementById('resBairro').innerText = im.bairro || 'Não inf.'; document.getElementById('resCad').innerText = im.cadastroimobiliario || 'Sem ID'; if(boxResult) boxResult.style.display = 'block'; window.mostrarToast("Localizado!"); } else { alert("Nenhum imóvel localizado com esta chave."); } } catch(e) { alert("Erro de conexão."); } mostrarLoading(false); }
 
-window.puxarDadosDaNotificacao = function() {
-    const numPesquisa = document.getElementById('autoBuscaNotif').value.trim();
-    if(!numPesquisa) return alert("Digite o número da notificação para puxar.");
-    const notif = window.DB.find(i => i.numNotif === numPesquisa && i.tipoDocumento !== 'auto');
-    if(!notif) return alert("Notificação não encontrada ou ela não pertence ao seu Setor.");
-    
-    document.getElementById('autoNome').value = notif.nome; document.getElementById('autoDoc').value = notif.doc;
-    document.getElementById('autoEndOcorrencia').value = notif.loteEndereco; document.getElementById('autoDescricaoLei').value = "Ocorrência vinculada à Notificação " + notif.numNotif;
-    window.mostrarToast("Dados importados da Notificação!");
-}
+window.puxarDadosDaNotificacao = function() { const numPesquisa = document.getElementById('autoBuscaNotif').value.trim(); if(!numPesquisa) return alert("Digite o número da notificação para puxar."); const notif = window.DB.find(i => i.numNotif === numPesquisa && i.tipoDocumento !== 'auto'); if(!notif) return alert("Notificação não encontrada ou ela não pertence ao seu Setor."); document.getElementById('autoNome').value = notif.nome; document.getElementById('autoDoc').value = notif.doc; document.getElementById('autoEndOcorrencia').value = notif.loteEndereco; document.getElementById('autoDescricaoLei').value = "Ocorrência vinculada à Notificação " + notif.numNotif; window.mostrarToast("Dados importados da Notificação!"); }
 
-window.calcularMultaReais = function() {
-    const elUrm = document.getElementById('autoMultaURM');
-    const elReais = document.getElementById('autoMultaReais');
-    if(!elUrm || !elReais) return;
-    const qtdURM = parseFloat(elUrm.value) || 0;
-    const emReais = qtdURM * window.valorURMGlobal;
-    elReais.value = "R$ " + emReais.toFixed(2).replace('.', ',');
-}
+window.calcularMultaReais = function() { const elUrm = document.getElementById('autoMultaURM'); const elReais = document.getElementById('autoMultaReais'); if(!elUrm || !elReais) return; const qtdURM = parseFloat(elUrm.value) || 0; const emReais = qtdURM * window.valorURMGlobal; elReais.value = "R$ " + emReais.toFixed(2).replace('.', ','); }
 
-let chartBairrosInstance = null; let chartStatusInstance = null;
+// ============================================================================
+// DASHBOARDS E GRÁFICOS (CHART.JS - PAINEL BI)
+// ============================================================================
+let chartBairrosInstance = null; 
+let chartStatusInstance = null;
+let chartEvolucaoInstance = null;
+let chartTiposInstance = null;
+let chartFiscaisInstance = null;
+
 window.renderizarGraficos = function() {
     if(window.DB.length === 0) return;
 
     let countBairros = {};
-    window.DB.forEach(doc => { let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO'; countBairros[b] = (countBairros[b] || 0) + 1; });
-    const bairrosOrdenados = Object.entries(countBairros).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    const labelsBairros = bairrosOrdenados.map(item => item[0]); const dadosBairros = bairrosOrdenados.map(item => item[1]);
-
+    let countMeses = {};
+    let countFiscais = {};
+    let countTipos = { 'Mato/Vegetação': 0, 'Resíduos/Entulhos': 0, 'Obra/Posturas': 0, 'Outros': 0 };
+    
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     let stNoPrazo = 0; let stVencido = 0; let stAutos = 0;
-    window.DB.forEach(i => { if(i.tipoDocumento === 'auto') stAutos++; else if(i.dataPrazo) { const pz = new Date(i.dataPrazo + "T00:00:00"); if(pz < hoje) stVencido++; else stNoPrazo++; } });
+    let totalMultasReais = 0;
 
+    // Processa todo o banco de dados de uma vez só para velocidade
+    window.DB.forEach(doc => { 
+        // Bairros
+        let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO'; 
+        countBairros[b] = (countBairros[b] || 0) + 1;
+        
+        // Fiscais (Produtividade)
+        let f = (doc.fiscal && doc.fiscal.trim() !== '') ? doc.fiscal.toUpperCase() : 'NÃO IDENTIFICADO';
+        countFiscais[f] = (countFiscais[f] || 0) + 1;
+
+        // Status Operacional
+        if(doc.tipoDocumento === 'auto') {
+            stAutos++;
+            // Projeção Financeira
+            if(doc.autoMultaURM) totalMultasReais += (parseFloat(doc.autoMultaURM) * window.valorURMGlobal);
+        }
+        else if(doc.dataPrazo) { const pz = new Date(doc.dataPrazo + "T00:00:00"); if(pz < hoje) stVencido++; else stNoPrazo++; }
+
+        // Tipos de Infração (Só para Notificações)
+        if(doc.tipoDocumento !== 'auto') {
+            if(doc.irrMato) countTipos['Mato/Vegetação']++;
+            if(doc.irrResiduos) countTipos['Resíduos/Entulhos']++;
+            if(doc.irrEntulhos) countTipos['Obra/Posturas']++;
+            if(doc.irrOutros) countTipos['Outros']++;
+        }
+
+        // Evolução Mensal (Demanda)
+        if(doc.dataNotif) {
+            let mesAno = doc.dataNotif.substring(0, 7); // Pega YYYY-MM
+            countMeses[mesAno] = (countMeses[mesAno] || 0) + 1;
+        }
+    });
+
+    // --- RENDERIZA O VALOR FINANCEIRO ---
+    const painelDinheiro = document.getElementById('painelFinanceiroValor');
+    if(painelDinheiro) {
+        painelDinheiro.innerText = totalMultasReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    // --- GRÁFICO 1: EVOLUÇÃO (LINHA) ---
+    const ctxEvolucao = document.getElementById('chartEvolucao');
+    if(ctxEvolucao) {
+        if(chartEvolucaoInstance) chartEvolucaoInstance.destroy();
+        // Ordenar os meses cronologicamente
+        const mesesOrdenados = Object.keys(countMeses).sort();
+        const dadosMeses = mesesOrdenados.map(m => countMeses[m]);
+        // Formatar para exibição BR (ex: "05/2026")
+        const labelsMeses = mesesOrdenados.map(m => { const partes = m.split('-'); return `${partes[1]}/${partes[0]}`; });
+        
+        chartEvolucaoInstance = new Chart(ctxEvolucao, { 
+            type: 'line', 
+            data: { labels: labelsMeses, datasets: [{ label: 'Novos Cadastros', data: dadosMeses, borderColor: '#1b365d', backgroundColor: 'rgba(27, 54, 93, 0.1)', tension: 0.3, fill: true, pointRadius: 5 }] }, 
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } 
+        });
+    }
+
+    // --- GRÁFICO 2: BAIRROS (BARRAS TOP 10) ---
     const ctxB = document.getElementById('chartBairros');
     if(ctxB) {
         if(chartBairrosInstance) chartBairrosInstance.destroy();
-        chartBairrosInstance = new Chart(ctxB, { type: 'bar', data: { labels: labelsBairros, datasets: [{ label: 'Qtd de Autuações', data: dadosBairros, backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        const bairrosOrdenados = Object.entries(countBairros).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const labelsBairros = bairrosOrdenados.map(item => item[0]); const dadosBairros = bairrosOrdenados.map(item => item[1]);
+        chartBairrosInstance = new Chart(ctxB, { type: 'bar', data: { labels: labelsBairros, datasets: [{ label: 'Volume', data: dadosBairros, backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
     }
 
+    // --- GRÁFICO 3: TIPOS (PIZZA) ---
+    const ctxTipos = document.getElementById('chartTipos');
+    if(ctxTipos) {
+        if(chartTiposInstance) chartTiposInstance.destroy();
+        chartTiposInstance = new Chart(ctxTipos, { type: 'pie', data: { labels: Object.keys(countTipos), datasets: [{ data: Object.values(countTipos), backgroundColor: ['#22c55e', '#a855f7', '#64748b', '#cbd5e1'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } } });
+    }
+
+    // --- GRÁFICO 4: STATUS (ROSCA) ---
     const ctxS = document.getElementById('chartStatus');
     if(ctxS) {
         if(chartStatusInstance) chartStatusInstance.destroy();
-        chartStatusInstance = new Chart(ctxS, { type: 'doughnut', data: { labels: ['No Prazo', 'Vencidos (Irregular)', 'Multas Geradas'], datasets: [{ data: [stNoPrazo, stVencido, stAutos], backgroundColor: ['#10b981', '#ef4444', '#f59e0b'] }] }, options: { responsive: true, maintainAspectRatio: false } });
+        chartStatusInstance = new Chart(ctxS, { type: 'doughnut', data: { labels: ['No Prazo', 'Vencidos (Irregular)', 'Multas Geradas'], datasets: [{ data: [stNoPrazo, stVencido, stAutos], backgroundColor: ['#10b981', '#ef4444', '#f59e0b'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } } });
+    }
+
+    // --- GRÁFICO 5: FISCAIS (BARRAS HORIZONTAIS) ---
+    const ctxFiscais = document.getElementById('chartFiscais');
+    if(ctxFiscais) {
+        if(chartFiscaisInstance) chartFiscaisInstance.destroy();
+        const fiscaisOrdenados = Object.entries(countFiscais).sort((a, b) => b[1] - a[1]);
+        const labelsFiscais = fiscaisOrdenados.map(item => item[0]); const dadosFiscais = fiscaisOrdenados.map(item => item[1]);
+        chartFiscaisInstance = new Chart(ctxFiscais, { type: 'bar', data: { labels: labelsFiscais, datasets: [{ label: 'Documentos Emitidos', data: dadosFiscais, backgroundColor: '#0ea5e9', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
     }
 }
 
+// ============================================================================
+// ADMINISTRAÇÃO E IMPORTAÇÃO NATIVA IPTU
+// ============================================================================
 window.carregarConfiguracoesAdmin = async function() {
     const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); if(corpoUsuarios) corpoUsuarios.innerHTML = '';
     try {
