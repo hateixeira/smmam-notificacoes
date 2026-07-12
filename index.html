@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Notificação - SMMAM</title>
-    <!-- Aqui o sistema "puxa" o design que você acabou de criar na pasta css -->
+    <title>Plataforma de Fiscalização</title>
+    <!-- O sistema puxa o design da pasta css -->
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -18,7 +18,7 @@
 
     <!-- TELA DE LOGIN / CADASTRO -->
     <div id="auth-container">
-        <h2 id="authTitle">Acesso - SMMAM</h2>
+        <h2 id="authTitle">Acesso - Fiscalização</h2>
         
         <div id="login-fields">
             <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
@@ -29,6 +29,15 @@
         <div id="register-fields" style="display:none;">
             <input type="text" id="regNome" placeholder="Nome Completo">
             <input type="text" id="regCargo" placeholder="Cargo (Ex: Fiscal, Agente Administrativo)">
+            
+            <!-- NOVO: Seletor de Secretaria/Setor -->
+            <select id="regSetor" style="margin-bottom: 12px; padding: 12px; font-weight: bold; color: #1b365d;">
+                <option value="" disabled selected>Selecione sua Secretaria/Setor...</option>
+                <option value="SMMAM">SMMAM (Meio Ambiente)</option>
+                <option value="MOBILIDADE">Mobilidade Urbana (Trânsito)</option>
+                <option value="OBRAS">Obras e Posturas</option>
+            </select>
+
             <input type="text" id="regCpf" placeholder="CPF" maxlength="14">
             <input type="text" id="regTelefone" placeholder="Telefone Celular" maxlength="15">
             <input type="text" id="regMatricula" placeholder="Nº da Matrícula / RE">
@@ -46,7 +55,7 @@
     <!-- TELA DE SALA DE ESPERA -->
     <div id="waiting-room">
         <h2>⏳ Acesso em Análise</h2>
-        <p>O seu cadastro foi realizado com sucesso!<br>Para garantir a segurança dos dados, o seu perfil está aguardando a liberação do Administrador do Setor de Fiscalização.</p>
+        <p>O seu cadastro foi realizado com sucesso!<br>Para garantir a segurança dos dados, o seu perfil está aguardando a liberação da Chefia da sua Secretaria.</p>
         <button class="btn-secondary" onclick="realizarLogout()" style="width: 200px; margin: 0 auto;">Sair</button>
     </div>
 
@@ -66,8 +75,8 @@
                     <thead>
                         <tr>
                             <th>Servidor / Cargo</th>
-                            <th>Contato</th>
-                            <th>Matrícula</th>
+                            <th>Secretaria</th>
+                            <th>Contato / Matrícula</th>
                             <th>Status de Acesso</th>
                             <th>Nível de Permissão</th>
                         </tr>
@@ -85,7 +94,7 @@
         
         <!-- FORMULÁRIO -->
         <div class="form-container">
-            <h2>Fiscalização SMMAM</h2>
+            <h2 id="mainHeaderTitleForm">Fiscalização</h2>
             <form id="notifForm" onsubmit="salvarNotificacao(event)">
                 <input type="hidden" id="editFirebaseId">
                 
@@ -95,7 +104,7 @@
                         <input type="text" id="numNotif" placeholder="Ex: 0520B" required>
                     </div>
                     <div class="form-group" style="flex: 1.2;">
-                        <label>Proc. Ouvidoria <span style="color:#64748b; font-weight:normal;">(Interno)</span></label>
+                        <label>Proc. Administrativo / Ouvidoria</label>
                         <input type="text" id="procOuvidoria" placeholder="Ex: 1234/26">
                     </div>
                     <div class="form-group" style="flex: 1.5;">
@@ -113,7 +122,7 @@
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group" style="flex: 2;"><label>Nome do Notificado *</label><input type="text" id="nome" required></div>
+                    <div class="form-group" style="flex: 2;"><label>Nome do Notificado (Pessoa/Empresa) *</label><input type="text" id="nome" required></div>
                     <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="doc" maxlength="18" required></div>
                 </div>
 
@@ -127,34 +136,34 @@
                     <div class="form-group"><label>Telefone</label><input type="text" id="telefone" maxlength="15"></div>
                 </div>
 
-                <div style="font-weight: bold; margin: 10px 0 5px 0; color: #1b365d; font-size:13px;">Cadastro Imobiliário (IPTU)</div>
+                <div style="font-weight: bold; margin: 10px 0 5px 0; color: #1b365d; font-size:13px;">Cadastro Imobiliário do Local (Opcional)</div>
                 <div class="form-row">
                     <div class="form-group"><label>Distr.</label><input type="text" id="cadDistrito" placeholder="01"></div>
                     <div class="form-group"><label>Zona</label><input type="text" id="cadZona" placeholder="5"></div>
                     <div class="form-group"><label>Quadr.</label><input type="text" id="cadQuadra" placeholder="071"></div>
                     <div class="form-group"><label>Lote</label><input type="text" id="cadLote" placeholder="0015"></div>
-                    <div class="form-group" style="flex: 1.5;"><label>Cad. Imob. *</label><input type="text" id="cadImob" required></div>
+                    <div class="form-group" style="flex: 1.5;"><label>Cad. Imob.</label><input type="text" id="cadImob"></div>
                 </div>
 
-                <div class="form-group"><label>Endereço do Lote Irregular *</label><input type="text" id="loteEndereco" required></div>
+                <div class="form-group"><label>Endereço do Local da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
 
                 <div class="form-group">
-                    <label>Irregularidades</label>
+                    <label>Irregularidades Verificadas</label>
                     <div class="checkbox-group">
                         <div class="checkbox-item"><input type="checkbox" id="irrMato"><label for="irrMato">Vegetação/Mato</label></div>
-                        <div class="checkbox-item"><input type="checkbox" id="irrResiduos"><label for="irrResiduos">Resíduos Sólidos</label></div>
-                        <div class="checkbox-item"><input type="checkbox" id="irrEntulhos"><label for="irrEntulhos">Entulhos</label></div>
+                        <div class="checkbox-item"><input type="checkbox" id="irrResiduos"><label for="irrResiduos">Resíduos Sólidos / Entulhos</label></div>
+                        <div class="checkbox-item"><input type="checkbox" id="irrEntulhos"><label for="irrEntulhos">Obra Irregular / Posturas</label></div>
                         <div class="checkbox-item"><input type="checkbox" id="irrOutros"><label for="irrOutros">Outros</label></div>
                     </div>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group"><label>Ponto de Referência</label><input type="text" id="ref"></div>
-                    <div class="form-group"><label>Observações do Lote</label><input type="text" id="obs"></div>
+                    <div class="form-group"><label>Observações Adicionais</label><input type="text" id="obs"></div>
                 </div>
 
                 <div class="form-group">
-                    <label>Base Legal</label>
+                    <label>Base Legal (Padrão SMMAM)</label>
                     <div class="checkbox-group">
                         <div class="checkbox-item"><input type="checkbox" id="lei5198" checked><label for="lei5198">Art. 6º, § 2º - L 5.198</label></div>
                         <div class="checkbox-item"><input type="checkbox" id="lc56"><label for="lc56">Art. 41, inc. III - LC 56</label></div>
@@ -174,12 +183,12 @@
                 </div>
 
                 <div class="form-row" style="margin-top: 10px;">
-                    <div class="form-group"><label>Notificante (Logado) *</label><input type="text" id="fiscal" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
+                    <div class="form-group"><label>Servidor Responsável (Logado) *</label><input type="text" id="fiscal" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
                     <div class="form-group"><label>RE / Matrícula *</label><input type="text" id="matricula" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
                 </div>
 
                 <div class="btn-actions" id="areaBotoesSalvar">
-                    <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar na Nuvem</button>
+                    <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar Notificação</button>
                     <button type="button" class="btn-secondary" onclick="limparFormulario()">🔄 Novo / Limpar</button>
                 </div>
             </form>
@@ -188,7 +197,7 @@
         <!-- PAINEL -->
         <div class="panel-container">
             <h2 style="font-size: 18px;">
-                Gerenciador de Notificações
+                Gerenciador de Demandas
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <button id="btnAdminTop" class="btn-outline" onclick="abrirPainelAdmin()" style="display:none; font-weight:bold;">⚙️ Gestão de Usuários</button>
                     <span id="userLoggedDisplay" style="font-size: 11px; color: #64748b; font-weight: normal; margin-left: 10px;"></span>
@@ -226,8 +235,8 @@
                     <thead>
                         <tr>
                             <th style="width: 30px;"><input type="checkbox" id="selecionarTodos" onclick="toggleTodos(this)"></th>
-                            <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Notif. <span class="sort-icon">▼▲</span></th>
-                            <th class="sortable" onclick="ordenarTabela('nome')">Nome do Notificado <span class="sort-icon">▼▲</span></th>
+                            <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Reg. <span class="sort-icon">▼▲</span></th>
+                            <th class="sortable" onclick="ordenarTabela('nome')">Nome / Alvo <span class="sort-icon">▼▲</span></th>
                             <th>Status (AR/Prazo)</th>
                             <th>Ações</th>
                         </tr>
@@ -244,8 +253,8 @@
             <tr>
                 <td colspan="4" style="width: 65%; padding: 10px;">
                     <div style="font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 0.3px;">Prefeitura de Bento Gonçalves</div>
-                    <div style="font-size: 11px; margin-top: 3px;">Secretaria de Meio Ambiente</div>
-                    <div style="font-size: 11px; font-weight: bold; margin-top: 2px;">Setor de fiscalização</div>
+                    <div id="printSecretaria" style="font-size: 11px; margin-top: 3px; font-weight: bold;">Secretaria de Meio Ambiente</div>
+                    <div style="font-size: 11px; margin-top: 2px;">Setor de Fiscalização</div>
                 </td>
                 <td colspan="2" style="width: 35%; background-color: #fafafa; vertical-align: middle;">
                     <span class="cell-label">2. NOTIFICAÇÃO N°</span>
@@ -286,20 +295,20 @@
             <tr><td colspan="6" class="section-title">15. MOTIVO DA NOTIFICAÇÃO</td></tr>
             <tr>
                 <td colspan="6" style="padding: 12px; line-height: 1.45;">
-                    <p style="margin: 0 0 10px 0;">Verificação de lote, situado no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS, com presença de:</p>
+                    <p style="margin: 0 0 10px 0;">Verificação de irregularidade, situada no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS, com presença de:</p>
                     <div style="display: flex; justify-content: space-between; margin: 12px 10px; font-weight: bold; font-size: 10.5px;">
-                        <span id="pIrrMato">( ) Vegetação Rasteira/mato</span><span id="pIrrResiduos">( ) Resíduos Sólidos Diversos</span><span id="pIrrEntulhos">( ) Entulhos</span><span id="pIrrOutros">( ) Outros</span>
+                        <span id="pIrrMato">( ) Vegetação Rasteira/mato</span><span id="pIrrResiduos">( ) Resíduos / Entulhos</span><span id="pIrrEntulhos">( ) Obra / Posturas</span><span id="pIrrOutros">( ) Outros</span>
                     </div>
                     <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
                     <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
                     <p style="margin: 15px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
-                        <strong>FICA NOTIFICADO POR ESTE INSTRUMENTO</strong>, a providenciar a limpeza do lote, no prazo de <strong>15 dias</strong>, em conformidade com o:
+                        <strong>FICA NOTIFICADO POR ESTE INSTRUMENTO</strong>, a providenciar a regularização, no prazo de <strong><span id="pPrazoImpressao"></span></strong>, em conformidade com o:
                     </p>
                     <div style="margin: 8px 0 4px 5px; line-height: 1.5;">
                         <div id="pLei5198">( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.</div>
                         <div id="pLc56">( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.</div>
                     </div>
-                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">OBSERVAÇÕES:</p>
+                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">OBSERVAÇÕES (MEIO AMBIENTE):</p>
                     <ul class="bullet-rules">
                         <li>Vegetais arbóreos, lenhosos e nativos deverão ser preservados.</li>
                         <li>Fica proibido o emprego do fogo, bem como, a utilização da capina química para limpeza dos lotes.</li>
@@ -309,20 +318,20 @@
             </tr>
             <tr>
                 <td colspan="4" style="width: 65%;">
-                    <span class="cell-label">16. Nome do Notificante</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
+                    <span class="cell-label">16. Nome do Servidor Responsável</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
                     <span class="cell-label">17. RE / MATRÍCULA</span><div class="cell-value" id="pMatricula"></div>
                 </td>
                 <td colspan="2" style="width: 35%;">
                     <span class="cell-label">18. Endereço de Apresentação</span>
-                    <div class="cell-value" style="font-size: 9.5px; line-height: 1.4;">
-                        <strong>Secretaria Municipal do Meio Ambiente / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211
+                    <div id="pEnderecoSecretaria" class="cell-value" style="font-size: 9.5px; line-height: 1.4;">
+                        <strong>SMMAM / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211
                     </div>
                 </td>
             </tr>
             <tr>
                 <td colspan="6" style="padding: 0; border: none;">
                     <div class="signature-container">
-                        <div class="sig-box"><br><span class="cell-label">19. Assinatura do Notificante</span></div>
+                        <div class="sig-box"><br><span class="cell-label">19. Assinatura do Responsável</span></div>
                         <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;">Recebi o presente em _____/_____/_________</div><span class="cell-label">20. Assinatura do Notificado</span></div>
                     </div>
                 </td>
@@ -333,7 +342,5 @@
     <!-- Conectando o Motor Javascript Modular -->
     <script type="module" src="js/app.js"></script>
 
-</body>
-</html>
 </body>
 </html>
