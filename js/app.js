@@ -60,7 +60,6 @@ function aplicarRestricoesDeTela() {
     const nivel = perfilUsuario.nivel;
     const setor = perfilUsuario.setor || 'SMMAM';
     
-    // Troca o título principal com base no Setor do usuário
     let nomeSecretaria = "SMMAM (Meio Ambiente)";
     if (setor === "MOBILIDADE") nomeSecretaria = "Mobilidade Urbana";
     if (setor === "OBRAS") nomeSecretaria = "Obras e Posturas";
@@ -108,7 +107,6 @@ onAuthStateChanged(auth, async (user) => {
 
             if (docSnap.exists()) {
                 perfilUsuario = docSnap.data();
-                // Migração de perfil: Se o perfil antigo não tem setor, define como SMMAM
                 if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
 
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
@@ -143,15 +141,7 @@ window.realizarLogin = function() {
 }
 
 window.registrarUsuario = async function() {
-    const nome = document.getElementById('regNome').value; 
-    const cargo = document.getElementById('regCargo').value; 
-    const setor = document.getElementById('regSetor').value;
-    const cpf = document.getElementById('regCpf').value; 
-    const telefone = document.getElementById('regTelefone').value; 
-    const matricula = document.getElementById('regMatricula').value; 
-    const email = document.getElementById('regEmail').value; 
-    const senha = document.getElementById('regPassword').value;
-    
+    const nome = document.getElementById('regNome').value; const cargo = document.getElementById('regCargo').value; const setor = document.getElementById('regSetor').value; const cpf = document.getElementById('regCpf').value; const telefone = document.getElementById('regTelefone').value; const matricula = document.getElementById('regMatricula').value; const email = document.getElementById('regEmail').value; const senha = document.getElementById('regPassword').value;
     if(!nome || !cargo || !setor || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
     if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
     mostrarLoading(true, "Criando ficha do servidor...");
@@ -211,16 +201,10 @@ window.carregarDadosNuvem = async function() {
         const querySnapshot = await getDocs(notificacoesRef); 
         window.DB = [];
         const meuSetor = perfilUsuario.setor || 'SMMAM';
-
         querySnapshot.forEach((documento) => { 
             let data = documento.data(); 
             data.firebaseId = documento.id; 
-            
-            // Lógica de Isolamento Multi-Setor (Migração Silenciosa)
-            // Se o dado for antigo e não tiver setor, o sistema assume SMMAM.
             const setorDoDocumento = data.setor || 'SMMAM';
-            
-            // Só carrega para a tela se o documento for do mesmo setor do fiscal logado
             if (setorDoDocumento === meuSetor || perfilUsuario.nivel === 'superadmin') {
                 window.DB.push(data); 
             }
@@ -238,18 +222,13 @@ window.salvarNotificacao = async function(event) {
     const editId = document.getElementById('editFirebaseId').value; const qtdFotosAnexadas = window.fotosTemp.length;
     
     const dados = {
-        numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString(),
-        setor: perfilUsuario.setor || 'SMMAM' // Grava o setor que originou a notificação
+        numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM'
     };
     
     try {
         let idDoDocumento = editId;
-        if (editId) { 
-            const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); 
-        } else { 
-            dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); 
-            const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; 
-        }
+        if (editId) { const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); } 
+        else { dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; }
         
         const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
         if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
@@ -280,6 +259,33 @@ window.excluirSelecionadas = async function() {
     }
 }
 
+// --- CONTROLE DE FOTOS E LIGHTBOX (ZOOM) ---
+window.fotoModalAtual = null;
+
+window.abrirModalFoto = function(index) {
+    const fotoBase64 = window.fotosTemp[index];
+    if(!fotoBase64) return;
+    window.fotoModalAtual = fotoBase64;
+    document.getElementById('modal-image').src = fotoBase64;
+    document.getElementById('photo-modal').style.display = 'flex';
+}
+
+window.fecharModalFoto = function() {
+    document.getElementById('photo-modal').style.display = 'none';
+    document.getElementById('modal-image').src = '';
+    window.fotoModalAtual = null;
+}
+
+window.baixarFotoAtual = function() {
+    if(!window.fotoModalAtual) return;
+    const a = document.createElement("a");
+    a.href = window.fotoModalAtual;
+    a.download = `Evidencia_Fiscalizacao_${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
 window.processarFotos = function(event) {
     const files = event.target.files; if(!files) return;
     for(let file of files) {
@@ -300,12 +306,20 @@ window.processarFotos = function(event) {
 window.renderizarPreviewFotos = function() {
     const container = document.getElementById('previewFotos'); container.innerHTML = '';
     window.fotosTemp.forEach((foto, index) => {
-        const div = document.createElement('div'); div.style.position = 'relative';
-        div.innerHTML = `<img src="${foto}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;"><button type="button" onclick="removerFoto(${index})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`; container.appendChild(div);
+        const div = document.createElement('div'); div.style.position = 'relative'; div.style.display = 'inline-block';
+        
+        // Agora a foto tem "cursor:pointer" e o evento onclick que abre a Modal Gigante
+        div.innerHTML = `
+            <img src="${foto}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc; cursor:pointer; transition: transform 0.2s;" onclick="abrirModalFoto(${index})" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Clique para ampliar">
+            <button type="button" onclick="removerFoto(${index})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;" title="Remover Foto">X</button>
+        `;
+        container.appendChild(div);
     });
 }
+
 window.removerFoto = function(index) { window.fotosTemp.splice(index, 1); window.renderizarPreviewFotos(); }
 
+// --- DASHBOARD E RENDERIZAÇÃO ---
 window.atualizarDashboard = function() {
     const hoje = new Date(); hoje.setHours(0,0,0,0); let noPrazo = 0; let vencidas = 0;
     window.DB.forEach(i => { if(i.dataPrazo) { const prazo = new Date(i.dataPrazo + "T00:00:00"); if(prazo < hoje) vencidas++; else noPrazo++; } });
@@ -358,36 +372,11 @@ if(telefoneInputForm) telefoneInputForm.addEventListener('input', function(e) { 
 
 window.imprimirRegistro = function(firebaseId) {
     const item = window.DB.find(i => i.firebaseId === firebaseId); if (!item) return;
-    
-    // DINÂMICA MULTI-SETOR NO ESPELHO A4
     const setorDoc = item.setor || 'SMMAM';
-    if(setorDoc === 'MOBILIDADE') {
-        document.getElementById('printSecretaria').innerText = "Secretaria de Segurança e Mobilidade Urbana";
-        document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075 – Cidade Alta";
-    } else if(setorDoc === 'OBRAS') {
-        document.getElementById('printSecretaria').innerText = "Secretaria de Obras e Posturas";
-        document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Marechal Deodoro, 70 – Centro";
-    } else {
-        document.getElementById('printSecretaria').innerText = "Secretaria Municipal do Meio Ambiente";
-        document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211";
-    }
-    
-    // Calcula prazo para impressão
-    let prazoTexto = "Imediato";
-    if(item.dataPrazo) {
-        const d1 = new Date(item.dataNotif + "T00:00:00");
-        const d2 = new Date(item.dataPrazo + "T00:00:00");
-        const diffTime = Math.abs(d2 - d1);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        prazoTexto = `${diffDays} dias`;
-    }
-
-    document.getElementById('pNum').innerText = item.numNotif; document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); document.getElementById('pDoc').innerText = item.doc; document.getElementById('pEndereco').innerText = item.endereco || '---'; document.getElementById('pTelefone').innerText = item.telefone || '---'; document.getElementById('pBairro').innerText = item.bairro || '---'; document.getElementById('pCep').innerText = item.cep || '---'; document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; document.getElementById('pCadZona').innerText = item.cadZona || '---'; document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; document.getElementById('pCadLote').innerText = item.cadLote || '---'; document.getElementById('pCadImob').innerText = item.cadImob || ''; document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; document.getElementById('pRef').innerText = item.ref || 'Não informado'; document.getElementById('pObs').innerText = item.obs || 'Nenhuma'; document.getElementById('pFiscal').innerText = item.fiscal || ''; document.getElementById('pMatricula').innerText = item.matricula || '';
-    document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação Rasteira' : '( ) Vegetação Rasteira'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos / Entulhos' : '( ) Resíduos / Entulhos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.' : '( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.' : '( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.';
-    document.getElementById('pPrazoImpressao').innerText = prazoTexto;
-    
-    const tituloOriginal = document.title; document.title = `${item.numNotif} - ${(item.nome || '').toUpperCase()}`;
-    window.print(); setTimeout(() => { document.title = tituloOriginal; }, 1000);
+    if(setorDoc === 'MOBILIDADE') { document.getElementById('printSecretaria').innerText = "Secretaria de Segurança e Mobilidade Urbana"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075 – Cidade Alta"; } else if(setorDoc === 'OBRAS') { document.getElementById('printSecretaria').innerText = "Secretaria de Obras e Posturas"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Marechal Deodoro, 70 – Centro"; } else { document.getElementById('printSecretaria').innerText = "Secretaria Municipal do Meio Ambiente"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211"; }
+    let prazoTexto = "Imediato"; if(item.dataPrazo) { const d1 = new Date(item.dataNotif + "T00:00:00"); const d2 = new Date(item.dataPrazo + "T00:00:00"); const diffTime = Math.abs(d2 - d1); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); prazoTexto = `${diffDays} dias`; }
+    document.getElementById('pNum').innerText = item.numNotif; document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); document.getElementById('pDoc').innerText = item.doc; document.getElementById('pEndereco').innerText = item.endereco || '---'; document.getElementById('pTelefone').innerText = item.telefone || '---'; document.getElementById('pBairro').innerText = item.bairro || '---'; document.getElementById('pCep').innerText = item.cep || '---'; document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; document.getElementById('pCadZona').innerText = item.cadZona || '---'; document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; document.getElementById('pCadLote').innerText = item.cadLote || '---'; document.getElementById('pCadImob').innerText = item.cadImob || ''; document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; document.getElementById('pRef').innerText = item.ref || 'Não informado'; document.getElementById('pObs').innerText = item.obs || 'Nenhuma'; document.getElementById('pFiscal').innerText = item.fiscal || ''; document.getElementById('pMatricula').innerText = item.matricula || ''; document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação Rasteira' : '( ) Vegetação Rasteira'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos / Entulhos' : '( ) Resíduos / Entulhos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.' : '( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.' : '( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.'; document.getElementById('pPrazoImpressao').innerText = prazoTexto;
+    const tituloOriginal = document.title; document.title = `${item.numNotif} - ${(item.nome || '').toUpperCase()}`; window.print(); setTimeout(() => { document.title = tituloOriginal; }, 1000);
 }
 
 window.exportarExcel = function() {
