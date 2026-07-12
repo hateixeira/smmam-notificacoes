@@ -67,16 +67,21 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; }
 .search-box { padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; width: 100%; box-sizing: border-box; }
 
-/* Dashboard Cards */
-.dashboard-cards { display: flex; gap: 15px; flex-wrap: wrap; }
-.card { flex: 1; min-width: 150px; padding: 20px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+/* Dashboard Cards Ajustados para 5 colunas */
+.dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; }
+.card { padding: 20px 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 .card-total { background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6;} .card-total .num { color: #1e293b; }
-.card-prazo { background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #10b981;} .card-prazo .num { color: #1e293b; }
-.card-vencida { background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444;} .card-vencida .num { color: #1e293b; }
-.card .num { font-size: 28px; font-weight: bold; line-height: 1; margin-bottom: 8px; }
-.card .label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+.card-info { background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #f59e0b;} .card-info .num { color: #d97706; }
+.card-prazo { background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #10b981;} .card-prazo .num { color: #059669; }
+.card-vencida { background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444;} .card-vencida .num { color: #dc2626; }
+.card .num { font-size: 26px; font-weight: bold; line-height: 1; margin-bottom: 8px; }
+.card .label { font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; }
 
-/* Filtros de Status */
+/* Filtros de Tabela e Tipo */
+.filter-group { display: flex; background: #e2e8f0; padding: 3px; border-radius: 6px; }
+.filter-type-btn { background: transparent; color: #475569; padding: 6px 15px; font-size: 12px; font-weight: bold; border-radius: 4px; border: none; cursor: pointer; flex: none;}
+.filter-type-btn.active { background: #fff; color: #1b365d; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
 .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; }
 .filter-btn { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; font-weight: 600; flex: none; }
 .filter-btn.active { background: #1b365d; color: white; border-color: #1b365d; }
@@ -96,12 +101,15 @@ table.data-table tr:hover { background-color: #f1f5f9; }
 .action-links a.btn-autuar:hover { background: #fecaca; }
 
 /* Status da Tabela */
+.badge-tipo-notif { background: #e0e7ff; color: #4338ca; padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; border: 1px solid #c7d2fe;}
+.badge-tipo-auto { background: #fef08a; color: #a16207; padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; border: 1px solid #fde047;}
+
 .badge-ouvidoria { background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-top: 4px; display: inline-block; }
 .badge-ar { background: #e0f2fe; color: #0369a1; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 4px; display: block; width: fit-content; border: 1px solid #bae6fd;}
 .badge-prazo { background: #dcfce7; color: #166534; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: fit-content; border: 1px solid #bbf7d0;}
 .badge-vencido { background: #fee2e2; color: #991b1b; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; display: block; width: fit-content; border: 1px solid #fecaca;}
 
-/* Tag da API dos Correios (Novo) */
+/* Tag da API dos Correios */
 .correios-status { font-size: 10px; margin-left: 5px; padding: 2px 5px; border-radius: 3px; font-weight: normal; }
 .correios-entregue { background: #16a34a; color: #fff; }
 .correios-transito { background: #d97706; color: #fff; }
