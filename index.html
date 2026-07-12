@@ -14,29 +14,24 @@
         <div id="loading-msg">Sincronizando Banco de Dados...</div>
     </div>
     <div id="toast">Operação realizada com sucesso!</div>
-    <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importarBackup(event)">
 
-    <!-- TELA DE LOGIN / CADASTRO -->
+    <!-- TELAS DE ACESSO (Fora do sistema logado) -->
     <div id="auth-container">
         <h2 id="authTitle">Acesso - Fiscalização</h2>
-        
         <div id="login-fields">
             <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
             <input type="password" id="authPassword" placeholder="Senha">
             <button class="btn-primary" onclick="realizarLogin()" style="width: 100%;">Entrar no Sistema</button>
         </div>
-
         <div id="register-fields" style="display:none;">
             <input type="text" id="regNome" placeholder="Nome Completo">
             <input type="text" id="regCargo" placeholder="Cargo (Ex: Fiscal, Agente Administrativo)">
-            
             <select id="regSetor" style="margin-bottom: 12px; padding: 12px; font-weight: bold; color: #1b365d;">
                 <option value="" disabled selected>Selecione sua Secretaria/Setor...</option>
                 <option value="SMMAM">SMMAM (Meio Ambiente)</option>
                 <option value="MOBILIDADE">Mobilidade Urbana (Trânsito)</option>
                 <option value="OBRAS">Obras e Posturas</option>
             </select>
-
             <input type="text" id="regCpf" placeholder="CPF" maxlength="14">
             <input type="text" id="regTelefone" placeholder="Telefone Celular" maxlength="15">
             <input type="text" id="regMatricula" placeholder="Nº da Matrícula / RE">
@@ -44,206 +39,281 @@
             <input type="password" id="regPassword" placeholder="Crie uma Senha (mín. 6 caracteres)">
             <button class="btn-success" onclick="registrarUsuario()" style="width: 100%;">Finalizar Cadastro</button>
         </div>
-
         <div class="auth-links">
             <span id="btnToggleAuth" onclick="toggleAuthMode()">Servidor Novo? Solicite Acesso</span>
             <span onclick="recuperarSenha()">Esqueci a Senha</span>
         </div>
     </div>
 
-    <!-- TELA DE SALA DE ESPERA -->
-    <div id="waiting-room">
+    <div id="waiting-room" style="display:none;">
         <h2>⏳ Acesso em Análise</h2>
         <p>O seu cadastro foi realizado com sucesso!<br>Para garantir a segurança dos dados, o seu perfil está aguardando a liberação da Chefia da sua Secretaria.</p>
         <button class="btn-secondary" onclick="realizarLogout()" style="width: 200px; margin: 0 auto;">Sair</button>
     </div>
 
-    <!-- PAINEL ADMIN (GESTÃO DE USUÁRIOS) -->
-    <div id="admin-workspace">
-        <div class="panel-container">
-            <h2>
-                Gestão de Usuários e Permissões
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn-primary btn-outline" onclick="fecharPainelAdmin()">⬅️ Voltar ao Sistema</button>
-                </div>
-            </h2>
-            <p style="font-size: 13px; color: #64748b; margin-top: -5px; margin-bottom: 20px;">Aprove novos servidores e defina o que cada um pode fazer no sistema.</p>
-            
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Servidor / Cargo</th>
-                            <th>Secretaria</th>
-                            <th>Contato / Matrícula</th>
-                            <th>Status de Acesso</th>
-                            <th>Nível de Permissão</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaUsuariosCorpo">
-                        <!-- Gerado dinamicamente -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- WORKSPACE PRINCIPAL (NOTIFICAÇÕES) -->
-    <div class="workspace" id="main-workspace">
+    <!-- ESTRUTURA SPA (SINGLE PAGE APPLICATION) - Visível apenas quando logado -->
+    <div id="app-layout" style="display: none;">
         
-        <!-- FORMULÁRIO -->
-        <div class="form-container">
-            <h2 id="mainHeaderTitleForm">Fiscalização</h2>
-            <form id="notifForm" onsubmit="salvarNotificacao(event)">
-                <input type="hidden" id="editFirebaseId">
-                
-                <div class="form-row">
-                    <div class="form-group" style="flex: 1.2;">
-                        <label>Nº Notificação *</label>
-                        <input type="text" id="numNotif" placeholder="Ex: 0520B" required>
-                    </div>
-                    <div class="form-group" style="flex: 1.2;">
-                        <label>Proc. Administrativo / Ouvidoria</label>
-                        <input type="text" id="procOuvidoria" placeholder="Ex: 1234/26">
-                    </div>
-                    <div class="form-group" style="flex: 1.5;">
-                        <label>Data *</label>
-                        <input type="date" id="dataNotif" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Forma de Notificação *</label>
-                    <div class="checkbox-group">
-                        <div class="checkbox-item"><input type="radio" id="tipoPresencial" name="tipoNotif" value="Presencial" checked><label for="tipoPresencial">Presencial</label></div>
-                        <div class="checkbox-item"><input type="radio" id="tipoAR" name="tipoNotif" value="AR"><label for="tipoAR">Por AR</label></div>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group" style="flex: 2;"><label>Nome do Notificado (Pessoa/Empresa) *</label><input type="text" id="nome" required></div>
-                    <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="doc" maxlength="18" required></div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group"><label>CEP</label><input type="text" id="cep" maxlength="9"></div>
-                    <div class="form-group" style="flex: 2;"><label>Endereço de Correspondência</label><input type="text" id="endereco"></div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group"><label>Bairro/Distrito</label><input type="text" id="bairro"></div>
-                    <div class="form-group"><label>Telefone</label><input type="text" id="telefone" maxlength="15"></div>
-                </div>
-
-                <div style="font-weight: bold; margin: 10px 0 5px 0; color: #1b365d; font-size:13px;">Cadastro Imobiliário do Local (Opcional)</div>
-                <div class="form-row">
-                    <div class="form-group"><label>Distr.</label><input type="text" id="cadDistrito" placeholder="01"></div>
-                    <div class="form-group"><label>Zona</label><input type="text" id="cadZona" placeholder="5"></div>
-                    <div class="form-group"><label>Quadr.</label><input type="text" id="cadQuadra" placeholder="071"></div>
-                    <div class="form-group"><label>Lote</label><input type="text" id="cadLote" placeholder="0015"></div>
-                    <div class="form-group" style="flex: 1.5;"><label>Cad. Imob.</label><input type="text" id="cadImob"></div>
-                </div>
-
-                <div class="form-group"><label>Endereço do Local da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
-
-                <div class="form-group">
-                    <label>Irregularidades Verificadas</label>
-                    <div class="checkbox-group">
-                        <div class="checkbox-item"><input type="checkbox" id="irrMato"><label for="irrMato">Vegetação/Mato</label></div>
-                        <div class="checkbox-item"><input type="checkbox" id="irrResiduos"><label for="irrResiduos">Resíduos Sólidos / Entulhos</label></div>
-                        <div class="checkbox-item"><input type="checkbox" id="irrEntulhos"><label for="irrEntulhos">Obra Irregular / Posturas</label></div>
-                        <div class="checkbox-item"><input type="checkbox" id="irrOutros"><label for="irrOutros">Outros</label></div>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group"><label>Ponto de Referência</label><input type="text" id="ref"></div>
-                    <div class="form-group"><label>Observações Adicionais</label><input type="text" id="obs"></div>
-                </div>
-
-                <div class="form-group">
-                    <label>Base Legal (Padrão SMMAM)</label>
-                    <div class="checkbox-group">
-                        <div class="checkbox-item"><input type="checkbox" id="lei5198" checked><label for="lei5198">Art. 6º, § 2º - L 5.198</label></div>
-                        <div class="checkbox-item"><input type="checkbox" id="lc56"><label for="lc56">Art. 41, inc. III - LC 56</label></div>
-                    </div>
-                </div>
-
-                <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Acompanhamento (Uso Interno)</div>
-                <div class="form-row">
-                    <div class="form-group"><label>Código de Rastreio (AR)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
-                    <div class="form-group"><label>Prazo para Regularização</label><input type="date" id="dataPrazo"></div>
-                </div>
-
-                <div class="form-group">
-                    <label>Evidências Fotográficas (Uso Interno) <span id="indicadorFotos" class="foto-loading" style="display:none;">Carregando fotos...</span></label>
-                    <input type="file" id="inputFotos" accept="image/*" multiple onchange="processarFotos(event)" style="background: #fff; padding: 5px;">
-                    <div id="previewFotos" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
-                </div>
-
-                <div class="form-row" style="margin-top: 10px;">
-                    <div class="form-group"><label>Servidor Responsável (Logado) *</label><input type="text" id="fiscal" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
-                    <div class="form-group"><label>RE / Matrícula *</label><input type="text" id="matricula" required readonly style="background-color: #f1f5f9; color: #64748b;"></div>
-                </div>
-
-                <div class="btn-actions" id="areaBotoesSalvar">
-                    <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar Notificação</button>
-                    <button type="button" class="btn-secondary" onclick="limparFormulario()">🔄 Novo / Limpar</button>
-                </div>
-            </form>
-        </div>
-
-        <!-- PAINEL -->
-        <div class="panel-container">
-            <h2 style="font-size: 18px;">
-                Gerenciador de Demandas
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <button id="btnAdminTop" class="btn-outline" onclick="abrirPainelAdmin()" style="display:none; font-weight:bold;">⚙️ Gestão de Usuários</button>
-                    <span id="userLoggedDisplay" style="font-size: 11px; color: #64748b; font-weight: normal; margin-left: 10px;"></span>
-                    <button class="btn-logout" onclick="realizarLogout()">Sair</button>
-                </div>
-            </h2>
-
-            <div class="dashboard-cards">
-                <div class="card card-total"><div class="num" id="dashTotal">0</div><div class="label">Total Cadastrado</div></div>
-                <div class="card card-prazo"><div class="num" id="dashPrazo">0</div><div class="label">No Prazo</div></div>
-                <div class="card card-vencida"><div class="num" id="dashVencida">0</div><div class="label">Vencidas</div></div>
+        <!-- MENU LATERAL (SIDEBAR) -->
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <h3>Fiscalização</h3>
+                <span id="sidebar-setor">Carregando...</span>
             </div>
             
-            <div class="toolbar">
-                <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por nome, endereço, lote, número ou ouvidoria..." onkeyup="renderizarPainel()">
-                <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                    <div class="filter-bar">
-                        <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
-                        <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
-                        <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
-                        <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
-                    </div>
-                    <div><button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px; width: auto;" title="Baixar relatório Excel">📊 Exportar Planilha Excel</button></div>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" onclick="navegarPara('dashboard')" id="nav-dashboard">📊 Dashboard</a>
+                <a class="nav-item" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Notificações</a>
+                <a class="nav-item" onclick="navegarPara('autos')" id="nav-autos">🚨 Auto de Infração</a>
+                <a class="nav-item" onclick="navegarPara('consulta')" id="nav-consulta">🔍 Consulta Cadastral</a>
+                <a class="nav-item" onclick="navegarPara('perfil')" id="nav-perfil">👤 Meu Perfil</a>
+                
+                <!-- Apenas para Administradores -->
+                <div id="menu-admin-area" style="display: none;">
+                    <div class="nav-section-title">ADMINISTRAÇÃO</div>
+                    <a class="nav-item" onclick="navegarPara('auditoria')" id="nav-auditoria">🛡️ Auditoria do Sistema</a>
+                    <a class="nav-item" onclick="navegarPara('configuracoes')" id="nav-configuracoes">⚙️ Configurações</a>
                 </div>
-                <div class="btn-actions" style="margin-top:5px;">
-                    <button class="btn-primary" onclick="exportarVipp()" style="flex: 2;">📦 Exportar VIPP</button>
-                    <button class="btn-secondary" onclick="document.getElementById('importFile').click()" title="Importar notificações">📥 Importar DB</button>
-                    <button class="btn-secondary" onclick="exportarBackup()" title="Baixar JSON">📤 Backup JSON</button>
-                    <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()" style="display:none;">🗑️ Excluir Selecionadas</button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <span id="userLoggedDisplay" style="display:block; margin-bottom: 10px; font-size: 11px;"></span>
+                <button class="btn-logout" onclick="realizarLogout()" style="width: 100%;">Sair do Sistema</button>
+            </div>
+        </aside>
+
+        <!-- ÁREA CENTRAL DE CONTEÚDO -->
+        <main id="main-content">
+            
+            <!-- VIEW 1: DASHBOARD -->
+            <div id="view-dashboard" class="view-section active-view">
+                <h2>Visão Geral do Setor</h2>
+                <div class="dashboard-cards">
+                    <div class="card card-total"><div class="num" id="dashTotal">0</div><div class="label">Total Notificações</div></div>
+                    <div class="card card-prazo"><div class="num" id="dashPrazo">0</div><div class="label">No Prazo</div></div>
+                    <div class="card card-vencida"><div class="num" id="dashVencida">0</div><div class="label">Vencidas</div></div>
+                </div>
+                <div class="panel-container" style="margin-top: 20px;">
+                    <p style="color: #64748b;">(Gráficos gerenciais serão implementados aqui)</p>
                 </div>
             </div>
 
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 30px;"><input type="checkbox" id="selecionarTodos" onclick="toggleTodos(this)"></th>
-                            <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Reg. <span class="sort-icon">▼▲</span></th>
-                            <th class="sortable" onclick="ordenarTabela('nome')">Nome / Alvo <span class="sort-icon">▼▲</span></th>
-                            <th>Status (AR/Prazo)</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabelaCorpo"></tbody>
-                </table>
+            <!-- VIEW 2: NOTIFICAÇÕES (Seu formulário principal) -->
+            <div id="view-notificacoes" class="view-section">
+                <!-- FORMULÁRIO -->
+                <div class="form-container" style="margin-bottom: 20px;">
+                    <h2 id="mainHeaderTitleForm">Gerador de Demandas</h2>
+                    <form id="notifForm" onsubmit="salvarNotificacao(event)">
+                        <input type="hidden" id="editFirebaseId">
+                        
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1.2;"><label>Nº Notificação *</label><input type="text" id="numNotif" placeholder="Ex: 0520B" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria" placeholder="Ex: 1234/26"></div>
+                            <div class="form-group" style="flex: 1.5;"><label>Data *</label><input type="date" id="dataNotif" required></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Forma de Notificação *</label>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item"><input type="radio" id="tipoPresencial" name="tipoNotif" value="Presencial" checked><label for="tipoPresencial">Presencial</label></div>
+                                <div class="checkbox-item"><input type="radio" id="tipoAR" name="tipoNotif" value="AR"><label for="tipoAR">Por AR</label></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;"><label>Nome do Notificado *</label><input type="text" id="nome" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="doc" maxlength="18" required></div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group"><label>CEP</label><input type="text" id="cep" maxlength="9"></div>
+                            <div class="form-group" style="flex: 2;"><label>Endereço de Correspondência</label><input type="text" id="endereco"></div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group"><label>Bairro</label><input type="text" id="bairro"></div>
+                            <div class="form-group"><label>Telefone</label><input type="text" id="telefone" maxlength="15"></div>
+                        </div>
+
+                        <div style="font-weight: bold; margin: 10px 0 5px 0; color: #1b365d; font-size:13px;">Cadastro Imobiliário (Busca Automática)</div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Distr.</label><input type="text" id="cadDistrito" placeholder="01"></div>
+                            <div class="form-group"><label>Zona</label><input type="text" id="cadZona" placeholder="5"></div>
+                            <div class="form-group"><label>Quadr.</label><input type="text" id="cadQuadra" placeholder="071"></div>
+                            <div class="form-group"><label>Lote</label><input type="text" id="cadLote" placeholder="0015"></div>
+                            <div class="form-group" style="flex: 1.5;"><label>Cad. Imob.</label><input type="text" id="cadImob"></div>
+                        </div>
+
+                        <div class="form-group"><label>Endereço do Local da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
+
+                        <div class="form-group">
+                            <label>Irregularidades Verificadas</label>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item"><input type="checkbox" id="irrMato"><label for="irrMato">Vegetação/Mato</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="irrResiduos"><label for="irrResiduos">Resíduos Sólidos</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="irrEntulhos"><label for="irrEntulhos">Obra Irregular / Posturas</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="irrOutros"><label for="irrOutros">Outros</label></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group"><label>Ponto de Referência</label><input type="text" id="ref"></div>
+                            <div class="form-group"><label>Observações</label><input type="text" id="obs"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Base Legal</label>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item"><input type="checkbox" id="lei5198" checked><label for="lei5198">Art. 6º, § 2º - L 5.198</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="lc56"><label for="lc56">Art. 41, inc. III - LC 56</label></div>
+                            </div>
+                        </div>
+
+                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Acompanhamento / Prazos</div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Código AR (Correios)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
+                            <div class="form-group"><label>Prazo para Regularização</label><input type="date" id="dataPrazo"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Evidências Fotográficas <span id="indicadorFotos" class="foto-loading" style="display:none;">Carregando...</span></label>
+                            <input type="file" id="inputFotos" accept="image/*" multiple onchange="processarFotos(event)" style="background: #fff; padding: 5px;">
+                            <div id="previewFotos" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
+                        </div>
+
+                        <div class="form-row" style="margin-top: 10px;">
+                            <div class="form-group"><label>Servidor Responsável</label><input type="text" id="fiscal" required readonly style="background-color: #f1f5f9;"></div>
+                            <div class="form-group"><label>RE / Matrícula</label><input type="text" id="matricula" required readonly style="background-color: #f1f5f9;"></div>
+                        </div>
+
+                        <div class="btn-actions" id="areaBotoesSalvar">
+                            <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar Notificação</button>
+                            <button type="button" class="btn-secondary" onclick="limparFormulario()">🔄 Novo / Limpar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- TABELA DE NOTIFICAÇÕES -->
+                <div class="panel-container">
+                    <div class="toolbar">
+                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar notificações..." onkeyup="renderizarPainel()">
+                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                            <div class="filter-bar">
+                                <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
+                            </div>
+                            <div>
+                                <button class="btn-primary btn-outline" onclick="exportarVipp()" style="padding: 6px 12px; font-size: 12px;">📦 Exportar VIPP</button>
+                                <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px;" title="Baixar Excel">📊 Excel</button>
+                            </div>
+                        </div>
+                        <div class="btn-actions" id="areaBotoesAdminExcluir" style="display:none; margin-top:5px;">
+                            <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir Selecionadas</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30px;"><input type="checkbox" id="selecionarTodos" onclick="toggleTodos(this)"></th>
+                                    <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Reg. <span class="sort-icon">▼▲</span></th>
+                                    <th class="sortable" onclick="ordenarTabela('nome')">Nome / Alvo <span class="sort-icon">▼▲</span></th>
+                                    <th>Status (AR/Prazo)</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaCorpo"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <!-- VIEW 3: AUTO DE INFRAÇÃO -->
+            <div id="view-autos" class="view-section">
+                <h2>Gerador de Auto de Infração (Multa)</h2>
+                <div class="panel-container">
+                    <p style="color: #64748b;">Módulo em construção. Será liberado na segunda-feira.</p>
+                </div>
+            </div>
+
+            <!-- VIEW 4: CONSULTA CADASTRAL -->
+            <div id="view-consulta" class="view-section">
+                <h2>Consulta Rápida ao Cadastro Imobiliário</h2>
+                <div class="panel-container">
+                    <p style="color: #64748b;">Módulo de busca inteligente livre.</p>
+                </div>
+            </div>
+
+            <!-- VIEW 5: MEU PERFIL -->
+            <div id="view-perfil" class="view-section">
+                <h2>Meu Perfil</h2>
+                <div class="form-container" style="max-width: 600px;">
+                    <p style="color: #64748b; margin-bottom: 20px;">Mantenha seus dados atualizados.</p>
+                    <div class="form-group"><label>Nome</label><input type="text" id="perfilNome" disabled style="background:#f1f5f9;"></div>
+                    <div class="form-group"><label>Matrícula</label><input type="text" id="perfilMatricula" disabled style="background:#f1f5f9;"></div>
+                    <div class="form-group"><label>Setor / Nível</label><input type="text" id="perfilSetorNivel" disabled style="background:#f1f5f9;"></div>
+                    <div class="form-group"><label>Telefone Celular</label><input type="text" id="perfilTelefone" placeholder="(54) 99999-9999"></div>
+                    <div class="form-group"><label>Nova Senha (opcional)</label><input type="password" id="perfilSenha" placeholder="Digite apenas se quiser trocar"></div>
+                    <button class="btn-success" style="margin-top: 15px; width: 100%;">💾 Atualizar Meus Dados</button>
+                </div>
+            </div>
+
+            <!-- VIEW 6: AUDITORIA -->
+            <div id="view-auditoria" class="view-section">
+                <h2>Caixa Preta (Logs de Auditoria)</h2>
+                <div class="panel-container">
+                    <p style="color: #64748b;">Tabela imutável de rastreamento de ações do sistema.</p>
+                </div>
+            </div>
+
+            <!-- VIEW 7: CONFIGURAÇÕES DO SISTEMA (ADMIN) -->
+            <div id="view-configuracoes" class="view-section">
+                <h2>Configurações do Sistema</h2>
+                
+                <div class="dashboard-cards" style="margin-bottom: 20px;">
+                    <!-- Gestão de Usuários -->
+                    <div class="panel-container" style="flex: 2;">
+                        <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores</h3>
+                        <div class="table-container" style="max-height: 400px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Servidor / Cargo</th>
+                                        <th>Secretaria</th>
+                                        <th>Contato / Matrícula</th>
+                                        <th>Status</th>
+                                        <th>Nível</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaUsuariosCorpo"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Configurações Globais -->
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+                        <div class="panel-container">
+                            <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Financeiro / Multas</h3>
+                            <div class="form-group">
+                                <label>Valor da URM Atual (R$)</label>
+                                <input type="number" id="configURM" step="0.01" placeholder="Ex: 175.50">
+                                <button class="btn-primary" style="margin-top: 10px; width: 100%;">Salvar URM</button>
+                            </div>
+                        </div>
+
+                        <div class="panel-container">
+                            <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Base de Dados (IPTU)</h3>
+                            <p style="font-size: 12px; color: #64748b; line-height: 1.4;">Para importar a base JSON da Prefeitura, utilize o módulo externo de importação fracionada, devido ao grande volume de dados.</p>
+                            <a href="#" style="font-size: 12px; font-weight: bold; color: #d97706; text-decoration: none;">Acessar Importador Seguro ↗</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
     </div>
 
     <!-- MODAL DE VISUALIZAÇÃO DE FOTOS (LIGHTBOX) -->
@@ -257,7 +327,7 @@
         </div>
     </div>
 
-    <!-- ESPELHO DE IMPRESSÃO -->
+    <!-- ESPELHO DE IMPRESSÃO (Mantido oculto no HTML, visível apenas na impressão via CSS) -->
     <div id="print-area">
         <table class="main-grid">
             <tr>
