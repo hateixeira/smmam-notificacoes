@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAP56ee8ituvxypF_aPOVSClu0EfCJBhR8",
@@ -26,7 +26,7 @@ window.filtroStatusAtual = 'Todos';
 let usuarioLogado = null;
 let perfilUsuario = null;
 
-const mostrarLoading = (mostrar, msg = "Sincronizando Banco de Dados...") => {
+const mostrarLoading = (mostrar, msg = "Sincronizando...") => {
     document.getElementById('loading-msg').innerText = msg;
     document.getElementById('loading-overlay').style.display = mostrar ? 'flex' : 'none';
 }
@@ -39,10 +39,27 @@ window.mostrarToast = function(msg) {
 }
 
 // ============================================================================
-// INTEGRAÇÕES AUTOMÁTICAS (VIACEP E BASE IPTU NO FIREBASE)
+// NAVEGAÇÃO SPA (SINGLE PAGE APPLICATION)
 // ============================================================================
+window.navegarPara = function(viewId) {
+    // Esconde todas as views e remove active dos botões
+    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    
+    // Mostra a view solicitada
+    document.getElementById('view-' + viewId).classList.add('active-view');
+    document.getElementById('nav-' + viewId).classList.add('active');
 
-// 1. VIA CEP - Correios
+    // Executa ações específicas ao abrir a página
+    if(viewId === 'dashboard') window.atualizarDashboardGraficos();
+    if(viewId === 'perfil') window.carregarDadosPerfil();
+    if(viewId === 'configuracoes' && perfilUsuario.nivel === 'admin') window.carregarConfiguracoesAdmin();
+    if(viewId === 'auditoria' && perfilUsuario.nivel === 'admin') window.carregarAuditoria();
+}
+
+// ============================================================================
+// INTEGRAÇÕES EXTERNAS (VIACEP, IPTU, CORREIOS BRASILAPI)
+// ============================================================================
 const cepInput = document.getElementById('cep');
 if(cepInput) {
     cepInput.addEventListener('blur', async function() {
@@ -51,133 +68,82 @@ if(cepInput) {
             try {
                 const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
                 const data = await response.json();
-                if(!data.erro) {
-                    document.getElementById('endereco').value = data.logradouro || '';
-                    document.getElementById('bairro').value = data.bairro || '';
-                    window.mostrarToast("Endereço localizado pelo CEP!");
-                }
-            } catch(e) { console.error("Erro na busca de CEP", e); }
+                if(!data.erro) { document.getElementById('endereco').value = data.logradouro || ''; document.getElementById('bairro').value = data.bairro || ''; window.mostrarToast("Endereço (CEP) localizado!"); }
+            } catch(e) { console.error("Erro no ViaCEP", e); }
         }
     });
 }
 
-// 2. BASE IPTU - CONSULTA INTELIGENTE NO FIREBASE
 const cadLoteInput = document.getElementById('cadLote');
 if(cadLoteInput) {
     cadLoteInput.addEventListener('blur', async function() {
-        const dist = document.getElementById('cadDistrito').value.padStart(2, '0');
-        const zona = document.getElementById('cadZona').value;
-        const quad = document.getElementById('cadQuadra').value.padStart(3, '0');
-        const lote = document.getElementById('cadLote').value.padStart(4, '0');
-
-        // Se faltar algum campo essencial, não faz a busca
+        const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); const zona = document.getElementById('cadZona').value; const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); const lote = document.getElementById('cadLote').value.padStart(4, '0');
         if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
-
-        // Monta a base da chave (os 10 primeiros dígitos)
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
-        
-        mostrarLoading(true, "Buscando dados no Cadastro Imobiliário...");
-
+        mostrarLoading(true, "Buscando Imóvel (IPTU)...");
         try {
-            // Nova Lógica: Busca qualquer imóvel onde a chave COMECE com os 10 dígitos informados
-            const q = query(
-                collection(db, "cadastro_imobiliario"), 
-                where("chaveinscricao", ">=", chaveBusca), 
-                where("chaveinscricao", "<=", chaveBusca + "\uf8ff"),
-                limit(1) // Traz apenas 1 resultado correspondente ao lote
-            );
-            
+            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
             const querySnapshot = await getDocs(q);
-
             if(!querySnapshot.empty) {
-                // Pega os dados do primeiro imóvel encontrado no lote
                 const imovel = querySnapshot.docs[0].data();
-                
-                document.getElementById('nome').value = imovel.proprietario_principal || '';
-                document.getElementById('doc').value = imovel.cnpj_cpf || '';
-                
-                let endLote = imovel.logradouro || '';
-                if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') {
-                    endLote += `, ${imovel.numero}`;
-                }
-                if(imovel.complemento) endLote += ` - ${imovel.complemento}`;
-                
-                document.getElementById('loteEndereco').value = endLote;
-                
-                const bairroAtual = document.getElementById('bairro').value;
-                if(!bairroAtual) document.getElementById('bairro').value = imovel.bairro || '';
-                
-                document.getElementById('cadImob').value = imovel.cadastroimobiliario || '';
-
-                // Força a máscara do CPF/CNPJ a ser aplicada no dado recebido
-                document.getElementById('doc').dispatchEvent(new Event('input'));
-
-                window.mostrarToast("Dados do IPTU preenchidos automaticamente!");
-            } else {
-                window.mostrarToast("Lote não encontrado no banco de dados.");
-            }
-        } catch(e) {
-            console.error("Erro na busca do IPTU", e);
-            window.mostrarToast("Falha na conexão com o banco de imóveis.");
-        }
+                document.getElementById('nome').value = imovel.proprietario_principal || ''; document.getElementById('doc').value = imovel.cnpj_cpf || '';
+                let endLote = imovel.logradouro || ''; if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') endLote += `, ${imovel.numero}`; if(imovel.complemento) endLote += ` - ${imovel.complemento}`;
+                document.getElementById('loteEndereco').value = endLote; if(!document.getElementById('bairro').value) document.getElementById('bairro').value = imovel.bairro || ''; document.getElementById('cadImob').value = imovel.cadastroimobiliario || '';
+                document.getElementById('doc').dispatchEvent(new Event('input')); window.mostrarToast("Base IPTU preenchida com sucesso!");
+            } else { window.mostrarToast("Lote não encontrado na base."); }
+        } catch(e) { console.error(e); window.mostrarToast("Falha na busca do IPTU."); }
         mostrarLoading(false);
     });
 }
-// ============================================================================
 
-// --- MOTOR DE AUDITORIA (CAIXA PRETA) ---
+window.buscarStatusCorreios = async function(codigoAR, spanId) {
+    const span = document.getElementById(spanId);
+    span.innerHTML = `<span class="correios-status" style="background:#e2e8f0;color:#64748b;">⏳ Consultando...</span>`;
+    try {
+        const response = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
+        if(!response.ok) throw new Error('API Indisponível');
+        const data = await response.json();
+        if(data.isDelivered) { span.innerHTML = `<span class="correios-status correios-entregue">📬 Entregue</span>`; } 
+        else { span.innerHTML = `<span class="correios-status correios-transito">🚚 Em Trânsito</span>`; }
+    } catch(e) { span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" class="correios-status correios-erro">Ver Site ↗</a>`; }
+}
+
+// ============================================================================
+// LOGS E PERMISSÕES (CAIXA PRETA)
+// ============================================================================
 async function registrarLog(acaoRealizada, alvo) {
     if(!perfilUsuario) return;
-    try {
-        await addDoc(collection(db, "logs_auditoria"), {
-            dataHora: new Date().toISOString(),
-            usuario: perfilUsuario.nome,
-            matricula: perfilUsuario.matricula,
-            setor: perfilUsuario.setor || 'SMMAM',
-            nivel: perfilUsuario.nivel,
-            acao: acaoRealizada,
-            documentoAlvo: alvo
-        });
-    } catch(e) { console.error("Erro ao gravar auditoria", e); }
+    try { await addDoc(collection(db, "logs_auditoria"), { dataHora: new Date().toISOString(), usuario: perfilUsuario.nome, matricula: perfilUsuario.matricula, setor: perfilUsuario.setor || 'SMMAM', nivel: perfilUsuario.nivel, acao: acaoRealizada, documentoAlvo: alvo }); } catch(e) { console.error(e); }
 }
 
-// --- APLICAÇÃO DE PERMISSÕES NA INTERFACE (RBAC E SETOR) ---
 function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
-    const nivel = perfilUsuario.nivel;
-    const setor = perfilUsuario.setor || 'SMMAM';
+    const nivel = perfilUsuario.nivel; const setor = perfilUsuario.setor || 'SMMAM';
+    let nomeSecretaria = "SMMAM (Meio Ambiente)"; if (setor === "MOBILIDADE") nomeSecretaria = "Mobilidade Urbana"; if (setor === "OBRAS") nomeSecretaria = "Obras e Posturas";
     
-    let nomeSecretaria = "SMMAM (Meio Ambiente)";
-    if (setor === "MOBILIDADE") nomeSecretaria = "Mobilidade Urbana";
-    if (setor === "OBRAS") nomeSecretaria = "Obras e Posturas";
-    
-    document.getElementById('mainHeaderTitleForm').innerText = `Fiscalização - ${nomeSecretaria}`;
-    
-    if(nivel === 'leitor') document.getElementById('areaBotoesSalvar').style.display = 'none';
-    else document.getElementById('areaBotoesSalvar').style.display = 'flex';
+    document.getElementById('sidebar-setor').innerText = nomeSecretaria;
+    document.getElementById('mainHeaderTitleForm').innerText = `Formulário - ${nomeSecretaria}`;
+    document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${perfilUsuario.nivel.toUpperCase()}</span>`;
+    document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula;
 
+    if(nivel === 'leitor') document.getElementById('areaBotoesSalvar').style.display = 'none'; else document.getElementById('areaBotoesSalvar').style.display = 'flex';
+    
     if(nivel === 'admin') {
-        document.getElementById('btnExcluirLote').style.display = 'block';
-        document.getElementById('btnAdminTop').style.display = 'block';
+        document.getElementById('menu-admin-area').style.display = 'block';
+        document.getElementById('areaBotoesAdminExcluir').style.display = 'flex';
     } else {
-        document.getElementById('btnExcluirLote').style.display = 'none';
-        document.getElementById('btnAdminTop').style.display = 'none';
+        document.getElementById('menu-admin-area').style.display = 'none';
+        document.getElementById('areaBotoesAdminExcluir').style.display = 'none';
     }
 }
 
+// ============================================================================
+// AUTENTICAÇÃO E INICIALIZAÇÃO
+// ============================================================================
 window.toggleAuthMode = function() {
-    const loginFields = document.getElementById('login-fields');
-    const registerFields = document.getElementById('register-fields');
-    const title = document.getElementById('authTitle');
-    const btnToggle = document.getElementById('btnToggleAuth');
-
-    if(loginFields.style.display === 'none') {
-        loginFields.style.display = 'block'; registerFields.style.display = 'none';
-        title.innerText = 'Acesso - Fiscalização'; btnToggle.innerText = 'Servidor Novo? Solicite Acesso';
-    } else {
-        loginFields.style.display = 'none'; registerFields.style.display = 'block';
-        title.innerText = 'Cadastro de Servidor'; btnToggle.innerText = 'Já tenho conta (Entrar)';
-    }
+    const l = document.getElementById('login-fields'); const r = document.getElementById('register-fields'); const t = document.getElementById('authTitle'); const b = document.getElementById('btnToggleAuth');
+    if(l.style.display === 'none') { l.style.display = 'block'; r.style.display = 'none'; t.innerText = 'Acesso - Fiscalização'; b.innerText = 'Servidor Novo? Solicite Acesso'; } 
+    else { l.style.display = 'none'; r.style.display = 'block'; t.innerText = 'Cadastro de Servidor'; b.innerText = 'Já tenho conta (Entrar)'; }
 }
 
 const regCpf = document.getElementById('regCpf'); const regTel = document.getElementById('regTelefone');
@@ -186,73 +152,62 @@ if(regTel) regTel.addEventListener('input', function(e) { let v = e.target.value
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        usuarioLogado = user;
-        mostrarLoading(true, "Lendo credenciais e setor...");
+        usuarioLogado = user; mostrarLoading(true, "Carregando Plataforma...");
         try {
-            const userDocRef = doc(db, "usuarios", user.uid);
-            const docSnap = await getDoc(userDocRef);
-
+            const docSnap = await getDoc(doc(db, "usuarios", user.uid));
             if (docSnap.exists()) {
-                perfilUsuario = docSnap.data();
-                if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
-
+                perfilUsuario = docSnap.data(); if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
-                    document.getElementById('auth-container').style.display = 'none'; document.getElementById('main-workspace').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'none'; document.getElementById('waiting-room').style.display = 'block';
+                    document.getElementById('auth-container').style.display = 'none'; document.getElementById('app-layout').style.display = 'none'; document.getElementById('waiting-room').style.display = 'block';
                     if(perfilUsuario.status === 'bloqueado') document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
                 } else if (perfilUsuario.status === 'aprovado') {
-                    document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'none'; document.getElementById('main-workspace').style.display = 'grid';
-                    document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>${perfilUsuario.nome}</strong> (${perfilUsuario.nivel.toUpperCase()})`;
-                    document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula;
-                    aplicarRestricoesDeTela(); window.carregarDadosNuvem();
+                    document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('app-layout').style.display = 'flex';
+                    aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('dashboard');
                 }
-            } else {
-                const novoPerfil = { nome: "Administrador Legado", cargo: "Administrador do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
-                await setDoc(userDocRef, novoPerfil); perfilUsuario = novoPerfil;
-                document.getElementById('auth-container').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('main-workspace').style.display = 'grid';
-                document.getElementById('userLoggedDisplay').innerHTML = `👤 <strong>Admin Legado</strong> (ADMIN)`;
-                aplicarRestricoesDeTela(); window.carregarDadosNuvem();
             }
-        } catch(e) { console.error("Erro na leitura de permissões", e); alert("Erro ao validar permissões de acesso."); }
+        } catch(e) { alert("Erro de permissão."); }
         mostrarLoading(false);
     } else {
         usuarioLogado = null; perfilUsuario = null;
-        document.getElementById('auth-container').style.display = 'flex'; document.getElementById('main-workspace').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'none';
+        document.getElementById('auth-container').style.display = 'flex'; document.getElementById('app-layout').style.display = 'none'; document.getElementById('waiting-room').style.display = 'none';
     }
 });
 
-window.realizarLogin = function() {
-    const email = document.getElementById('authEmail').value; const senha = document.getElementById('authPassword').value;
-    if(!email || !senha) return alert("Preencha e-mail e senha.");
-    mostrarLoading(true, "Acessando sistema...");
-    signInWithEmailAndPassword(auth, email, senha).catch((error) => { mostrarLoading(false); alert("Erro ao entrar: Verifique as credenciais."); });
+window.realizarLogin = function() { const email = document.getElementById('authEmail').value; const senha = document.getElementById('authPassword').value; if(!email || !senha) return alert("Preencha tudo."); mostrarLoading(true, "Acessando..."); signInWithEmailAndPassword(auth, email, senha).catch((error) => { mostrarLoading(false); alert("Erro ao entrar."); }); }
+window.registrarUsuario = async function() { const nome = document.getElementById('regNome').value; const cargo = document.getElementById('regCargo').value; const setor = document.getElementById('regSetor').value; const cpf = document.getElementById('regCpf').value; const telefone = document.getElementById('regTelefone').value; const matricula = document.getElementById('regMatricula').value; const email = document.getElementById('regEmail').value; const senha = document.getElementById('regPassword').value; if(!nome || !setor || !cpf || !senha) return alert("Preencha os obrigatórios."); mostrarLoading(true); try { const userC = await createUserWithEmailAndPassword(auth, email, senha); await setDoc(doc(db, "usuarios", userC.user.uid), { nome, cargo, setor, cpf, telefone, matricula, email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() }); sendEmailVerification(userC.user); mostrarLoading(false); alert("Cadastro enviado para chefia."); } catch(e) { mostrarLoading(false); alert(e.message); } }
+window.recuperarSenha = function() { const email = document.getElementById('authEmail').value || document.getElementById('regEmail').value; if(!email) return alert("Digite o e-mail."); sendPasswordResetEmail(auth, email).then(() => alert("E-mail de redefinição enviado!")); }
+window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; window.limparFormulario(); }); }
+
+// ============================================================================
+// MEU PERFIL (ATUALIZAÇÃO)
+// ============================================================================
+window.carregarDadosPerfil = function() {
+    if(!perfilUsuario) return;
+    document.getElementById('perfilNome').value = perfilUsuario.nome;
+    document.getElementById('perfilMatricula').value = perfilUsuario.matricula;
+    document.getElementById('perfilSetorNivel').value = `${perfilUsuario.setor || 'SMMAM'} - ${perfilUsuario.nivel.toUpperCase()}`;
+    document.getElementById('perfilTelefone').value = perfilUsuario.telefone || '';
 }
 
-window.registrarUsuario = async function() {
-    const nome = document.getElementById('regNome').value; const cargo = document.getElementById('regCargo').value; const setor = document.getElementById('regSetor').value; const cpf = document.getElementById('regCpf').value; const telefone = document.getElementById('regTelefone').value; const matricula = document.getElementById('regMatricula').value; const email = document.getElementById('regEmail').value; const senha = document.getElementById('regPassword').value;
-    if(!nome || !cargo || !setor || !cpf || !telefone || !matricula || !email || !senha) return alert("Preencha todos os campos obrigatórios do cadastro.");
-    if(senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
-    mostrarLoading(true, "Criando ficha do servidor...");
+document.querySelector('#view-perfil .btn-success').addEventListener('click', async function() {
+    mostrarLoading(true, "Atualizando Perfil...");
     try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, senha);
-        const user = userCredential.user;
-        await setDoc(doc(db, "usuarios", user.uid), { nome: nome, cargo: cargo, setor: setor, cpf: cpf, telefone: telefone, matricula: matricula, email: email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() });
-        sendEmailVerification(user);
-        mostrarLoading(false); alert("Cadastro realizado! Seu acesso foi enviado para a fila de aprovação da Chefia.");
-    } catch(error) { mostrarLoading(false); alert("Erro ao criar conta: " + error.message); }
-}
+        const novoTel = document.getElementById('perfilTelefone').value;
+        const novaSenha = document.getElementById('perfilSenha').value;
+        await updateDoc(doc(db, "usuarios", usuarioLogado.uid), { telefone: novoTel });
+        perfilUsuario.telefone = novoTel;
+        if(novaSenha && novaSenha.length >= 6) { await updatePassword(usuarioLogado, novaSenha); }
+        window.mostrarToast("Perfil atualizado com sucesso!");
+        document.getElementById('perfilSenha').value = '';
+    } catch(e) { alert("Erro ao atualizar. Para trocar a senha, talvez seja necessário sair e logar novamente."); }
+    mostrarLoading(false);
+});
 
-window.recuperarSenha = function() {
-    const email = document.getElementById('authEmail').value || document.getElementById('regEmail').value;
-    if(!email) return alert("Digite seu e-mail em algum dos campos para recuperar a senha.");
-    mostrarLoading(true);
-    sendPasswordResetEmail(auth, email).then(() => { mostrarLoading(false); alert("E-mail de redefinição de senha enviado!"); }).catch((error) => { mostrarLoading(false); alert("Erro: " + error.message); });
-}
-
-window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; document.getElementById('tabelaCorpo').innerHTML = ''; window.limparFormulario(); }); }
-
-window.abrirPainelAdmin = async function() {
-    document.getElementById('main-workspace').style.display = 'none'; document.getElementById('admin-workspace').style.display = 'block';
-    mostrarLoading(true, "Carregando usuários...");
+// ============================================================================
+// ADMINISTRAÇÃO E CONFIGURAÇÕES
+// ============================================================================
+window.carregarConfiguracoesAdmin = async function() {
+    // 1. Carrega Usuários
     const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); corpoUsuarios.innerHTML = '';
     try {
         const usersSnapshot = await getDocs(collection(db, "usuarios"));
@@ -261,41 +216,57 @@ window.abrirPainelAdmin = async function() {
             const setorBadge = `<span style="background:#e2e8f0; padding:3px 6px; border-radius:4px; font-size:11px; font-weight:bold;">${u.setor || 'SMMAM'}</span>`;
             const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
             const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td>${setorBadge}</td><td>${u.email}<br><small style="color:#64748b;">Mat: ${u.matricula}</small></td><td>${selectStatus}</td><td>${selectNivel}</td>`;
-            corpoUsuarios.appendChild(tr);
+            corpoUsuarios.innerHTML += `<tr><td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td>${setorBadge}</td><td>${u.email}</td><td>${selectStatus}</td><td>${selectNivel}</td></tr>`;
         });
-    } catch(e) { console.error(e); alert("Erro ao carregar usuários. Verifique se você é Administrador."); }
-    mostrarLoading(false);
-}
+    } catch(e) { console.error("Erro ao listar usuários"); }
 
-window.fecharPainelAdmin = function() { document.getElementById('admin-workspace').style.display = 'none'; document.getElementById('main-workspace').style.display = 'grid'; }
+    // 2. Carrega URM
+    try {
+        const configSnap = await getDoc(doc(db, "configuracoes", "sistema"));
+        if(configSnap.exists() && configSnap.data().valorURM) document.getElementById('configURM').value = configSnap.data().valorURM;
+    } catch(e) {}
+}
 
 window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) {
-    try {
-        const userRef = doc(db, "usuarios", uid);
-        await updateDoc(userRef, { [campo]: valorNovo });
-        window.mostrarToast(`Atualizado para ${valorNovo}!`);
-        if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`;
-    } catch(e) { console.error(e); alert("Erro ao atualizar o perfil. Você tem permissão de Administrador?"); }
+    try { await updateDoc(doc(db, "usuarios", uid), { [campo]: valorNovo }); window.mostrarToast(`Atualizado para ${valorNovo}!`); if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`; } catch(e) { alert("Erro de permissão."); }
 }
 
-window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
+document.querySelector('#configURM').nextElementSibling.addEventListener('click', async function() {
+    const valor = parseFloat(document.getElementById('configURM').value);
+    if(!valor || valor <= 0) return alert("Valor inválido.");
+    mostrarLoading(true);
+    try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.mostrarToast("Valor da URM salvo com sucesso!"); await registrarLog("Alterou Valor da URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro"); }
+    mostrarLoading(false);
+});
 
-window.carregarDadosNuvem = async function() {
-    mostrarLoading(true, "Baixando dados do setor...");
+// ============================================================================
+// AUDITORIA (CAIXA PRETA)
+// ============================================================================
+window.carregarAuditoria = async function() {
+    const container = document.querySelector('#view-auditoria .panel-container');
+    container.innerHTML = '<p>Carregando registros de segurança...</p>';
     try {
-        const querySnapshot = await getDocs(notificacoesRef); 
-        window.DB = [];
-        const meuSetor = perfilUsuario.setor || 'SMMAM';
+        const q = query(collection(db, "logs_auditoria"), orderBy("dataHora", "desc"), limit(50));
+        const snap = await getDocs(q);
+        let html = `<table class="data-table"><thead><tr><th>Data/Hora</th><th>Servidor</th><th>Ação Realizada</th><th>Documento Alvo</th></tr></thead><tbody>`;
+        snap.forEach(doc => {
+            const l = doc.data(); const dataFormatada = new Date(l.dataHora).toLocaleString('pt-BR');
+            html += `<tr><td style="font-size:11px;">${dataFormatada}</td><td><strong>${l.usuario}</strong><br><small>${l.setor} - Mat: ${l.matricula}</small></td><td><span style="color:#d97706; font-weight:bold;">${l.acao}</span></td><td>${l.documentoAlvo}</td></tr>`;
+        });
+        html += `</tbody></table>`; container.innerHTML = html;
+    } catch(e) { container.innerHTML = '<p>Erro ao carregar logs. Verifique permissões.</p>'; }
+}
 
+// ============================================================================
+// CRUD NOTIFICAÇÕES (O NÚCLEO)
+// ============================================================================
+window.carregarDadosNuvem = async function() {
+    mostrarLoading(true, "Baixando demandas...");
+    try {
+        const querySnapshot = await getDocs(notificacoesRef); window.DB = []; const meuSetor = perfilUsuario.setor || 'SMMAM';
         querySnapshot.forEach((documento) => { 
-            let data = documento.data(); 
-            data.firebaseId = documento.id; 
-            const setorDoDocumento = data.setor || 'SMMAM';
-            if (setorDoDocumento === meuSetor || perfilUsuario.nivel === 'admin') {
-                window.DB.push(data); 
-            }
+            let data = documento.data(); data.firebaseId = documento.id; 
+            if ((data.setor || 'SMMAM') === meuSetor || perfilUsuario.nivel === 'admin') window.DB.push(data); 
         });
         window.renderizarPainel();
     } catch (e) { console.error(e); }
@@ -303,162 +274,113 @@ window.carregarDadosNuvem = async function() {
 }
 
 window.salvarNotificacao = async function(event) {
-    event.preventDefault();
-    if(perfilUsuario.nivel === 'leitor') return alert("Leitores não podem salvar dados.");
-    mostrarLoading(true, "Salvando dados e anexando fotos...");
-    const btn = document.getElementById('btnSalvar'); btn.disabled = true;
-    const editId = document.getElementById('editFirebaseId').value; const qtdFotosAnexadas = window.fotosTemp.length;
-    
-    const dados = {
-        numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: qtdFotosAnexadas, editadoPor: perfilUsuario ? perfilUsuario.nome : 'Desconhecido', dataUltimaEdicao: new Date().toISOString(),
-        setor: perfilUsuario.setor || 'SMMAM'
-    };
+    event.preventDefault(); if(perfilUsuario.nivel === 'leitor') return alert("Leitores não editam.");
+    mostrarLoading(true, "Salvando dados e fotos...");
+    const btn = document.getElementById('btnSalvar'); btn.disabled = true; const editId = document.getElementById('editFirebaseId').value;
+    const dados = { numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: document.getElementById('fiscal').value, matricula: document.getElementById('matricula').value, qtdFotosSalvas: window.fotosTemp.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
     
     try {
-        let idDoDocumento = editId;
-        if (editId) { 
-            const docRef = doc(db, "notificacoes", editId); await updateDoc(docRef, dados); 
-        } else { 
-            dados.criadoPor = perfilUsuario ? perfilUsuario.nome : 'Desconhecido'; dados.criadoPorEmail = perfilUsuario ? perfilUsuario.email : ''; dados.dataCriacao = new Date().toISOString(); 
-            const novoDocRef = await addDoc(notificacoesRef, dados); idDoDocumento = novoDocRef.id; 
-        }
+        let idDoDoc = editId;
+        if (editId) { await updateDoc(doc(db, "notificacoes", editId), dados); } 
+        else { dados.criadoPor = perfilUsuario.nome; dados.dataCriacao = new Date().toISOString(); const novoDoc = await addDoc(notificacoesRef, dados); idDoDoc = novoDoc.id; }
         
-        const fotosSubRef = collection(db, "notificacoes", idDoDocumento, "evidencias");
+        const fotosSubRef = collection(db, "notificacoes", idDoDoc, "evidencias");
         if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
-        for (let fotoBase64 of window.fotosTemp) { await addDoc(fotosSubRef, { imagemBinaria: fotoBase64 }); }
+        for (let base64 of window.fotosTemp) { await addDoc(fotosSubRef, { imagemBinaria: base64 }); }
         
-        await window.carregarDadosNuvem(); window.limparFormulario(); window.mostrarToast("Salvo com sucesso na nuvem!");
-        await registrarLog(editId ? "Editou Registro" : "Criou Novo Registro", dados.numNotif);
-    } catch (e) { alert("Erro ao salvar o banco de dados. Você tem permissão?"); console.error(e); }
+        await window.carregarDadosNuvem(); window.limparFormulario(); window.mostrarToast("Salvo na Nuvem!"); await registrarLog(editId ? "Editou Notificação" : "Criou Notificação", dados.numNotif);
+    } catch (e) { alert("Erro ao salvar."); }
     btn.disabled = false; mostrarLoading(false);
 }
 
 window.excluirSelecionadas = async function() {
-    if(perfilUsuario.nivel !== 'admin') return alert("Apenas Administradores podem excluir dados.");
-    const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
-    if(marcados.length === 0) { alert('Selecione ao menos um item para excluir.'); return; }
-    
-    if(confirm(`Tem certeza que deseja apagar ${marcados.length} registro(s) DA NUVEM?`)) {
-        mostrarLoading(true, "Excluindo arquivos...");
+    const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(marcados.length === 0) return alert('Selecione algo.');
+    if(confirm(`Tem certeza que deseja apagar ${marcados.length} registro(s)?`)) {
+        mostrarLoading(true, "Excluindo...");
         try {
-            for (let id of marcados) { 
-                const fotosSubRef = collection(db, "notificacoes", id, "evidencias"); const fotosParaApagar = await getDocs(fotosSubRef);
-                for (let f of fotosParaApagar.docs) { await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); 
-            }
-            document.getElementById('selecionarTodos').checked = false; await window.carregarDadosNuvem(); window.mostrarToast("Excluído permanentemente!");
-            await registrarLog("Excluiu Registros em Lote", marcados.join(", "));
-        } catch(e) { alert("Erro ao excluir."); console.error(e); }
-        mostrarLoading(false);
+            for (let id of marcados) { const subRef = collection(db, "notificacoes", id, "evidencias"); const snaps = await getDocs(subRef); for (let f of snaps.docs) { await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); }
+            await window.carregarDadosNuvem(); window.mostrarToast("Excluído!"); await registrarLog("Excluiu em Lote", marcados.join(", "));
+        } catch(e) { alert("Erro"); } mostrarLoading(false);
     }
 }
 
+// --- FOTOS ---
 window.fotoModalAtual = null;
-window.abrirModalFoto = function(index) {
-    const fotoBase64 = window.fotosTemp[index]; if(!fotoBase64) return;
-    window.fotoModalAtual = fotoBase64; document.getElementById('modal-image').src = fotoBase64; document.getElementById('photo-modal').style.display = 'flex';
-}
-window.fecharModalFoto = function() {
-    document.getElementById('photo-modal').style.display = 'none'; document.getElementById('modal-image').src = ''; window.fotoModalAtual = null;
-}
-window.baixarFotoAtual = function() {
-    if(!window.fotoModalAtual) return; const a = document.createElement("a"); a.href = window.fotoModalAtual; a.download = `Evidencia_Fiscalizacao_${Date.now()}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-}
-window.processarFotos = function(event) {
-    const files = event.target.files; if(!files) return;
-    for(let file of files) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const MAX_WIDTH = 700; let width = img.width; let height = img.height;
-                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height); window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.45)); window.renderizarPreviewFotos();
-            }
-            img.src = e.target.result;
-        }
-        reader.readAsDataURL(file);
-    }
-    event.target.value = ''; 
-}
-window.renderizarPreviewFotos = function() {
-    const container = document.getElementById('previewFotos'); container.innerHTML = '';
-    window.fotosTemp.forEach((foto, index) => {
-        const div = document.createElement('div'); div.style.position = 'relative'; div.style.display = 'inline-block';
-        div.innerHTML = `<img src="${foto}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc; cursor:pointer; transition: transform 0.2s;" onclick="abrirModalFoto(${index})" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" title="Clique para ampliar"><button type="button" onclick="removerFoto(${index})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;" title="Remover Foto">X</button>`; container.appendChild(div);
-    });
-}
-window.removerFoto = function(index) { window.fotosTemp.splice(index, 1); window.renderizarPreviewFotos(); }
+window.abrirModalFoto = function(i) { window.fotoModalAtual = window.fotosTemp[i]; document.getElementById('modal-image').src = window.fotoModalAtual; document.getElementById('photo-modal').style.display = 'flex'; }
+window.fecharModalFoto = function() { document.getElementById('photo-modal').style.display = 'none'; }
+window.baixarFotoAtual = function() { const a = document.createElement("a"); a.href = window.fotoModalAtual; a.download = `Foto_Fiscalizacao_${Date.now()}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+window.processarFotos = function(e) { const files = e.target.files; if(!files) return; for(let file of files) { const r = new FileReader(); r.onload = function(e) { const img = new Image(); img.onload = function() { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const MAX = 700; let w = img.width; let h = img.height; if (w > MAX) { h *= MAX / w; w = MAX; } canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h); window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.45)); window.renderizarPreviewFotos(); }; img.src = e.target.result; }; r.readAsDataURL(file); } e.target.value = ''; }
+window.renderizarPreviewFotos = function() { const container = document.getElementById('previewFotos'); container.innerHTML = ''; window.fotosTemp.forEach((f, i) => { const div = document.createElement('div'); div.style.position = 'relative'; div.innerHTML = `<img src="${f}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;cursor:pointer;" onclick="abrirModalFoto(${i})"><button type="button" onclick="removerFoto(${i})" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`; container.appendChild(div); }); }
+window.removerFoto = function(i) { window.fotosTemp.splice(i, 1); window.renderizarPreviewFotos(); }
 
-window.atualizarDashboard = function() {
+// --- DASHBOARD E TABELA ---
+window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
+window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
+window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => cb.checked = master.checked); }
+
+window.atualizarDashboardGraficos = function() {
     const hoje = new Date(); hoje.setHours(0,0,0,0); let noPrazo = 0; let vencidas = 0;
     window.DB.forEach(i => { if(i.dataPrazo) { const prazo = new Date(i.dataPrazo + "T00:00:00"); if(prazo < hoje) vencidas++; else noPrazo++; } });
     document.getElementById('dashTotal').innerText = window.DB.length; document.getElementById('dashPrazo').innerText = noPrazo; document.getElementById('dashVencida').innerText = vencidas;
 }
 
 window.renderizarPainel = function() {
-    window.atualizarDashboard(); const corpo = document.getElementById('tabelaCorpo'); corpo.innerHTML = ''; const filtroTexto = document.getElementById('buscaInput').value.toLowerCase(); const hoje = new Date(); hoje.setHours(0,0,0,0);
+    window.atualizarDashboardGraficos(); const corpo = document.getElementById('tabelaCorpo'); corpo.innerHTML = ''; const filtroTexto = document.getElementById('buscaInput').value.toLowerCase(); const hoje = new Date(); hoje.setHours(0,0,0,0);
     let filtrados = window.DB.filter(item => { return (item.nome || '').toLowerCase().includes(filtroTexto) || (item.numNotif || '').toLowerCase().includes(filtroTexto) || (item.loteEndereco || '').toLowerCase().includes(filtroTexto) || (item.procOuvidoria || '').toLowerCase().includes(filtroTexto) || (item.codigoAR || '').toLowerCase().includes(filtroTexto); });
     if (window.filtroStatusAtual === 'No Prazo') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") >= hoje); } else if (window.filtroStatusAtual === 'Vencidos') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") < hoje); } else if (window.filtroStatusAtual === 'Com AR') { filtrados = filtrados.filter(i => i.codigoAR && i.codigoAR.trim() !== ""); }
     if (window.colunaOrdenacao) { filtrados.sort((a, b) => { let valA = (a[window.colunaOrdenacao] || '').toLowerCase(); let valB = (b[window.colunaOrdenacao] || '').toLowerCase(); if (valA < valB) return window.ordemCrescente ? -1 : 1; if (valA > valB) return window.ordemCrescente ? 1 : -1; return 0; }); }
     window.itensFiltradosAtual = filtrados; 
+    
     filtrados.forEach(item => {
         const badgeOuvidoria = item.procOuvidoria ? `<br><span class="badge-ouvidoria">Ouv: ${item.procOuvidoria}</span>` : ''; const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
         let statusHtml = ''; let botaoAutuar = '';
-        if(item.codigoAR) { statusHtml += `<span class="badge-ar">AR: ${item.codigoAR}</span>`; }
-        if(item.dataPrazo) { const dataFormatada = item.dataPrazo.split('-').reverse().join('/'); const prazo = new Date(item.dataPrazo + "T00:00:00"); if(prazo < hoje) { statusHtml += `<span class="badge-vencido">Vencido: ${dataFormatada}</span>`; botaoAutuar = `<a class="btn-autuar" onclick="abrirModuloAutoInfracao()">📝 Autuar</a>`; } else { statusHtml += `<span class="badge-prazo">No Prazo: ${dataFormatada}</span>`; } }
-        const carimbo = item.criadoPor ? `<br><small style="color:#94a3b8; font-size:10px;">👤 ${item.criadoPor}</small>` : ''; if(!statusHtml) statusHtml = '<small style="color:#94a3b8">Sem acompanhamento</small>';
+        
+        if(item.codigoAR) { 
+            statusHtml += `<span class="badge-ar">AR: ${item.codigoAR} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:#0369a1;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;" onclick="buscarStatusCorreios('${item.codigoAR}', 'ar-${item.firebaseId}')">Consultar API</button></span></span>`; 
+        }
+        
+        if(item.dataPrazo) { const df = item.dataPrazo.split('-').reverse().join('/'); const pz = new Date(item.dataPrazo + "T00:00:00"); if(pz < hoje) { statusHtml += `<span class="badge-vencido">Vencido: ${df}</span>`; botaoAutuar = `<a class="btn-autuar" onclick="navegarPara('autos')">📝 Autuar</a>`; } else { statusHtml += `<span class="badge-prazo">No Prazo: ${df}</span>`; } }
+        
         const tr = document.createElement('tr');
-        const linkEditarOuVer = (perfilUsuario && perfilUsuario.nivel === 'leitor') ? `<a onclick="carregarParaEditar('${item.firebaseId}')">Ver Dados</a>` : `<a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a>`;
-        tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}"></td><td><strong>${item.numNotif}</strong>${badgeOuvidoria}</td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div>${carimbo}</td><td>${statusHtml}</td><td class="action-links">${linkEditarOuVer}<a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
+        tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}"></td><td><strong>${item.numNotif}</strong>${badgeOuvidoria}</td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div></td><td>${statusHtml || '<small style="color:#94a3b8">Sem acompanhamento</small>'}</td><td class="action-links"><a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a><a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
         corpo.appendChild(tr);
     });
 }
 
-window.abrirModuloAutoInfracao = function() { alert("Módulo de Auto de Infração em construção!\nSerá configurado na segunda-feira com o formulário oficial."); }
-window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
-
-window.carregarParaEditar = async function(firebaseId) {
-    const item = window.DB.find(i => i.firebaseId === firebaseId); if (!item) return;
-    document.getElementById('indicadorFotos').style.display = 'inline-block'; window.scrollTo(0,0);
+window.carregarParaEditar = async function(id) {
+    const item = window.DB.find(i => i.firebaseId === id); if (!item) return;
+    window.navegarPara('notificacoes'); window.scrollTo(0,0);
     document.getElementById('editFirebaseId').value = item.firebaseId; document.getElementById('numNotif').value = item.numNotif || ''; document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; document.getElementById('codigoAR').value = item.codigoAR || ''; document.getElementById('dataPrazo').value = item.dataPrazo || ''; document.getElementById('dataNotif').value = item.dataNotif || ''; document.getElementById('tipoAR').checked = item.tipoAR; document.getElementById('tipoPresencial').checked = item.tipoPresencial; document.getElementById('nome').value = item.nome || ''; document.getElementById('doc').value = item.doc || ''; document.getElementById('endereco').value = item.endereco || ''; document.getElementById('telefone').value = item.telefone || ''; document.getElementById('bairro').value = item.bairro || ''; document.getElementById('cep').value = item.cep || ''; document.getElementById('cadDistrito').value = item.cadDistrito || ''; document.getElementById('cadZona').value = item.cadZona || ''; document.getElementById('cadQuadra').value = item.cadQuadra || ''; document.getElementById('cadLote').value = item.cadLote || ''; document.getElementById('cadImob').value = item.cadImob || ''; document.getElementById('loteEndereco').value = item.loteEndereco || ''; document.getElementById('irrMato').checked = item.irrMato; document.getElementById('irrResiduos').checked = item.irrResiduos; document.getElementById('irrEntulhos').checked = item.irrEntulhos; document.getElementById('irrOutros').checked = item.irrOutros; document.getElementById('ref').value = item.ref || ''; document.getElementById('obs').value = item.obs || ''; document.getElementById('lei5198').checked = item.lei5198; document.getElementById('lc56').checked = item.lc56;
-    window.fotosTemp = [];
-    try { const fotosSubRef = collection(db, "notificacoes", item.firebaseId, "evidencias"); const docFotos = await getDocs(fotosSubRef); docFotos.forEach(doc => { window.fotosTemp.push(doc.data().imagemBinaria); }); } catch(e) { console.error("Erro ao buscar fotos", e); }
+    window.fotosTemp = []; document.getElementById('indicadorFotos').style.display = 'inline-block';
+    try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {}
     document.getElementById('indicadorFotos').style.display = 'none'; window.renderizarPreviewFotos();
 }
 
-window.limparFormulario = function() {
-    document.getElementById('notifForm').reset(); document.getElementById('editFirebaseId').value = ''; document.getElementById('dataNotif').valueAsDate = new Date();
-    if(perfilUsuario) { document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula; }
-    window.fotosTemp = []; window.renderizarPreviewFotos();
-}
+window.limparFormulario = function() { document.getElementById('notifForm').reset(); document.getElementById('editFirebaseId').value = ''; document.getElementById('dataNotif').valueAsDate = new Date(); if(perfilUsuario) { document.getElementById('fiscal').value = perfilUsuario.nome; document.getElementById('matricula').value = perfilUsuario.matricula; } window.fotosTemp = []; window.renderizarPreviewFotos(); }
 
-window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => cb.checked = master.checked); }
-
+// --- EXPORTAÇÕES E IMPRESSÃO ---
 const docInputForm = document.getElementById('doc'); const telefoneInputForm = document.getElementById('telefone');
 if(docInputForm) docInputForm.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 11) { v = v.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2'); } else { v = v.substring(0, 14).replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2'); } e.target.value = v; });
 if(telefoneInputForm) telefoneInputForm.addEventListener('input', function(e) { let v = e.target.value.replace(/\D/g, ''); if (v.length <= 10) v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2'); else v = v.replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2'); e.target.value = v.substring(0, 15); });
 
-window.imprimirRegistro = function(firebaseId) {
-    const item = window.DB.find(i => i.firebaseId === firebaseId); if (!item) return;
-    const setorDoc = item.setor || 'SMMAM';
-    if(setorDoc === 'MOBILIDADE') { document.getElementById('printSecretaria').innerText = "Secretaria de Segurança e Mobilidade Urbana"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075 – Cidade Alta"; } else if(setorDoc === 'OBRAS') { document.getElementById('printSecretaria').innerText = "Secretaria de Obras e Posturas"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Marechal Deodoro, 70 – Centro"; } else { document.getElementById('printSecretaria').innerText = "Secretaria Municipal do Meio Ambiente"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211"; }
-    let prazoTexto = "Imediato"; if(item.dataPrazo) { const d1 = new Date(item.dataNotif + "T00:00:00"); const d2 = new Date(item.dataPrazo + "T00:00:00"); const diffTime = Math.abs(d2 - d1); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); prazoTexto = `${diffDays} dias`; }
-    document.getElementById('pNum').innerText = item.numNotif; document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); document.getElementById('pDoc').innerText = item.doc; document.getElementById('pEndereco').innerText = item.endereco || '---'; document.getElementById('pTelefone').innerText = item.telefone || '---'; document.getElementById('pBairro').innerText = item.bairro || '---'; document.getElementById('pCep').innerText = item.cep || '---'; document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; document.getElementById('pCadZona').innerText = item.cadZona || '---'; document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; document.getElementById('pCadLote').innerText = item.cadLote || '---'; document.getElementById('pCadImob').innerText = item.cadImob || ''; document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; document.getElementById('pRef').innerText = item.ref || 'Não informado'; document.getElementById('pObs').innerText = item.obs || 'Nenhuma'; document.getElementById('pFiscal').innerText = item.fiscal || ''; document.getElementById('pMatricula').innerText = item.matricula || ''; document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação Rasteira' : '( ) Vegetação Rasteira'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos / Entulhos' : '( ) Resíduos / Entulhos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.' : '( ) artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.' : '( ) artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.'; document.getElementById('pPrazoImpressao').innerText = prazoTexto;
-    const tituloOriginal = document.title; document.title = `${item.numNotif} - ${(item.nome || '').toUpperCase()}`; window.print(); setTimeout(() => { document.title = tituloOriginal; }, 1000);
+window.imprimirRegistro = function(id) {
+    const item = window.DB.find(i => i.firebaseId === id); if (!item) return; const s = item.setor || 'SMMAM';
+    if(s === 'MOBILIDADE') { document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { document.getElementById('printSecretaria').innerText = "Obras e Posturas"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Mal Deodoro, 70"; } else { document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Fiscalização</strong><br>Rua 10 de Novembro, 190"; }
+    let pzTxt = "Imediato"; if(item.dataPrazo) { const d1 = new Date(item.dataNotif + "T00:00:00"); const d2 = new Date(item.dataPrazo + "T00:00:00"); pzTxt = `${Math.ceil(Math.abs(d2 - d1) / 86400000)} dias`; }
+    document.getElementById('pNum').innerText = item.numNotif; document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); document.getElementById('pDoc').innerText = item.doc; document.getElementById('pEndereco').innerText = item.endereco || '---'; document.getElementById('pTelefone').innerText = item.telefone || '---'; document.getElementById('pBairro').innerText = item.bairro || '---'; document.getElementById('pCep').innerText = item.cep || '---'; document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; document.getElementById('pCadZona').innerText = item.cadZona || '---'; document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; document.getElementById('pCadLote').innerText = item.cadLote || '---'; document.getElementById('pCadImob').innerText = item.cadImob || ''; document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; document.getElementById('pRef').innerText = item.ref || '---'; document.getElementById('pObs').innerText = item.obs || '---'; document.getElementById('pFiscal').innerText = item.fiscal || ''; document.getElementById('pMatricula').innerText = item.matricula || ''; document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação' : '( ) Vegetação'; document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos' : '( ) Resíduos'; document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) Art 6º, L 5.198' : '( ) Art 6º, L 5.198'; document.getElementById('pLc56').innerText = item.lc56 ? '( X ) Art 41, LC 56' : '( ) Art 41, LC 56'; document.getElementById('pPrazoImpressao').innerText = pzTxt;
+    window.print();
 }
 
 window.exportarExcel = function() {
-    if(window.itensFiltradosAtual.length === 0) { alert("Não há dados na tela para exportar."); return; }
-    let csvContent = "\uFEFF"; csvContent += "Nº Notificacao;Setor;Ouvidoria;Data Notificacao;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo Regularizacao;Codigo AR;Fiscal Responsavel;Criado Por\n";
-    window.itensFiltradosAtual.forEach(i => { const num = i.numNotif || ''; const set = i.setor || 'SMMAM'; const ouv = i.procOuvidoria || ''; const data = i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''; const nome = i.nome ? i.nome.toUpperCase().replace(/;/g, ',') : ''; const doc = i.doc || ''; const lote = i.loteEndereco ? i.loteEndereco.replace(/;/g, ',') : ''; const bairro = i.bairro || ''; const prazo = i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''; const ar = i.codigoAR || ''; const fiscal = i.fiscal || ''; const criador = i.criadoPor || ''; csvContent += `${num};${set};${ouv};${data};${nome};${doc};${lote};${bairro};${prazo};${ar};${fiscal};${criador}\n`; });
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `Relatorio_Fiscalizacao_${perfilUsuario.setor || 'SMMAM'}_${new Date().toISOString().split('T')[0]}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    if(window.itensFiltradosAtual.length === 0) return alert("Vazio.");
+    let c = "\uFEFFNº Notificacao;Setor;Ouvidoria;Data;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo;Codigo AR;Fiscal\n";
+    window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${i.setor || ''};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''};${i.codigoAR||''};${i.fiscal||''}\n`; });
+    const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `SMMAM_Relatorio_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
 }
 
 window.exportarVipp = function() {
-    const marcados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(marcados.length === 0) { alert('Selecione as notificações que deseja enviar via VIPP Correios.'); return; }
-    const itensExportar = window.DB.filter(item => marcados.includes(item.firebaseId)); let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<correioslog>\n  <tipo_arquivo>Postagem</tipo_arquivo>\n  <versao_arquivo>2.3</versao_arquivo>\n  <remetente>\n    <numero_contrato>9912740833</numero_contrato>\n    <codigo_administrativo>79980660</codigo_administrativo>\n    <nome_remetente>PREFEITURA MUNIC DE BENTO GONCALVES</nome_remetente>\n    <logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente>\n    <numero_remetente>1075</numero_remetente>\n    <bairro_remetente>CIDADE ALTA</bairro_remetente>\n    <cep_remetente>95700010</cep_remetente>\n    <cidade_remetente>BENTO GONCALVES</cidade_remetente>\n    <uf_remetente>RS</uf_remetente>\n  </remetente>\n';
-    itensExportar.forEach(i => {
-        const cepLimpo = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); const numEtiqueta = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0');
-        xml += `  <objeto_postal>\n    <numero_etiqueta>${numEtiqueta}</numero_etiqueta>\n    <codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente>\n    <codigo_servico_postagem>80810</codigo_servico_postagem>\n    <peso>100</peso>\n    <destinatario>\n      <nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario>\n      <logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario>\n      <numero_end_destinatario>S/N</numero_end_destinatario>\n    </destinatario>\n    <nacional>\n      <bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario>\n      <cidade_destinatario>BENTO GONCALVES</cidade_destinatario>\n      <uf_destinatario>RS</uf_destinatario>\n      <cep_destinatario>${cepLimpo}</cep_destinatario>\n    </nacional>\n    <servico_adicional>\n      <codigo_servico_adicional>25</codigo_servico_adicional>\n    </servico_adicional>\n    <servico_adicional>\n      <codigo_servico_adicional>01</codigo_servico_adicional>\n    </servico_adicional>\n    <dimensao_objeto>\n      <tipo_objeto>001</tipo_objeto>\n    </dimensao_objeto>\n  </objeto_postal>\n`;
-    }); xml += '</correioslog>';
-    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.setAttribute("download", `importacao_vipp_fiscalizacao_${Date.now()}.xml`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(m.length === 0) return alert('Selecione notificações.');
+    const itens = window.DB.filter(item => m.includes(item.firebaseId)); let x = '<?xml version="1.0" encoding="UTF-8"?>\n<correioslog>\n<tipo_arquivo>Postagem</tipo_arquivo><versao_arquivo>2.3</versao_arquivo><remetente><numero_contrato>9912740833</numero_contrato><codigo_administrativo>79980660</codigo_administrativo><nome_remetente>PREFEITURA DE BENTO GONCALVES</nome_remetente><logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente><numero_remetente>1075</numero_remetente><bairro_remetente>CIDADE ALTA</bairro_remetente><cep_remetente>95700010</cep_remetente><cidade_remetente>BENTO GONCALVES</cidade_remetente><uf_remetente>RS</uf_remetente></remetente>\n';
+    itens.forEach(i => { const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0'); x += `<objeto_postal><numero_etiqueta>${ar}</numero_etiqueta><codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente><codigo_servico_postagem>80810</codigo_servico_postagem><peso>100</peso><destinatario><nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario><logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario><numero_end_destinatario>S/N</numero_end_destinatario></destinatario><nacional><bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario><cidade_destinatario>BENTO GONCALVES</cidade_destinatario><uf_destinatario>RS</uf_destinatario><cep_destinatario>${cep}</cep_destinatario></nacional><servico_adicional><codigo_servico_adicional>25</codigo_servico_adicional></servico_adicional><servico_adicional><codigo_servico_adicional>01</codigo_servico_adicional></servico_adicional><dimensao_objeto><tipo_objeto>001</tipo_objeto></dimensao_objeto></objeto_postal>\n`; }); x += '</correioslog>';
+    const b = new Blob([x], { type: 'application/xml;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `VIPP_${Date.now()}.xml`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
 }
