@@ -1,3 +1,4 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -205,6 +206,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
     if(tbody) tbody.innerHTML = '';
     
     let q = null;
+    let qAlternativa = null; 
     const imoveisRef = collection(db, "cadastro_imobiliario");
 
     if (tipoBusca === 'lote') {
@@ -218,6 +220,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
         }
         
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
+        console.log("Buscando Chave IPTU:", chaveBusca); 
         q = query(imoveisRef, where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(50));
     
     } else if (tipoBusca === 'pessoa') {
@@ -226,6 +229,8 @@ window.buscarConsultaLivre = async function(tipoBusca) {
 
         if (docForm) {
             q = query(imoveisRef, where("cnpj_cpf", "==", docForm), limit(50));
+            const docLimpo = docForm.replace(/\D/g, '');
+            qAlternativa = query(imoveisRef, where("cnpj_cpf", "==", docLimpo), limit(50));
         } else if (nomeForm) {
             q = query(imoveisRef, where("proprietario_principal", ">=", nomeForm), where("proprietario_principal", "<=", nomeForm + "\uf8ff"), limit(50));
         } else {
@@ -236,7 +241,13 @@ window.buscarConsultaLivre = async function(tipoBusca) {
     mostrarLoading(true, "Pesquisando Cofre IPTU...");
     
     try {
-        const snap = await getDocs(q);
+        let snap = await getDocs(q);
+
+        if(snap.empty && qAlternativa) {
+            console.log("Tentando buscar CPF sem pontuação...");
+            snap = await getDocs(qAlternativa);
+        }
+
         if(!snap.empty) {
             if(countSpan) countSpan.innerText = snap.docs.length;
             snap.forEach(docSnap => {
@@ -259,11 +270,11 @@ window.buscarConsultaLivre = async function(tipoBusca) {
             if(boxResult) boxResult.style.display = 'block'; 
             window.mostrarToast("Busca concluída!");
         } else { 
-            alert("Nenhum imóvel localizado com os dados informados."); 
+            alert("Nenhum imóvel localizado. \n\nDICA: Verifique se o nome possui acentos (Ex: JOÃO em vez de JOAO). Na dúvida, tente pesquisar usando apenas o CPF ou apenas o início do primeiro nome."); 
         }
     } catch(e) { 
         console.error(e);
-        alert("Erro na consulta com o Firebase."); 
+        alert("Erro na consulta com o banco de dados."); 
     }
     mostrarLoading(false);
 }
@@ -361,7 +372,7 @@ window.renderizarGraficos = function() {
         if(chartFiscaisInstance) chartFiscaisInstance.destroy();
         const fiscaisOrdenados = Object.entries(countFiscais).sort((a, b) => b[1] - a[1]);
         const labelsFiscais = fiscaisOrdenados.map(item => item[0]); const dadosFiscais = fiscaisOrdenados.map(item => item[1]);
-        chartFiscaisInstance = new Chart(ctxFiscais, { type: 'bar', data: { labels: labelsFiscais, datasets: [{ label: 'Documentos', data: dadosFiscais, backgroundColor: '#0ea5e9', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        chartFiscaisInstance = new Chart(ctxFiscais, { type: 'bar', data: { labels: labelsFiscais, datasets: [{ label: 'Documentos Emitidos', data: dadosFiscais, backgroundColor: '#0ea5e9', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
     }
 }
 
@@ -428,7 +439,7 @@ if(btnImportarIptu) {
 }
 
 // ============================================================================
-// CRUD NOTIFICAÇÕES E AUTOS
+// CRUD NOTIFICAÇÕES E AUTOS (O NÚCLEO MISTO)
 // ============================================================================
 window.carregarDadosNuvem = async function() {
     mostrarLoading(true, "Baixando demandas...");
@@ -483,7 +494,6 @@ window.excluirSelecionadas = async function() {
     }
 }
 
-// --- FOTOS ---
 window.fotoModalAtual = null;
 window.abrirModalFoto = function(i) { window.fotoModalAtual = window.fotosTemp[i]; document.getElementById('modal-image').src = window.fotoModalAtual; document.getElementById('photo-modal').style.display = 'flex'; }
 window.fecharModalFoto = function() { document.getElementById('photo-modal').style.display = 'none'; }
@@ -492,7 +502,6 @@ window.processarFotos = function(e, containerId) { const files = e.target.files;
 window.renderizarPreviewFotos = function(containerId) { const container = document.getElementById(containerId); if(!container) return; container.innerHTML = ''; window.fotosTemp.forEach((f, i) => { const div = document.createElement('div'); div.style.position = 'relative'; div.innerHTML = `<img src="${f}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;cursor:pointer;" onclick="abrirModalFoto(${i})"><button type="button" onclick="removerFoto(${i}, '${containerId}')" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`; container.appendChild(div); }); }
 window.removerFoto = function(i, cid) { window.fotosTemp.splice(i, 1); window.renderizarPreviewFotos(cid); }
 
-// --- DASHBOARD E TABELA CENTRAL ---
 window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 window.aplicarFiltroTipo = function(tipo, btnElement) { window.filtroTipoDocumento = tipo; document.querySelectorAll('.filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
@@ -632,14 +641,20 @@ window.imprimirRegistro = function(id) {
 }
 
 window.exportarExcel = function() {
-    if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo;Codigo AR;Status AR;Fiscal\n";
-    window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''};${i.codigoAR||''};${i.statusRetornoAR||''};${i.fiscal||''}\n`; });
+    if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "﻿Nº Reg;Tipo;Ouvidoria;Data;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo;Codigo AR;Status AR;Fiscal
+";
+    window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''};${i.codigoAR||''};${i.statusRetornoAR||''};${i.fiscal||''}
+`; });
     const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `SMMAM_Relatorio_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
 }
 
 window.exportarVipp = function() {
     const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(m.length === 0) return alert('Selecione notificações.');
-    const itens = window.DB.filter(item => m.includes(item.firebaseId)); let x = '<?xml version="1.0" encoding="UTF-8"?>\n<correioslog>\n<tipo_arquivo>Postagem</tipo_arquivo><versao_arquivo>2.3</versao_arquivo><remetente><numero_contrato>9912740833</numero_contrato><codigo_administrativo>79980660</codigo_administrativo><nome_remetente>PREFEITURA DE BENTO GONCALVES</nome_remetente><logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente><numero_remetente>1075</numero_remetente><bairro_remetente>CIDADE ALTA</bairro_remetente><cep_remetente>95700010</cep_remetente><cidade_remetente>BENTO GONCALVES</cidade_remetente><uf_remetente>RS</uf_remetente></remetente>\n';
-    itens.forEach(i => { const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0'); x += `<objeto_postal><numero_etiqueta>${ar}</numero_etiqueta><codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente><codigo_servico_postagem>80810</codigo_servico_postagem><peso>100</peso><destinatario><nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario><logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario><numero_end_destinatario>S/N</numero_end_destinatario></destinatario><nacional><bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario><cidade_destinatario>BENTO GONCALVES</cidade_destinatario><uf_destinatario>RS</uf_destinatario><cep_destinatario>${cep}</cep_destinatario></nacional><servico_adicional><codigo_servico_adicional>25</codigo_servico_adicional></servico_adicional><servico_adicional><codigo_servico_adicional>01</codigo_servico_adicional></servico_adicional><dimensao_objeto><tipo_objeto>001</tipo_objeto></dimensao_objeto></objeto_postal>\n`; }); x += '</correioslog>';
+    const itens = window.DB.filter(item => m.includes(item.firebaseId)); let x = '<?xml version="1.0" encoding="UTF-8"?>
+<correioslog>
+<tipo_arquivo>Postagem</tipo_arquivo><versao_arquivo>2.3</versao_arquivo><remetente><numero_contrato>9912740833</numero_contrato><codigo_administrativo>79980660</codigo_administrativo><nome_remetente>PREFEITURA DE BENTO GONCALVES</nome_remetente><logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente><numero_remetente>1075</numero_remetente><bairro_remetente>CIDADE ALTA</bairro_remetente><cep_remetente>95700010</cep_remetente><cidade_remetente>BENTO GONCALVES</cidade_remetente><uf_remetente>RS</uf_remetente></remetente>
+';
+    itens.forEach(i => { const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0'); x += `<objeto_postal><numero_etiqueta>${ar}</numero_etiqueta><codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente><codigo_servico_postagem>80810</codigo_servico_postagem><peso>100</peso><destinatario><nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario><logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario><numero_end_destinatario>S/N</numero_end_destinatario></destinatario><nacional><bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario><cidade_destinatario>BENTO GONCALVES</cidade_destinatario><uf_destinatario>RS</uf_destinatario><cep_destinatario>${cep}</cep_destinatario></nacional><servico_adicional><codigo_servico_adicional>25</codigo_servico_adicional></servico_adicional><servico_adicional><codigo_servico_adicional>01</codigo_servico_adicional></servico_adicional><dimensao_objeto><tipo_objeto>001</tipo_objeto></dimensao_objeto></objeto_postal>
+`; }); x += '</correioslog>';
     const b = new Blob([x], { type: 'application/xml;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `VIPP_${Date.now()}.xml`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
 }
