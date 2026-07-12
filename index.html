@@ -62,10 +62,11 @@
             </div>
             
             <nav class="sidebar-nav">
-                <a class="nav-item active" onclick="navegarPara('dashboard')" id="nav-dashboard">📊 Dashboard</a>
-                <a class="nav-item" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Notificações</a>
-                <a class="nav-item" onclick="navegarPara('autos')" id="nav-autos">🚨 Auto de Infração</a>
+                <a class="nav-item active" onclick="navegarPara('inicio')" id="nav-inicio">🏠 Tela Inicial</a>
+                <a class="nav-item" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Nova Notificação</a>
+                <a class="nav-item" onclick="navegarPara('autos')" id="nav-autos">🚨 Novo Auto (Multa)</a>
                 <a class="nav-item" onclick="navegarPara('consulta')" id="nav-consulta">🔍 Consulta Cadastral</a>
+                <a class="nav-item" onclick="navegarPara('relatorios')" id="nav-relatorios">📈 Relatórios e Gráficos</a>
                 <a class="nav-item" onclick="navegarPara('perfil')" id="nav-perfil">👤 Meu Perfil</a>
                 
                 <!-- Apenas para Administradores -->
@@ -85,24 +86,77 @@
         <!-- ÁREA CENTRAL DE CONTEÚDO -->
         <main id="main-content">
             
-            <!-- VIEW 1: DASHBOARD -->
-            <div id="view-dashboard" class="view-section active-view">
+            <!-- VIEW 1: TELA INICIAL (DASHBOARD LIMPO E TABELA MESTRA) -->
+            <div id="view-inicio" class="view-section active-view">
                 <h2>Visão Geral do Setor</h2>
+                
+                <!-- Cards de Resumo -->
                 <div class="dashboard-cards">
-                    <div class="card card-total"><div class="num" id="dashTotal">0</div><div class="label">Total Notificações</div></div>
-                    <div class="card card-prazo"><div class="num" id="dashPrazo">0</div><div class="label">No Prazo</div></div>
-                    <div class="card card-vencida"><div class="num" id="dashVencida">0</div><div class="label">Vencidas</div></div>
+                    <div class="card card-total"><div class="num" id="dashTotalNotif">0</div><div class="label">Notificações</div></div>
+                    <div class="card card-total"><div class="num" id="dashTotalAutos">0</div><div class="label">Autos / Multas</div></div>
+                    <div class="card card-info"><div class="num" id="dashAREnviados">0</div><div class="label">ARs Enviados</div></div>
+                    <div class="card card-prazo"><div class="num" id="dashARRetornados">0</div><div class="label">ARs Recebidos</div></div>
+                    <div class="card card-vencida"><div class="num" id="dashVencidas">0</div><div class="label">Prazos Vencidos</div></div>
                 </div>
+
+                <!-- Tabela Mestra de Demandas -->
                 <div class="panel-container" style="margin-top: 20px;">
-                    <p style="color: #64748b;">(Gráficos gerenciais serão implementados aqui)</p>
+                    
+                    <div class="toolbar">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                            <!-- Botões de Tipo de Documento -->
+                            <div class="filter-group">
+                                <button class="filter-type-btn active" onclick="aplicarFiltroTipo('Todos', this)">📋 Mostrar Todos</button>
+                                <button class="filter-type-btn" onclick="aplicarFiltroTipo('notificacao', this)">📝 Só Notificações</button>
+                                <button class="filter-type-btn" onclick="aplicarFiltroTipo('auto', this)">🚨 Só Autos</button>
+                            </div>
+                        </div>
+
+                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por nome, endereço, lote, número ou ouvidoria..." onkeyup="renderizarPainel()">
+                        
+                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+                            <div class="filter-bar">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 5px;">FILTROS:</span>
+                                <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
+                            </div>
+                            <div>
+                                <button class="btn-primary btn-outline" onclick="exportarVipp()" style="padding: 6px 12px; font-size: 12px;">📦 Exportar VIPP</button>
+                                <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px;" title="Baixar Excel">📊 Excel</button>
+                            </div>
+                        </div>
+
+                        <div class="btn-actions" id="areaBotoesAdminExcluir" style="display:none; margin-top:5px;">
+                            <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir Selecionadas</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30px;"><input type="checkbox" id="selecionarTodos" onclick="toggleTodos(this)"></th>
+                                    <th>Tipo</th>
+                                    <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Reg. <span class="sort-icon">▼▲</span></th>
+                                    <th class="sortable" onclick="ordenarTabela('nome')">Nome / Alvo <span class="sort-icon">▼▲</span></th>
+                                    <th>Status (AR/Prazo)</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaCorpo"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            <!-- VIEW 2: NOTIFICAÇÕES (Seu formulário principal) -->
+            <!-- VIEW 2: FORMULÁRIO DE NOTIFICAÇÕES -->
             <div id="view-notificacoes" class="view-section">
-                <!-- FORMULÁRIO -->
-                <div class="form-container" style="margin-bottom: 20px;">
-                    <h2 id="mainHeaderTitleForm">Gerador de Demandas</h2>
+                <div class="form-container">
+                    <h2 id="mainHeaderTitleForm">Gerar Nova Notificação</h2>
+                    <p style="color: #64748b; margin-bottom: 20px; margin-top: -5px; font-size: 13px;">Preencha os dados abaixo para emitir o aviso de regularização.</p>
+                    
                     <form id="notifForm" onsubmit="salvarNotificacao(event)">
                         <input type="hidden" id="editFirebaseId">
                         
@@ -171,8 +225,16 @@
 
                         <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Acompanhamento / Prazos</div>
                         <div class="form-row">
-                            <div class="form-group"><label>Código AR (Correios)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
-                            <div class="form-group"><label>Prazo para Regularização</label><input type="date" id="dataPrazo"></div>
+                            <div class="form-group" style="flex: 1.5;"><label>Código AR (Correios)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
+                            <div class="form-group" style="flex: 1.5;">
+                                <label>Retorno Físico do AR?</label>
+                                <select id="statusRetornoAR">
+                                    <option value="aguardando">⏳ Aguardando Retorno</option>
+                                    <option value="entregue">✅ Entregue / Assinado</option>
+                                    <option value="devolvido">❌ Devolvido / Não Localizado</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Prazo p/ Regularizar</label><input type="date" id="dataPrazo"></div>
                         </div>
 
                         <div class="form-group">
@@ -187,47 +249,10 @@
                         </div>
 
                         <div class="btn-actions" id="areaBotoesSalvar">
-                            <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar Notificação</button>
-                            <button type="button" class="btn-secondary" onclick="limparFormulario()">🔄 Novo / Limpar</button>
+                            <button type="submit" id="btnSalvar" class="btn-success" style="flex: 2;">☁️ Salvar e Voltar</button>
+                            <button type="button" class="btn-secondary" onclick="limparFormulario()">🔄 Limpar Tudo</button>
                         </div>
                     </form>
-                </div>
-
-                <!-- TABELA DE NOTIFICAÇÕES -->
-                <div class="panel-container">
-                    <div class="toolbar">
-                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar notificações..." onkeyup="renderizarPainel()">
-                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                            <div class="filter-bar">
-                                <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
-                                <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
-                                <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
-                                <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
-                            </div>
-                            <div>
-                                <button class="btn-primary btn-outline" onclick="exportarVipp()" style="padding: 6px 12px; font-size: 12px;">📦 Exportar VIPP</button>
-                                <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px;" title="Baixar Excel">📊 Excel</button>
-                            </div>
-                        </div>
-                        <div class="btn-actions" id="areaBotoesAdminExcluir" style="display:none; margin-top:5px;">
-                            <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir Selecionadas</button>
-                        </div>
-                    </div>
-
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 30px;"><input type="checkbox" id="selecionarTodos" onclick="toggleTodos(this)"></th>
-                                    <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Reg. <span class="sort-icon">▼▲</span></th>
-                                    <th class="sortable" onclick="ordenarTabela('nome')">Nome / Alvo <span class="sort-icon">▼▲</span></th>
-                                    <th>Status (AR/Prazo)</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabelaCorpo"></tbody>
-                        </table>
-                    </div>
                 </div>
             </div>
 
@@ -235,7 +260,7 @@
             <div id="view-autos" class="view-section">
                 <h2>Gerador de Auto de Infração (Multa)</h2>
                 <div class="panel-container">
-                    <p style="color: #64748b;">Módulo em construção. Será liberado na segunda-feira.</p>
+                    <p style="color: #64748b;">Módulo em construção. Será liberado na segunda-feira para emissão de penalidades financeiras baseadas na URM.</p>
                 </div>
             </div>
 
@@ -243,11 +268,19 @@
             <div id="view-consulta" class="view-section">
                 <h2>Consulta Rápida ao Cadastro Imobiliário</h2>
                 <div class="panel-container">
-                    <p style="color: #64748b;">Módulo de busca inteligente livre.</p>
+                    <p style="color: #64748b;">Módulo de busca inteligente livre. Procure donos de lotes sem gerar notificações.</p>
                 </div>
             </div>
 
-            <!-- VIEW 5: MEU PERFIL -->
+            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS -->
+            <div id="view-relatorios" class="view-section">
+                <h2>Relatórios e Desempenho</h2>
+                <div class="panel-container">
+                    <p style="color: #64748b;">O dashboard completo com gráficos de produtividade, bairros mais autuados e estatísticas gerais será processado aqui.</p>
+                </div>
+            </div>
+
+            <!-- VIEW 6: MEU PERFIL -->
             <div id="view-perfil" class="view-section">
                 <h2>Meu Perfil</h2>
                 <div class="form-container" style="max-width: 600px;">
@@ -261,7 +294,7 @@
                 </div>
             </div>
 
-            <!-- VIEW 6: AUDITORIA -->
+            <!-- VIEW 7: AUDITORIA -->
             <div id="view-auditoria" class="view-section">
                 <h2>Caixa Preta (Logs de Auditoria)</h2>
                 <div class="panel-container">
@@ -269,12 +302,11 @@
                 </div>
             </div>
 
-            <!-- VIEW 7: CONFIGURAÇÕES DO SISTEMA (ADMIN) -->
+            <!-- VIEW 8: CONFIGURAÇÕES DO SISTEMA (ADMIN) -->
             <div id="view-configuracoes" class="view-section">
                 <h2>Configurações do Sistema</h2>
                 
                 <div class="dashboard-cards" style="margin-bottom: 20px;">
-                    <!-- Gestão de Usuários -->
                     <div class="panel-container" style="flex: 2;">
                         <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores</h3>
                         <div class="table-container" style="max-height: 400px;">
@@ -293,7 +325,6 @@
                         </div>
                     </div>
 
-                    <!-- Configurações Globais -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
                         <div class="panel-container">
                             <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Financeiro / Multas</h3>
@@ -316,7 +347,7 @@
         </main>
     </div>
 
-    <!-- MODAL DE VISUALIZAÇÃO DE FOTOS (LIGHTBOX) -->
+    <!-- MODAL DE VISUALIZAÇÃO DE FOTOS -->
     <div id="photo-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <span class="modal-close" onclick="fecharModalFoto()">&times;</span>
@@ -327,7 +358,7 @@
         </div>
     </div>
 
-    <!-- ESPELHO DE IMPRESSÃO (Mantido oculto no HTML, visível apenas na impressão via CSS) -->
+    <!-- ESPELHO DE IMPRESSÃO (Oculto) -->
     <div id="print-area">
         <table class="main-grid">
             <tr>
@@ -419,8 +450,6 @@
         </table>
     </div>
 
-    <!-- Conectando o Motor Javascript Modular -->
     <script type="module" src="js/app.js"></script>
-
 </body>
 </html>
