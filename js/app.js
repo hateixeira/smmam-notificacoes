@@ -835,10 +835,11 @@ window.exportarVipp = function() {
     };
 
     const jsonStr = JSON.stringify(jsonVipp, null, 2);
-    const b = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' }); 
+    // Truque para burlar a trava de upload do VIPP: exporta como TXT!
+    const b = new Blob([jsonStr], { type: 'text/plain;charset=utf-8;' }); 
     const l = document.createElement("a"); 
     l.href = URL.createObjectURL(b); 
-    l.download = `VIPP_Importacao_${Date.now()}.json`; 
+    l.download = `VIPP_Importacao_${Date.now()}.txt`; 
     document.body.appendChild(l); 
     l.click(); 
     document.body.removeChild(l);
