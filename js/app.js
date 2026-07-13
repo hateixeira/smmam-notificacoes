@@ -27,13 +27,25 @@ window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
 window.filtroTipoDocumento = 'Todos'; 
 window.valorURMGlobal = 0; 
+window.lastCheckedCheckbox = null; // Memória para o Shift+Click
 
 let usuarioLogado = null;
 let perfilUsuario = null;
 
 // ============================================================================
-// FUNÇÕES BASE
+// FUNÇÕES BASE E SELEÇÃO MÚLTIPLA (SHIFT+CLICK)
 // ============================================================================
+window.handleShiftClick = function(e, checkbox) {
+    if (e.shiftKey && window.lastCheckedCheckbox) {
+        const checkboxes = Array.from(document.querySelectorAll('.select-item'));
+        const start = checkboxes.indexOf(checkbox);
+        const end = checkboxes.indexOf(window.lastCheckedCheckbox);
+        const slice = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
+        slice.forEach(cb => { cb.checked = window.lastCheckedCheckbox.checked; });
+    }
+    window.lastCheckedCheckbox = checkbox;
+}
+
 const mostrarLoading = (mostrar, msg = "Sincronizando...") => {
     const loader = document.getElementById('loading-overlay');
     const msgEl = document.getElementById('loading-msg');
@@ -584,7 +596,7 @@ window.removerFoto = function(i, cid) { window.fotosTemp.splice(i, 1); window.re
 window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 window.aplicarFiltroTipo = function(tipo, btnElement) { window.filtroTipoDocumento = tipo; document.querySelectorAll('.filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
-window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => cb.checked = master.checked); }
+window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => { cb.checked = master.checked; }); }
 
 window.atualizarDashboardGraficos = function() {
     const hoje = new Date(); hoje.setHours(0,0,0,0); let tNotif = 0; let tAutos = 0; let arEnv = 0; let arRet = 0; let venc = 0;
@@ -619,7 +631,7 @@ window.renderizarPainel = function() {
         if(item.dataPrazo) { const df = item.dataPrazo.split('-').reverse().join('/'); const pz = new Date(item.dataPrazo + "T00:00:00"); if(pz < hoje) { statusHtml += `<span class="badge-vencido">Vencido: ${df}</span>`; if(item.tipoDocumento !== 'auto') botaoAutuar = `<a class="btn-autuar" onclick="navegarPara('autos')">📝 Autuar</a>`; } else { statusHtml += `<span class="badge-prazo">No Prazo: ${df}</span>`; } }
         
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}"></td><td>${badgeTipo}</td><td><strong>${item.numNotif}</strong></td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div></td><td>${statusHtml || '<small style="color:#94a3b8">Sem acompanhamento</small>'}</td><td class="action-links"><a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a><a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
+        tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}" onclick="handleShiftClick(event, this)"></td><td>${badgeTipo}</td><td><strong>${item.numNotif}</strong></td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div></td><td>${statusHtml || '<small style="color:#94a3b8">Sem acompanhamento</small>'}</td><td class="action-links"><a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a><a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
         corpo.appendChild(tr);
     });
 }
@@ -720,10 +732,8 @@ window.imprimirRegistro = function(id) {
 }
 
 window.exportarExcel = function() {
-    if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "﻿Nº Reg;Tipo;Ouvidoria;Data;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo;Codigo AR;Status AR;Fiscal
-";
-    window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''};${i.codigoAR||''};${i.statusRetornoAR||''};${i.fiscal||''}
-`; });
+    if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo;Codigo AR;Status AR;Fiscal\n";
+    window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''};${i.codigoAR||''};${i.statusRetornoAR||''};${i.fiscal||''}\n`; });
     const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `SMMAM_Relatorio_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
 }
 
@@ -732,26 +742,104 @@ window.exportarVipp = function() {
     if(m.length === 0) return alert('Selecione notificações.');
     
     const itens = window.DB.filter(item => m.includes(item.firebaseId)); 
-    let x = '<?xml version="1.0" encoding="UTF-8"?>
-<correioslog>
-<tipo_arquivo>Postagem</tipo_arquivo><versao_arquivo>2.3</versao_arquivo><remetente><numero_contrato>9912740833</numero_contrato><codigo_administrativo>79980660</codigo_administrativo><nome_remetente>PREFEITURA DE BENTO GONCALVES</nome_remetente><logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente><numero_remetente>1075</numero_remetente><bairro_remetente>CIDADE ALTA</bairro_remetente><cep_remetente>95700010</cep_remetente><cidade_remetente>BENTO GONCALVES</cidade_remetente><uf_remetente>RS</uf_remetente></remetente>
-';
-    
+    let postagens = [];
+
     itens.forEach(i => { 
         const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); 
         const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : ''; 
         const obsText = `Notificacao SMMAM ${i.numNotif || ''}`.substring(0, 50);
-        
-        x += `<objeto_postal><numero_etiqueta>${ar}</numero_etiqueta><codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente><codigo_servico_postagem>80810</codigo_servico_postagem><peso>100</peso><destinatario><nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario><logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario><numero_end_destinatario>S/N</numero_end_destinatario></destinatario><nacional><bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario><cidade_destinatario>BENTO GONCALVES</cidade_destinatario><uf_destinatario>RS</uf_destinatario><cep_destinatario>${cep}</cep_destinatario></nacional><servico_adicional><codigo_servico_adicional>25</codigo_servico_adicional></servico_adicional><servico_adicional><codigo_servico_adicional>01</codigo_servico_adicional></servico_adicional><dimensao_objeto><tipo_objeto>001</tipo_objeto></dimensao_objeto><observacao1>${obsText}</observacao1></objeto_postal>
-`; 
+        const docLimpo = (i.doc || '').replace(/\D/g, '').substring(0, 14);
+        const telLimpo = (i.telefone || '').replace(/\D/g, '').substring(0, 11);
+
+        let postagem = {
+            "Remetente": {
+                "Nome": "PREFEITURA DE BENTO GONCALVES",
+                "Endereco": "AV OSVALDO ARANHA",
+                "Numero": "1075",
+                "Complemento": "",
+                "Bairro": "CIDADE ALTA",
+                "Cidade": "BENTO GONCALVES",
+                "UF": "RS",
+                "CEP": "95700010",
+                "Celular": "",
+                "Email": "",
+                "CnpjCpf": "",
+                "IeRg": ""
+            },
+            "Destinatario": {
+                "Nome": (i.nome || '').toUpperCase().substring(0, 50),
+                "AosCuidados": "",
+                "EntregaNoVizinho": "",
+                "Endereco": (i.endereco || '').toUpperCase().substring(0, 90),
+                "Numero": "S/N",
+                "Complemento": obsText,
+                "Bairro": (i.bairro || '').toUpperCase().substring(0, 50),
+                "Cidade": "BENTO GONCALVES",
+                "UF": "RS",
+                "CEP": cep,
+                "Celular": telLimpo,
+                "Email": "",
+                "CnpjCpf": docLimpo,
+                "IeRg": ""
+            },
+            "NotaFiscal": {
+                "ChaveAcesso": "",
+                "SerieNota": "",
+                "NumeroNota": "",
+                "ValorNota": 0,
+                "DataNota": "",
+                "ProtocoloNota": "",
+                "ObservacaoNota": ""
+            },
+            "DadosPostagem": {
+                "Financeiro": "80810",
+                "Registro": ar,
+                "Peso": 100,
+                "Formato": 1,
+                "Altura": 1,
+                "Largura": 11,
+                "Comprimento": 16,
+                "Adicionais": "AR",
+                "ValorDeclarado": 0,
+                "VlrACobrar": 0,
+                "Contrato": 9912740833,
+                "Cartao": 79980660,
+                "RFIDSSCC": ""
+            },
+            "DadosComplementares": {
+                "Obervacao": obsText,
+                "ObservacaoTres": "",
+                "ObservacaoQuatro": "",
+                "ObservacaoCinco": "",
+                "IdVolume": 1,
+                "QuantidadeVolumes": 1,
+                "CodigoClienteVisual": "",
+                "ChaveRoteamento": "",
+                "ContaLote": ""
+            },
+            "DeclaracaoConteudo": {
+                "ItemConteudo": [
+                    {
+                        "Conteudo": "Documentos e Notificacoes Administrativas",
+                        "Quantidade": 1,
+                        "Valor": 100 
+                    }
+                ]
+            }
+        };
+        postagens.push(postagem);
     }); 
     
-    x += '</correioslog>';
-    
-    const b = new Blob([x], { type: 'application/xml;charset=utf-8;' }); 
+    let jsonVipp = {
+        "Postagens": postagens
+    };
+
+    const jsonStr = JSON.stringify(jsonVipp, null, 2);
+    const b = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' }); 
     const l = document.createElement("a"); 
     l.href = URL.createObjectURL(b); 
-    l.download = `VIPP_Importacao_${Date.now()}.xml`; 
+    l.download = `VIPP_Importacao_${Date.now()}.json`; 
     document.body.appendChild(l); 
     l.click(); 
     document.body.removeChild(l);
+}
