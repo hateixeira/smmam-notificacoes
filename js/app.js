@@ -786,6 +786,7 @@ window.exportarVipp = function() {
         
         // Aqui deixamos o CPF em branco se não existir, para não travar a validação do VIPP!
         const cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
+        if (!cpfCnpj) { cpfCnpj = "00000000000"; }
         
         // A vacina para o erro do Java: o CNPJ do Remetente é OBRIGATÓRIO
         const cnpjPrefeitura = "87850334000123";
@@ -794,9 +795,9 @@ window.exportarVipp = function() {
         const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
 
         let row = [
-            nome, "", "", logradouro, numero, complemento, bairro, "BENTO GONCALVES", "RS", cep, "", celular, "", cpfCnpj, "", "", 
+            nome, "", "", logradouro, numero, complemento, bairro, "BENTO GONCALVES", "RS", cep, "BR", celular, "", cpfCnpj, "", "", 
             "PREFEITURA DE BENTO GONCALVES", "AV OSVALDO ARANHA", "1075", "", "CIDADE ALTA", "BENTO GONCALVES", "RS", "95700010", "", "", cnpjPrefeitura, "", "", 
-            "80810", ar, "100", "1", "1", "11", "16", "AR", "", "", "9912740833", "79980660", "", "", 
+            "80810", ar, "100", "1", "1", "11", "16", "AR", "0", "0", "9912740833", "79980660", "", "", 
             obs1, "", "", "", "1", "1", "", "", "LOTESMMAM", "", 
             "", "", "", "", "", 
             "", "", "", "", "", "", "", "", "", "", 
@@ -806,7 +807,7 @@ window.exportarVipp = function() {
         csv += row.join(";") + "\n";
     });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `VIPP_Importacao_${Date.now()}.csv`;
