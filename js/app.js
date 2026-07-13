@@ -27,7 +27,7 @@ window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
 window.filtroTipoDocumento = 'Todos'; 
 window.valorURMGlobal = 0; 
-window.lastCheckedCheckbox = null; // Memória para o Shift+Click
+window.lastCheckedCheckbox = null;
 
 let usuarioLogado = null;
 let perfilUsuario = null;
@@ -371,7 +371,7 @@ window.autuarDesteEspelho = function() {
 
 
 // ============================================================================
-// MÓDULO AUTO DE INFRAÇÃO E CÁLCULO DE URM
+// MÓDULOS AUTO DE INFRAÇÃO E CÁLCULO DE URM
 // ============================================================================
 window.puxarDadosDaNotificacao = function() {
     const numPesquisa = document.getElementById('autoBuscaNotif').value.trim();
@@ -746,7 +746,6 @@ window.exportarVipp = function() {
     let csv = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME_REM;ENDERECO_REM;NUMERO_REM;COMPLEMENTO_REM;BAIRRO_REM;CIDADE_REM;UF_REM;CEP_REM;TELEFONE_CELULAR_REM;E_MAIL_REM;CPF_CNPJ_REM;IE_RG_REM;FILLER_REM;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER_POST;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER_LOTE;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER_REV;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER_NF;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO\n";
 
     itens.forEach(i => {
-        // Função de blindagem (remove vírgulas, barras e caracteres proibidos do layout)
         const limpa = (str) => (str || '').toString().replace(/["'*%?\\/><\[\]{}()#:,;|]/g, '').trim().toUpperCase();
 
         const nome = limpa(i.nome).substring(0, 50) || 'NAO INFORMADO';
@@ -784,12 +783,11 @@ window.exportarVipp = function() {
         const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0');
         const celular = (i.telefone || '').replace(/\D/g, '').substring(0, 11);
         
-        // Aqui deixamos o CPF em branco se não existir, para não travar a validação do VIPP!
-        const cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
+        let cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
         if (!cpfCnpj) { cpfCnpj = "00000000000"; }
         
-        // A vacina para o erro do Java: o CNPJ do Remetente é OBRIGATÓRIO
-        const cnpjPrefeitura = "87850334000123";
+        // A CORREÇÃO DE OURO: O CNPJ validado que você confirmou!
+        const cnpjPrefeitura = "87849923000109";
 
         const obs1 = limpa(`NOTIFICACAO SMMAM ${i.numNotif || ''}`).substring(0, 100);
         const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
