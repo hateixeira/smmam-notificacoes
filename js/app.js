@@ -738,109 +738,47 @@ window.exportarExcel = function() {
 }
 
 window.exportarVipp = function() {
-    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); 
+    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
     if(m.length === 0) return alert('Selecione notificações.');
-    
-    const itens = window.DB.filter(item => m.includes(item.firebaseId)); 
-    let postagens = [];
 
-    itens.forEach(i => { 
-        const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); 
-        const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : ''; 
-        const obsText = `Notificacao SMMAM ${i.numNotif || ''}`.substring(0, 50);
-        const docLimpo = (i.doc || '').replace(/\D/g, '').substring(0, 14);
-        const telLimpo = (i.telefone || '').replace(/\D/g, '').substring(0, 11);
+    const itens = window.DB.filter(item => m.includes(item.firebaseId));
 
-        let postagem = {
-            "Remetente": {
-                "Nome": "PREFEITURA DE BENTO GONCALVES",
-                "Endereco": "AV OSVALDO ARANHA",
-                "Numero": "1075",
-                "Complemento": "",
-                "Bairro": "CIDADE ALTA",
-                "Cidade": "BENTO GONCALVES",
-                "UF": "RS",
-                "CEP": "95700010",
-                "Celular": "",
-                "Email": "",
-                "CnpjCpf": "",
-                "IeRg": ""
-            },
-            "Destinatario": {
-                "Nome": (i.nome || '').toUpperCase().substring(0, 50),
-                "AosCuidados": "",
-                "EntregaNoVizinho": "",
-                "Endereco": (i.endereco || '').toUpperCase().substring(0, 90),
-                "Numero": "S/N",
-                "Complemento": obsText,
-                "Bairro": (i.bairro || '').toUpperCase().substring(0, 50),
-                "Cidade": "BENTO GONCALVES",
-                "UF": "RS",
-                "CEP": cep,
-                "Celular": telLimpo,
-                "Email": "",
-                "CnpjCpf": docLimpo,
-                "IeRg": ""
-            },
-            "NotaFiscal": {
-                "ChaveAcesso": "",
-                "SerieNota": "",
-                "NumeroNota": "",
-                "ValorNota": 0,
-                "DataNota": "",
-                "ProtocoloNota": "",
-                "ObservacaoNota": ""
-            },
-            "DadosPostagem": {
-                "Financeiro": "80810",
-                "Registro": ar,
-                "Peso": 100,
-                "Formato": 1,
-                "Altura": 1,
-                "Largura": 11,
-                "Comprimento": 16,
-                "Adicionais": "AR",
-                "ValorDeclarado": 0,
-                "VlrACobrar": 0,
-                "Contrato": 9912740833,
-                "Cartao": 79980660,
-                "RFIDSSCC": ""
-            },
-            "DadosComplementares": {
-                "Obervacao": obsText,
-                "ObservacaoTres": "",
-                "ObservacaoQuatro": "",
-                "ObservacaoCinco": "",
-                "IdVolume": 1,
-                "QuantidadeVolumes": 1,
-                "CodigoClienteVisual": "",
-                "ChaveRoteamento": "",
-                "ContaLote": ""
-            },
-            "DeclaracaoConteudo": {
-                "ItemConteudo": [
-                    {
-                        "Conteudo": "Documentos e Notificacoes Administrativas",
-                        "Quantidade": 1,
-                        "Valor": 100 
-                    }
-                ]
-            }
-        };
-        postagens.push(postagem);
-    }); 
-    
-    let jsonVipp = {
-        "Postagens": postagens
-    };
+    // 69 colunas rigorosamente baseadas no Anexo 1 - Layout Padrão de Importação 4.0 do VIPP
+    let csv = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME_REM;ENDERECO_REM;NUMERO_REM;COMPLEMENTO_REM;BAIRRO_REM;CIDADE_REM;UF_REM;CEP_REM;TELEFONE_CELULAR_REM;E_MAIL_REM;CPF_CNPJ_REM;IE_RG_REM;FILLER_REM;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER_POST;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER_LOTE;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER_REV;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER_NF;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO\n";
 
-    const jsonStr = JSON.stringify(jsonVipp, null, 2);
-    // Truque para burlar a trava de upload do VIPP: exporta como TXT!
-    const b = new Blob([jsonStr], { type: 'text/plain;charset=utf-8;' }); 
-    const l = document.createElement("a"); 
-    l.href = URL.createObjectURL(b); 
-    l.download = `VIPP_Importacao_${Date.now()}.txt`; 
-    document.body.appendChild(l); 
-    l.click(); 
-    document.body.removeChild(l);
+    itens.forEach(i => {
+        const nome = (i.nome || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 50);
+        const endereco = (i.endereco || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 90);
+        const numero = "S/N";
+        const bairro = (i.bairro || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 50);
+        const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0');
+        const celular = (i.telefone || '').replace(/\D/g, '').substring(0, 11);
+        const cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
+
+        const obs1 = `Notificacao SMMAM ${i.numNotif || ''}`.substring(0, 100);
+
+        // O VIPP deve gerar o AR se a caixa não for preenchida
+        const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
+
+        // Montagem minuciosa da Matriz de 69 campos
+        let row = [
+            nome, "", "", endereco, numero, "", bairro, "BENTO GONCALVES", "RS", cep, "BR", celular, "", cpfCnpj, "", "", 
+            "PREFEITURA DE BENTO GONCALVES", "AV OSVALDO ARANHA", "1075", "", "CIDADE ALTA", "BENTO GONCALVES", "RS", "95700010", "", "", "", "", "", 
+            "80810", ar, "100", "1", "1", "11", "16", "AR", "0", "0", "9912740833", "79980660", "", "", 
+            obs1, "", "", "", "1", "1", "", "", "", "", 
+            "", "", "", "", "", 
+            "", "", "", "", "", "", "", "", "", "", 
+            "Documentos Administrativos|1|100" 
+        ];
+
+        csv += row.join(";") + "\n";
+    });
+
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `VIPP_Importacao_${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
