@@ -747,25 +747,51 @@ window.exportarVipp = function() {
 
     itens.forEach(i => {
         const nome = (i.nome || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 50);
-        const endereco = (i.endereco || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 90);
-        const numero = "S/N";
+        
+        // EXTRATOR INTELIGENTE DE ENDEREÇOS
+        let rawAddress = (i.endereco || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').trim();
+        let logradouro = rawAddress;
+        let numero = "S/N";
+        let complemento = "";
+
+        if (rawAddress.includes(',')) {
+            let parts = rawAddress.split(',');
+            logradouro = parts[0].trim();
+            let rest = parts.slice(1).join(',').trim();
+            let matchRest = rest.match(/^(\S+)(?:\s*(?:-|\s)\s*(.*))?$/);
+            if (matchRest) {
+                numero = matchRest[1].trim();
+                if (matchRest[2]) complemento = matchRest[2].trim();
+            } else {
+                numero = rest;
+            }
+        } else {
+            let match = rawAddress.match(/^(.*?)\s+(\d+[A-Z]?|S\/N|SN)(?:\s*[-]*\s*(.*))?$/);
+            if (match) {
+                logradouro = match[1].trim();
+                numero = match[2].trim();
+                if (match[3]) complemento = match[3].trim();
+            }
+        }
+
+        logradouro = logradouro.substring(0, 90);
+        numero = numero.substring(0, 15) || "S/N";
+        complemento = complemento.substring(0, 50);
+
         const bairro = (i.bairro || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 50);
         const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0');
         const celular = (i.telefone || '').replace(/\D/g, '').substring(0, 11);
         
-        // Tratamento do erro de CPF/CNPJ Null na PPN:
-        // O VIPP exige CPF para gerar PPN Correios. Se estiver vazio na notificação, passamos 00000000000
         let cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
         if (!cpfCnpj) { cpfCnpj = "00000000000"; }
         
-        // CNPJ da Prefeitura (Remetente) para o sistema não dar NullException
         const cnpjPrefeitura = "87850334000123";
 
         const obs1 = `Notificacao SMMAM ${i.numNotif || ''}`.substring(0, 100);
         const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
 
         let row = [
-            nome, "", "", endereco, numero, "", bairro, "BENTO GONCALVES", "RS", cep, "BR", celular, "", cpfCnpj, "", "", 
+            nome, "", "", logradouro, numero, complemento, bairro, "BENTO GONCALVES", "RS", cep, "BR", celular, "", cpfCnpj, "", "", 
             "PREFEITURA DE BENTO GONCALVES", "AV OSVALDO ARANHA", "1075", "", "CIDADE ALTA", "BENTO GONCALVES", "RS", "95700010", "", "", cnpjPrefeitura, "", "", 
             "80810", ar, "100", "1", "1", "11", "16", "AR", "0", "0", "9912740833", "79980660", "", "", 
             obs1, "", "", "", "1", "1", "", "", "LOTE_SMMAM", "", 
