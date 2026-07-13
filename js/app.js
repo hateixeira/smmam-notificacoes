@@ -27,7 +27,7 @@ window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
 window.filtroTipoDocumento = 'Todos'; 
 window.valorURMGlobal = 0; 
-window.lastCheckedCheckbox = null; // Memória para o Shift+Click
+window.lastCheckedCheckbox = null;
 
 let usuarioLogado = null;
 let perfilUsuario = null;
@@ -743,7 +743,6 @@ window.exportarVipp = function() {
 
     const itens = window.DB.filter(item => m.includes(item.firebaseId));
 
-    // 69 colunas rigorosamente baseadas no Anexo 1 - Layout Padrão de Importação 4.0 do VIPP
     let csv = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME_REM;ENDERECO_REM;NUMERO_REM;COMPLEMENTO_REM;BAIRRO_REM;CIDADE_REM;UF_REM;CEP_REM;TELEFONE_CELULAR_REM;E_MAIL_REM;CPF_CNPJ_REM;IE_RG_REM;FILLER_REM;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER_POST;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER_LOTE;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER_REV;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER_NF;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO\n";
 
     itens.forEach(i => {
@@ -756,16 +755,13 @@ window.exportarVipp = function() {
         const cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
 
         const obs1 = `Notificacao SMMAM ${i.numNotif || ''}`.substring(0, 100);
-
-        // O VIPP deve gerar o AR se a caixa não for preenchida
         const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
 
-        // Montagem minuciosa da Matriz de 69 campos
         let row = [
             nome, "", "", endereco, numero, "", bairro, "BENTO GONCALVES", "RS", cep, "BR", celular, "", cpfCnpj, "", "", 
             "PREFEITURA DE BENTO GONCALVES", "AV OSVALDO ARANHA", "1075", "", "CIDADE ALTA", "BENTO GONCALVES", "RS", "95700010", "", "", "", "", "", 
             "80810", ar, "100", "1", "1", "11", "16", "AR", "0", "0", "9912740833", "79980660", "", "", 
-            obs1, "", "", "", "1", "1", "", "", "", "", 
+            obs1, "", "", "", "1", "1", "", "", "LOTE_SMMAM", "", 
             "", "", "", "", "", 
             "", "", "", "", "", "", "", "", "", "", 
             "Documentos Administrativos|1|100" 
