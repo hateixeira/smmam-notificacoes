@@ -19,8 +19,8 @@ const notificacoesRef = collection(db, "notificacoes");
 window.DB = [];
 window.itensFiltradosAtual = [];
 window.fotosTemp = [];
-window.resultadosConsultaAtual = []; // Guarda os imóveis pesquisados
-window.imovelSelecionadoParaNotificacao = null; // Guarda o lote escolhido no espelho
+window.resultadosConsultaAtual = []; 
+window.imovelSelecionadoParaNotificacao = null; 
 
 window.colunaOrdenacao = '';
 window.ordemCrescente = true;
@@ -71,7 +71,7 @@ async function registrarLog(acaoRealizada, alvo) {
 }
 
 // ============================================================================
-// AUTENTICAÇÃO E PERMISSÕES (COM AMORTECEDORES)
+// AUTENTICAÇÃO E PERMISSÕES
 // ============================================================================
 window.toggleAuthMode = function() {
     const l = document.getElementById('login-fields'); const r = document.getElementById('register-fields'); const t = document.getElementById('authTitle'); const b = document.getElementById('btnToggleAuth');
@@ -124,7 +124,7 @@ onAuthStateChanged(auth, async (user) => {
                 if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
                 aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
             }
-        } catch(e) { console.error(e); alert("Erro na inicialização: " + e.message + "\\n\\nTire um print se isso continuar!"); }
+        } catch(e) { console.error(e); alert("Erro na inicialização: " + e.message + "\n\nTire um print se isso continuar!"); }
         mostrarLoading(false);
     } else {
         if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'flex'; 
@@ -172,7 +172,7 @@ if(cadLoteInput) {
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
         mostrarLoading(true, "Buscando Imóvel...");
         try {
-            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\\uf8ff"), limit(1));
+            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
             const snap = await getDocs(q);
             if(!snap.empty) {
                 const imovel = snap.docs[0].data();
@@ -206,7 +206,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
     
     if(boxResult) boxResult.style.display = 'none';
     if(tbody) tbody.innerHTML = '';
-    window.resultadosConsultaAtual = []; // Reseta a memória de pesquisa
+    window.resultadosConsultaAtual = []; 
     
     let q = null;
     let qAlternativa = null; 
@@ -223,7 +223,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
         }
         
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
-        q = query(imoveisRef, where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\\uf8ff"), limit(50));
+        q = query(imoveisRef, where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(50));
     
     } else if (tipoBusca === 'pessoa') {
         const docForm = document.getElementById('consDoc').value.trim();
@@ -234,7 +234,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
             const docLimpo = docForm.replace(/\D/g, '');
             qAlternativa = query(imoveisRef, where("cnpj_cpf", "==", docLimpo), limit(50));
         } else if (nomeForm) {
-            q = query(imoveisRef, where("proprietario_principal", ">=", nomeForm), where("proprietario_principal", "<=", nomeForm + "\\uf8ff"), limit(50));
+            q = query(imoveisRef, where("proprietario_principal", ">=", nomeForm), where("proprietario_principal", "<=", nomeForm + "\uf8ff"), limit(50));
         } else {
             return alert("Preencha o Nome ou o CPF/CNPJ para buscar por proprietário.");
         }
@@ -251,7 +251,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
             
             snap.forEach(docSnap => {
                 const im = docSnap.data();
-                window.resultadosConsultaAtual.push(im); // Guarda na memória
+                window.resultadosConsultaAtual.push(im); 
                 const indexArray = window.resultadosConsultaAtual.length - 1;
                 
                 let endLote = im.logradouro || ''; 
@@ -280,7 +280,6 @@ window.buscarConsultaLivre = async function(tipoBusca) {
     mostrarLoading(false);
 }
 
-// Abertura do Espelho Visual
 window.abrirEspelhoCadastral = function(index) {
     const im = window.resultadosConsultaAtual[index];
     if(!im) return;
@@ -327,7 +326,6 @@ window.fecharEspelhoCadastral = function() {
     document.getElementById('modal-espelho-cadastral').style.display = 'none';
 }
 
-// Transformar Lote do Espelho em Notificação na hora
 window.autuarDesteEspelho = function() {
     const im = window.imovelSelecionadoParaNotificacao;
     if(!im) return;
@@ -336,7 +334,6 @@ window.autuarDesteEspelho = function() {
     window.navegarPara('notificacoes');
     window.limparFormularios();
     
-    // Preeche o form de Notificação
     document.getElementById('nome').value = im.proprietario_principal || ''; 
     document.getElementById('doc').value = im.cnpj_cpf || '';
     
@@ -348,7 +345,6 @@ window.autuarDesteEspelho = function() {
     document.getElementById('bairro').value = im.bairro || ''; 
     document.getElementById('cadImob').value = im.cadastroimobiliario || '';
 
-    // Fatia a Chave para as caixinhas
     if(im.chaveinscricao && im.chaveinscricao.length >= 11) {
         const chave = String(im.chaveinscricao);
         document.getElementById('cadDistrito').value = chave.substring(0,2);
@@ -730,8 +726,27 @@ window.exportarExcel = function() {
 }
 
 window.exportarVipp = function() {
-    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(m.length === 0) return alert('Selecione notificações.');
-    const itens = window.DB.filter(item => m.includes(item.firebaseId)); let x = '<?xml version="1.0" encoding="UTF-8"?>\n<correioslog>\n<tipo_arquivo>Postagem</tipo_arquivo><versao_arquivo>2.3</versao_arquivo><remetente><numero_contrato>9912740833</numero_contrato><codigo_administrativo>79980660</codigo_administrativo><nome_remetente>PREFEITURA DE BENTO GONCALVES</nome_remetente><logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente><numero_remetente>1075</numero_remetente><bairro_remetente>CIDADE ALTA</bairro_remetente><cep_remetente>95700010</cep_remetente><cidade_remetente>BENTO GONCALVES</cidade_remetente><uf_remetente>RS</uf_remetente></remetente>\n';
-    itens.forEach(i => { const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0'); x += `<objeto_postal><numero_etiqueta>${ar}</numero_etiqueta><codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente><codigo_servico_postagem>80810</codigo_servico_postagem><peso>100</peso><destinatario><nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario><logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario><numero_end_destinatario>S/N</numero_end_destinatario></destinatario><nacional><bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario><cidade_destinatario>BENTO GONCALVES</cidade_destinatario><uf_destinatario>RS</uf_destinatario><cep_destinatario>${cep}</cep_destinatario></nacional><servico_adicional><codigo_servico_adicional>25</codigo_servico_adicional></servico_adicional><servico_adicional><codigo_servico_adicional>01</codigo_servico_adicional></servico_adicional><dimensao_objeto><tipo_objeto>001</tipo_objeto></dimensao_objeto></objeto_postal>\n`; }); x += '</correioslog>';
-    const b = new Blob([x], { type: 'application/xml;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `VIPP_${Date.now()}.xml`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
+    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); 
+    if(m.length === 0) return alert('Selecione notificações.');
+    
+    const itens = window.DB.filter(item => m.includes(item.firebaseId)); 
+    let x = '<?xml version="1.0" encoding="UTF-8"?>\n<correioslog>\n<tipo_arquivo>Postagem</tipo_arquivo><versao_arquivo>2.3</versao_arquivo><remetente><numero_contrato>9912740833</numero_contrato><codigo_administrativo>79980660</codigo_administrativo><nome_remetente>PREFEITURA DE BENTO GONCALVES</nome_remetente><logradouro_remetente>AV OSVALDO ARANHA</logradouro_remetente><numero_remetente>1075</numero_remetente><bairro_remetente>CIDADE ALTA</bairro_remetente><cep_remetente>95700010</cep_remetente><cidade_remetente>BENTO GONCALVES</cidade_remetente><uf_remetente>RS</uf_remetente></remetente>\n';
+    
+    itens.forEach(i => { 
+        const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0'); 
+        const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : (i.numNotif.replace(/\D/g, '') + Date.now().toString().slice(-6)).padEnd(13, '0'); 
+        const obsText = `Notificacao SMMAM ${i.numNotif || ''}`.substring(0, 50);
+        
+        x += `<objeto_postal><numero_etiqueta>${ar}</numero_etiqueta><codigo_objeto_cliente>${(i.numNotif || '').substring(0, 20)}</codigo_objeto_cliente><codigo_servico_postagem>80810</codigo_servico_postagem><peso>100</peso><destinatario><nome_destinatario>${(i.nome || '').toUpperCase().substring(0, 50)}</nome_destinatario><logradouro_destinatario>${(i.endereco || '').toUpperCase().substring(0, 50)}</logradouro_destinatario><numero_end_destinatario>S/N</numero_end_destinatario></destinatario><nacional><bairro_destinatario>${(i.bairro || '').toUpperCase().substring(0, 30)}</bairro_destinatario><cidade_destinatario>BENTO GONCALVES</cidade_destinatario><uf_destinatario>RS</uf_destinatario><cep_destinatario>${cep}</cep_destinatario></nacional><servico_adicional><codigo_servico_adicional>25</codigo_servico_adicional></servico_adicional><servico_adicional><codigo_servico_adicional>01</codigo_servico_adicional></servico_adicional><dimensao_objeto><tipo_objeto>001</tipo_objeto></dimensao_objeto><observacao1>${obsText}</observacao1></objeto_postal>\n`; 
+    }); 
+    
+    x += '</correioslog>';
+    
+    const b = new Blob([x], { type: 'application/xml;charset=utf-8;' }); 
+    const l = document.createElement("a"); 
+    l.href = URL.createObjectURL(b); 
+    l.download = `VIPP_${Date.now()}.xml`; 
+    document.body.appendChild(l); 
+    l.click(); 
+    document.body.removeChild(l);
 }
