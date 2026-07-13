@@ -746,18 +746,20 @@ window.exportarVipp = function() {
     let csv = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME_REM;ENDERECO_REM;NUMERO_REM;COMPLEMENTO_REM;BAIRRO_REM;CIDADE_REM;UF_REM;CEP_REM;TELEFONE_CELULAR_REM;E_MAIL_REM;CPF_CNPJ_REM;IE_RG_REM;FILLER_REM;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER_POST;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER_LOTE;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER_REV;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER_NF;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO\n";
 
     itens.forEach(i => {
-        const nome = (i.nome || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 50);
+        // Função de blindagem (remove vírgulas, barras e caracteres proibidos do layout)
+        const limpa = (str) => (str || '').toString().replace(/["'*%?\\/><\[\]{}()#:,;|]/g, '').trim().toUpperCase();
+
+        const nome = limpa(i.nome).substring(0, 50) || 'NAO INFORMADO';
         
-        // EXTRATOR INTELIGENTE DE ENDEREÇOS
-        let rawAddress = (i.endereco || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').trim();
+        let rawAddress = (i.endereco || 'NAO INFORMADO').toUpperCase();
         let logradouro = rawAddress;
-        let numero = "S/N";
+        let numero = "SN";
         let complemento = "";
 
         if (rawAddress.includes(',')) {
             let parts = rawAddress.split(',');
             logradouro = parts[0].trim();
-            let rest = parts.slice(1).join(',').trim();
+            let rest = parts.slice(1).join(' ').trim();
             let matchRest = rest.match(/^(\S+)(?:\s*(?:-|\s)\s*(.*))?$/);
             if (matchRest) {
                 numero = matchRest[1].trim();
@@ -774,27 +776,28 @@ window.exportarVipp = function() {
             }
         }
 
-        logradouro = logradouro.substring(0, 90);
-        numero = numero.substring(0, 15) || "S/N";
-        complemento = complemento.substring(0, 50);
+        logradouro = limpa(logradouro).substring(0, 90) || 'NAO INFORMADO';
+        numero = limpa(numero).replace(/S\/N/g, 'SN').substring(0, 15) || "SN";
+        complemento = limpa(complemento).substring(0, 50);
 
-        const bairro = (i.bairro || 'NÃO INFORMADO').toUpperCase().replace(/;/g, '').substring(0, 50);
+        const bairro = limpa(i.bairro).substring(0, 50) || 'NAO INFORMADO';
         const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0');
         const celular = (i.telefone || '').replace(/\D/g, '').substring(0, 11);
         
-        let cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
-        if (!cpfCnpj) { cpfCnpj = "00000000000"; }
+        // Aqui deixamos o CPF em branco se não existir, para não travar a validação do VIPP!
+        const cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
         
+        // A vacina para o erro do Java: o CNPJ do Remetente é OBRIGATÓRIO
         const cnpjPrefeitura = "87850334000123";
 
-        const obs1 = `Notificacao SMMAM ${i.numNotif || ''}`.substring(0, 100);
+        const obs1 = limpa(`NOTIFICACAO SMMAM ${i.numNotif || ''}`).substring(0, 100);
         const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
 
         let row = [
-            nome, "", "", logradouro, numero, complemento, bairro, "BENTO GONCALVES", "RS", cep, "BR", celular, "", cpfCnpj, "", "", 
+            nome, "", "", logradouro, numero, complemento, bairro, "BENTO GONCALVES", "RS", cep, "", celular, "", cpfCnpj, "", "", 
             "PREFEITURA DE BENTO GONCALVES", "AV OSVALDO ARANHA", "1075", "", "CIDADE ALTA", "BENTO GONCALVES", "RS", "95700010", "", "", cnpjPrefeitura, "", "", 
-            "80810", ar, "100", "1", "1", "11", "16", "AR", "0", "0", "9912740833", "79980660", "", "", 
-            obs1, "", "", "", "1", "1", "", "", "LOTE_SMMAM", "", 
+            "80810", ar, "100", "1", "1", "11", "16", "AR", "", "", "9912740833", "79980660", "", "", 
+            obs1, "", "", "", "1", "1", "", "", "LOTESMMAM", "", 
             "", "", "", "", "", 
             "", "", "", "", "", "", "", "", "", "", 
             "Documentos Administrativos|1|100" 
@@ -803,7 +806,7 @@ window.exportarVipp = function() {
         csv += row.join(";") + "\n";
     });
 
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `VIPP_Importacao_${Date.now()}.csv`;
