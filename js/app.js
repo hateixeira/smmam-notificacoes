@@ -1,1038 +1,682 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit, orderBy, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Fiscalização - SMMAM</title>
+    <link rel="stylesheet" href="css/style.css?v=6">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
 
-const firebaseConfig = {
-    apiKey: "AIzaSyAP56ee8ituvxypF_aPOVSClu0EfCJBhR8",
-    authDomain: "smmam-fiscalizacao-tb.firebaseapp.com",
-    projectId: "smmam-fiscalizacao-tb",
-    storageBucket: "smmam-fiscalizacao-tb.firebasestorage.app",
-    messagingSenderId: "969517921131",
-    appId: "1:969517921131:web:0346350b921ad7bab5522e"
-};
+    <div id="loading-overlay">
+        <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
+        <div id="loading-msg">Sincronizando Banco de Dados...</div>
+    </div>
+    <div id="toast">Operação realizada com sucesso!</div>
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const notificacoesRef = collection(db, "notificacoes");
-
-enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code == 'failed-precondition') console.log('Persistência: Múltiplas abas abertas.');
-    else if (err.code == 'unimplemented') console.log('Persistência: Navegador não suporta.');
-});
-
-window.DB = [];
-window.itensFiltradosAtual = [];
-window.fotosTemp = [];
-window.resultadosConsultaAtual = []; 
-window.imovelSelecionadoParaNotificacao = null; 
-
-window.colunaOrdenacao = '';
-window.ordemCrescente = true;
-window.filtroStatusAtual = 'Todos';
-window.filtroTipoDocumento = 'Todos'; 
-window.valorURMGlobal = 0; 
-window.lastCheckedCheckbox = null;
-
-let usuarioLogado = null;
-let perfilUsuario = null;
-
-window.handleShiftClick = function(e, checkbox) {
-    if (e.shiftKey && window.lastCheckedCheckbox) {
-        const checkboxes = Array.from(document.querySelectorAll('.select-item'));
-        const start = checkboxes.indexOf(checkbox);
-        const end = checkboxes.indexOf(window.lastCheckedCheckbox);
-        const slice = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
-        slice.forEach(cb => { cb.checked = window.lastCheckedCheckbox.checked; });
-    }
-    window.lastCheckedCheckbox = checkbox;
-}
-
-const mostrarLoading = (mostrar, msg = "Sincronizando...") => {
-    const loader = document.getElementById('loading-overlay');
-    const msgEl = document.getElementById('loading-msg');
-    if(msgEl) msgEl.innerText = msg;
-    if(loader) loader.style.display = mostrar ? 'flex' : 'none';
-}
-
-window.mostrarToast = function(msg) {
-    const toast = document.getElementById("toast"); 
-    if(toast) {
-        toast.innerText = msg; toast.className = "show";
-        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
-    }
-}
-
-window.navegarPara = function(viewId) {
-    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    
-    const view = document.getElementById('view-' + viewId);
-    const nav = document.getElementById('nav-' + viewId);
-    if(view) view.classList.add('active-view');
-    if(nav) nav.classList.add('active');
-
-    if(viewId === 'inicio') window.renderizarPainel();
-    if(viewId === 'relatorios') window.renderizarGraficos();
-    if(viewId === 'perfil') window.carregarDadosPerfil();
-    if(viewId === 'configuracoes' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarConfiguracoesAdmin();
-    if(viewId === 'auditoria' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarAuditoria();
-}
-
-async function registrarLog(acaoRealizada, alvo) {
-    if(!perfilUsuario) return;
-    try { await addDoc(collection(db, "logs_auditoria"), { dataHora: new Date().toISOString(), usuario: perfilUsuario.nome || 'Desconhecido', matricula: perfilUsuario.matricula || '0000', setor: perfilUsuario.setor || 'SMMAM', nivel: perfilUsuario.nivel || 'leitor', acao: acaoRealizada, documentoAlvo: alvo }); } catch(e) {}
-}
-
-window.toggleAuthMode = function() {
-    const l = document.getElementById('login-fields'); const r = document.getElementById('register-fields'); const t = document.getElementById('authTitle'); const b = document.getElementById('btnToggleAuth');
-    if(l && r && t && b) {
-        if(l.style.display === 'none') { l.style.display = 'block'; r.style.display = 'none'; t.innerText = 'Acesso - Fiscalização'; b.innerText = 'Servidor Novo? Solicite Acesso'; } 
-        else { l.style.display = 'none'; r.style.display = 'block'; t.innerText = 'Cadastro de Servidor'; b.innerText = 'Já tenho conta (Entrar)'; }
-    }
-}
-
-// O ROBÔ DOS CORREIOS ATUALIZADO (MOTOR DUPLO)
-async function verificarRotinaCorreios() {
-    if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; 
-    
-    const agora = new Date();
-    const hora = agora.getHours();
-    const dataHoje = agora.toISOString().slice(0, 10); 
-
-    let turno = null;
-    if (hora >= 8 && hora < 13) turno = 'manha';
-    else if (hora >= 13) turno = 'tarde';
-
-    if (!turno) return; 
-
-    const autoRef = doc(db, "configuracoes", "automacao");
-    try {
-        const snap = await getDoc(autoRef);
-        let dadosAuto = snap.exists() ? snap.data() : {};
-        const campoTurno = turno === 'manha' ? 'ultimaSyncManha' : 'ultimaSyncTarde';
-
-        if (dadosAuto[campoTurno] !== dataHoje) {
-            await setDoc(autoRef, { [campoTurno]: dataHoje }, { merge: true });
-            
-            console.log(`[LazyCron] Iniciando rastreamento Motor Duplo: ${turno}`);
-            window.mostrarToast(`🔄 Robô em ação: Atualizando status dos ARs em 2º plano...`);
-
-            const q = query(collection(db, "notificacoes"), where("codigoAR", "!=", ""));
-            const pendingSnaps = await getDocs(q);
-
-            let atualizados = 0;
-
-            for (let document of pendingSnaps.docs) {
-                const d = document.data();
-                if (!d.codigoAR || d.codigoAR.length < 13) continue;
-                if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
-
-                let desc = "";
-                
-                // 1. Tenta BrasilAPI
-                try {
-                    const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${d.codigoAR}`);
-                    if (res.ok) {
-                        const apiData = await res.json();
-                        if (apiData.eventos && apiData.eventos.length > 0) desc = apiData.eventos[0].descricao.toLowerCase();
-                    }
-                } catch(e) {}
-
-                // 2. Se falhou, tenta Linketrack (Plano B)
-                if (!desc) {
-                    try {
-                        const res2 = await fetch(`https://api.linketrack.com/track/json?user=teste&token=1abcd00b2731640e886fb41a8a9671ad1434c599dbaa0a0de9a5aa619f29a83f&codigo=${d.codigoAR}`);
-                        if (res2.ok) {
-                            const data2 = await res2.json();
-                            if (data2.eventos && data2.eventos.length > 0) desc = data2.eventos[0].status.toLowerCase();
-                        }
-                    } catch(e) {}
-                }
-
-                if (desc) {
-                    let novoStatus = d.statusRetornoAR || 'aguardando';
-
-                    if (desc.includes('entregue')) novoStatus = 'entregue';
-                    else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
-                    else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
-                    else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
-                    else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
-                    else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
-
-                    if (novoStatus !== d.statusRetornoAR || desc.toUpperCase() !== d.statusCorreiosTexto) {
-                        await updateDoc(document.ref, {
-                            statusRetornoAR: novoStatus,
-                            statusCorreiosTexto: desc.toUpperCase()
-                        });
-                        atualizados++;
-                    }
-                }
-                
-                await new Promise(r => setTimeout(r, 600));
-            }
-
-            if (atualizados > 0) {
-                window.mostrarToast(`✅ Correios: ${atualizados} AR(s) sofreram movimentação e foram atualizados!`);
-                await window.carregarDadosNuvem(); 
-            }
-        }
-    } catch(e) {
-        console.error("Falha na rotina em background dos Correios", e);
-    }
-}
-
-onAuthStateChanged(auth, async (user) => {
-    if (user) {
-        usuarioLogado = user; mostrarLoading(true, "Carregando Plataforma...");
-        
-        try {
-            const configSnap = await getDoc(doc(db, "configuracoes", "sistema"));
-            if(configSnap.exists()) window.valorURMGlobal = configSnap.data().valorURM || 0;
-            const campoURM = document.getElementById('autoValorURMAtual');
-            if(campoURM) campoURM.value = window.valorURMGlobal.toFixed(2);
-        } catch(e) { console.log("Aviso: Configurações de URM não lidas."); }
-
-        try {
-            const userDocRef = doc(db, "usuarios", user.uid);
-            const docSnap = await getDoc(userDocRef);
-            
-            if (docSnap.exists()) {
-                perfilUsuario = docSnap.data(); 
-                if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
-                if(!perfilUsuario.status) perfilUsuario.status = 'aprovado';
-                if(!perfilUsuario.nivel) perfilUsuario.nivel = 'admin'; 
-                if(!perfilUsuario.nome) perfilUsuario.nome = 'Administrador';
-                if(!perfilUsuario.matricula) perfilUsuario.matricula = '0000';
-
-                if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
-                    if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
-                    if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none'; 
-                    if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'block';
-                    if(perfilUsuario.status === 'bloqueado' && document.querySelector('#waiting-room h2')) document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
-                } else {
-                    if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
-                    if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
-                    if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
-                    aplicarRestricoesDeTela(); 
-                    await window.carregarDadosNuvem(); 
-                    window.navegarPara('inicio');
-                    verificarRotinaCorreios(); 
-                }
-            } else {
-                const novoPerfil = { nome: "Humberto", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
-                await setDoc(userDocRef, novoPerfil); 
-                perfilUsuario = novoPerfil;
-                if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
-                if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
-                if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
-                aplicarRestricoesDeTela(); 
-                await window.carregarDadosNuvem(); 
-                window.navegarPara('inicio');
-                verificarRotinaCorreios(); 
-            }
-        } catch(e) { console.error(e); alert("Erro na inicialização: " + e.message + "\n\nTire um print se isso continuar!"); }
-        mostrarLoading(false);
-    } else {
-        if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'flex'; 
-        if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none'; 
-        if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none';
-    }
-});
-
-window.realizarLogin = function() { const email = document.getElementById('authEmail').value; const senha = document.getElementById('authPassword').value; if(!email || !senha) return alert("Preencha tudo."); mostrarLoading(true, "Acessando..."); signInWithEmailAndPassword(auth, email, senha).catch(() => { mostrarLoading(false); alert("Erro ao entrar."); }); }
-window.registrarUsuario = async function() { const nome = document.getElementById('regNome').value; const cargo = document.getElementById('regCargo').value; const setor = document.getElementById('regSetor').value; const cpf = document.getElementById('regCpf').value; const telefone = document.getElementById('regTelefone').value; const matricula = document.getElementById('regMatricula').value; const email = document.getElementById('regEmail').value; const senha = document.getElementById('regPassword').value; if(!nome || !setor || !cpf || !senha) return alert("Preencha os obrigatórios."); mostrarLoading(true); try { const userC = await createUserWithEmailAndPassword(auth, email, senha); await setDoc(doc(db, "usuarios", userC.user.uid), { nome, cargo, setor, cpf, telefone, matricula, email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() }); sendEmailVerification(userC.user); mostrarLoading(false); alert("Cadastro enviado para chefia."); } catch(e) { mostrarLoading(false); alert(e.message); } }
-window.recuperarSenha = function() { const email = document.getElementById('authEmail').value || document.getElementById('regEmail').value; if(!email) return alert("Digite o e-mail."); sendPasswordResetEmail(auth, email).then(() => alert("E-mail de redefinição enviado!")); }
-window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; window.limparFormularios(); }); }
-
-function aplicarRestricoesDeTela() {
-    if(!perfilUsuario) return;
-    const setorEl = document.getElementById('sidebar-setor'); if(setorEl) setorEl.innerText = perfilUsuario.setor || 'SMMAM';
-    
-    if (perfilUsuario.nome === 'Administrador Legado') {
-        perfilUsuario.nome = 'Humberto';
-        if (usuarioLogado) { updateDoc(doc(db, "usuarios", usuarioLogado.uid), { nome: 'Humberto' }).catch(()=>{}); }
-    }
-    
-    let nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
-    if (nivelStr === 'ADMIN') nivelStr = 'ADM';
-
-    const userLogEl = document.getElementById('userLoggedDisplay'); 
-    if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
-    
-    const fiscalEl = document.getElementById('fiscal'); if(fiscalEl) fiscalEl.value = perfilUsuario.nome || ''; 
-    const matEl = document.getElementById('matricula'); if(matEl) matEl.value = perfilUsuario.matricula || '';
-    
-    const areaSalvarNotif = document.getElementById('areaBotoesSalvarNotif'); const areaSalvarAuto = document.getElementById('areaBotoesSalvarAuto');
-    if(perfilUsuario.nivel === 'leitor') { if(areaSalvarNotif) areaSalvarNotif.style.display = 'none'; if(areaSalvarAuto) areaSalvarAuto.style.display = 'none'; }
-    
-    const menuAdmin = document.getElementById('menu-admin-area'); const btnExcluir = document.getElementById('areaBotoesAdminExcluir');
-    if(perfilUsuario.nivel === 'admin') { if(menuAdmin) menuAdmin.style.display = 'block'; if(btnExcluir) btnExcluir.style.display = 'flex'; } else { if(menuAdmin) menuAdmin.style.display = 'none'; if(btnExcluir) btnExcluir.style.display = 'none'; }
-}
-
-const cepInput = document.getElementById('cep');
-if(cepInput) {
-    cepInput.addEventListener('blur', async function() {
-        let cepLimpo = this.value.replace(/\D/g, '');
-        if(cepLimpo.length === 8) { try { const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`); const data = await response.json(); if(!data.erro) { document.getElementById('endereco').value = data.logradouro || ''; document.getElementById('bairro').value = data.bairro || ''; window.mostrarToast("Endereço localizado!"); } } catch(e) {} }
-    });
-}
-
-const cadLoteInput = document.getElementById('cadLote');
-if(cadLoteInput) {
-    cadLoteInput.addEventListener('blur', async function() {
-        const dist = document.getElementById('cadDistrito').value.padStart(2, '0'); const zona = document.getElementById('cadZona').value; const quad = document.getElementById('cadQuadra').value.padStart(3, '0'); const lote = document.getElementById('cadLote').value.padStart(4, '0');
-        if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') return;
-        const chaveBusca = `${dist}${zona}${quad}${lote}`;
-        mostrarLoading(true, "Buscando Imóvel...");
-        try {
-            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
-            const snap = await getDocs(q);
-            if(!snap.empty) {
-                const imovel = snap.docs[0].data();
-                document.getElementById('nome').value = imovel.proprietario_principal || ''; document.getElementById('doc').value = imovel.cnpj_cpf || '';
-                let endLote = imovel.logradouro || ''; if(imovel.numero && imovel.numero !== '0' && imovel.numero !== 'S/N' && imovel.numero !== 'SN') endLote += `, ${imovel.numero}`; if(imovel.complemento) endLote += ` - ${imovel.complemento}`;
-                document.getElementById('loteEndereco').value = endLote; if(!document.getElementById('bairro').value) document.getElementById('bairro').value = imovel.bairro || ''; document.getElementById('cadImob').value = imovel.cadastroimobiliario || '';
-                document.getElementById('doc').dispatchEvent(new Event('input')); window.mostrarToast("Preenchido!");
-            } else { window.mostrarToast("Lote não encontrado."); }
-        } catch(e) {} mostrarLoading(false);
-    });
-}
-
-// AÇÃO MANUAL DA TABELA: ATUALIZA BANCO DE DADOS EM TEMPO REAL COM MOTOR DUPLO
-window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
-    const span = document.getElementById(spanId); 
-    if(!span) return;
-    
-    span.innerHTML = `<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 5px; border-radius:4px;">⏳ Consultando API...</span>`;
-    
-    try {
-        let desc = "";
-
-        // 1. Tenta BrasilAPI
-        try {
-            const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.eventos && data.eventos.length > 0) desc = data.eventos[0].descricao.toLowerCase();
-            }
-        } catch(e) {}
-
-        // 2. Se falhou, tenta Linketrack
-        if (!desc) {
-            try {
-                const res2 = await fetch(`https://api.linketrack.com/track/json?user=teste&token=1abcd00b2731640e886fb41a8a9671ad1434c599dbaa0a0de9a5aa619f29a83f&codigo=${codigoAR}`);
-                if (res2.ok) {
-                    const data2 = await res2.json();
-                    if (data2.eventos && data2.eventos.length > 0) desc = data2.eventos[0].status.toLowerCase();
-                }
-            } catch(e) {}
-        }
-
-        if (!desc) {
-            span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ API Falhou (Ver)</a>`; 
-            return;
-        }
-
-        let novoStatus = 'aguardando';
-        if (desc.includes('entregue')) novoStatus = 'entregue';
-        else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
-        else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
-        else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
-        else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
-        else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
-
-        // O SEGREDO: Atualiza o Banco de Dados definitivamente!
-        if(docId) {
-            await updateDoc(doc(db, "notificacoes", docId), {
-                statusRetornoAR: novoStatus,
-                statusCorreiosTexto: desc.toUpperCase()
-            });
-        }
-
-        span.innerHTML = `<span style="color:green; font-weight:bold;">✅ Salvo!</span>`;
-        setTimeout(() => { window.carregarDadosNuvem(); }, 800);
-        
-    } catch(e) { 
-        span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ API Falhou</a>`; 
-    }
-}
-
-window.buscarConsultaLivre = async function(tipoBusca) {
-    const boxResult = document.getElementById('resultadoConsulta'); 
-    const tbody = document.getElementById('tabelaResultadosConsulta');
-    const countSpan = document.getElementById('qtdResultadosConsulta');
-    
-    if(boxResult) boxResult.style.display = 'none';
-    if(tbody) tbody.innerHTML = '';
-    window.resultadosConsultaAtual = []; 
-    
-    let q = null;
-    let qAlternativa = null; 
-    const imoveisRef = collection(db, "cadastro_imobiliario");
-
-    if (tipoBusca === 'lote') {
-        const dist = document.getElementById('consDistrito').value.padStart(2, '0'); 
-        const zona = document.getElementById('consZona').value; 
-        const quad = document.getElementById('consQuadra').value.padStart(3, '0'); 
-        const lote = document.getElementById('consLote').value.padStart(4, '0');
-        
-        if(!dist || !zona || !quad || !lote || dist === '00' || quad === '000' || lote === '0000') {
-            return alert("Preencha Distrito, Zona, Quadra e Lote para buscar pela chave física.");
-        }
-        
-        const chaveBusca = `${dist}${zona}${quad}${lote}`;
-        q = query(imoveisRef, where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(50));
-    
-    } else if (tipoBusca === 'pessoa') {
-        const docForm = document.getElementById('consDoc').value.trim();
-        const nomeForm = document.getElementById('consNome').value.trim().toUpperCase();
-
-        if (docForm) {
-            q = query(imoveisRef, where("cnpj_cpf", "==", docForm), limit(50));
-            const docLimpo = docForm.replace(/\D/g, '');
-            qAlternativa = query(imoveisRef, where("cnpj_cpf", "==", docLimpo), limit(50));
-        } else if (nomeForm) {
-            q = query(imoveisRef, where("proprietario_principal", ">=", nomeForm), where("proprietario_principal", "<=", nomeForm + "\uf8ff"), limit(50));
-        } else {
-            return alert("Preencha o Nome ou o CPF/CNPJ para buscar por proprietário.");
-        }
-    }
-
-    mostrarLoading(true, "Pesquisando Cofre IPTU...");
-    
-    try {
-        let snap = await getDocs(q);
-        if(snap.empty && qAlternativa) { snap = await getDocs(qAlternativa); }
-
-        if(!snap.empty) {
-            if(countSpan) countSpan.innerText = snap.docs.length;
-            
-            snap.forEach(docSnap => {
-                const im = docSnap.data();
-                window.resultadosConsultaAtual.push(im); 
-                const indexArray = window.resultadosConsultaAtual.length - 1;
-                
-                let endLote = im.logradouro || ''; 
-                if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; 
-                if(im.complemento) endLote += ` - ${im.complemento}`;
-                if(im.bairro) endLote += ` <br><small>Bairro: ${im.bairro}</small>`;
-
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><strong>${im.proprietario_principal || 'NÃO INFORMADO'}</strong></td>
-                    <td>${im.cnpj_cpf || '---'}</td>
-                    <td><span style="background:#f1f5f9; padding:3px 6px; border-radius:4px; font-weight:bold;">${im.chaveinscricao || 'Sem Chave'}</span><br><small style="color:#64748b">Cad: ${im.cadastroimobiliario || '---'}</small></td>
-                    <td style="font-size: 11px;">${endLote}</td>
-                    <td><button class="btn-primary btn-outline" onclick="abrirEspelhoCadastral(${indexArray})" style="padding: 6px 12px; font-size: 11px;">📄 Ver Espelho</button></td>
-                `;
-                if(tbody) tbody.appendChild(tr);
-            });
-            if(boxResult) boxResult.style.display = 'block'; 
-            window.mostrarToast("Busca concluída!");
-        } else { 
-            alert("Nenhum imóvel localizado. DICA: Tente buscar apenas pelo primeiro nome ou verifique se o CPF tem pontuação."); 
-        }
-    } catch(e) { 
-        console.error(e); alert("Erro na consulta com o banco de dados."); 
-    }
-    mostrarLoading(false);
-}
-
-window.abrirEspelhoCadastral = function(index) {
-    const im = window.resultadosConsultaAtual[index];
-    if(!im) return;
-    window.imovelSelecionadoParaNotificacao = im; 
-
-    let endLote = im.logradouro || ''; 
-    if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; 
-    if(im.complemento) endLote += ` - ${im.complemento}`;
-
-    const html = `
-        <div class="espelho-grid">
-            <div class="espelho-box">
-                <h4>👤 Dados do Proprietário</h4>
-                <p><strong>Nome:</strong> ${im.proprietario_principal || '---'}</p>
-                <p><strong>CPF/CNPJ:</strong> ${im.cnpj_cpf || '---'}</p>
+    <!-- TELAS DE ACESSO -->
+    <div id="auth-container">
+        <h2 id="authTitle">Acesso - Fiscalização</h2>
+        <div id="login-fields">
+            <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
+            <input type="password" id="authPassword" placeholder="Senha">
+            <button class="btn-primary" onclick="realizarLogin()" style="width: 100%;">Entrar no Sistema</button>
+        </div>
+        <div id="register-fields" style="display:none;">
+            <div style="font-size: 11px; background: #e2e8f0; color: #1e293b; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                ⚠️ <strong>Atenção:</strong> Apenas e-mails com domínio <strong>@bentogoncalves.rs.gov.br</strong> são permitidos, salvo exceções autorizadas pelo Administrador.
             </div>
-            <div class="espelho-box">
-                <h4>🏷️ Identificação do Imóvel</h4>
-                <p><strong>Cadastro (Cad):</strong> ${im.cadastroimobiliario || '---'}</p>
-                <p><strong>Inscrição (Chave):</strong> ${im.chaveinscricao || '---'}</p>
+            <input type="text" id="regNome" placeholder="Nome Completo">
+            <input type="text" id="regCargo" placeholder="Cargo (Ex: Fiscal, Agente Administrativo)">
+            <select id="regSetor" style="margin-bottom: 12px; padding: 12px; font-weight: bold; color: #1b365d;">
+                <option value="" disabled selected>Selecione sua Secretaria/Setor...</option>
+                <option value="SMMAM">SMMAM (Meio Ambiente)</option>
+                <option value="MOBILIDADE">Mobilidade Urbana (Trânsito)</option>
+                <option value="OBRAS">Obras e Posturas</option>
+            </select>
+            <input type="text" id="regCpf" placeholder="CPF" maxlength="14">
+            <input type="text" id="regTelefone" placeholder="Telefone Celular" maxlength="15">
+            <input type="text" id="regMatricula" placeholder="Nº da Matrícula / RE">
+            <input type="email" id="regEmail" placeholder="E-mail Institucional">
+            <input type="password" id="regPassword" placeholder="Crie uma Senha (mín. 6 caracteres)">
+            <button class="btn-success" onclick="registrarUsuario()" style="width: 100%;">Finalizar Cadastro</button>
+        </div>
+        <div class="auth-links">
+            <span id="btnToggleAuth" onclick="toggleAuthMode()">Servidor Novo? Solicite Acesso</span>
+            <span onclick="recuperarSenha()">Esqueci a Senha</span>
+        </div>
+    </div>
+
+    <div id="waiting-room" style="display:none;">
+        <h2>⏳ Acesso em Análise</h2>
+        <p>O seu cadastro foi realizado com sucesso!<br>Para garantir a segurança dos dados, o seu perfil está aguardando a liberação da Chefia da sua Secretaria.</p>
+        <button class="btn-secondary" onclick="realizarLogout()" style="width: 200px; margin: 0 auto;">Sair</button>
+    </div>
+
+    <!-- ESTRUTURA SPA -->
+    <div id="app-layout" style="display: none;">
+        
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <h3>Fiscalização</h3>
+                <span id="sidebar-setor">Carregando...</span>
             </div>
-            <div class="espelho-box" style="grid-column: span 2;">
-                <h4>📍 Localização do Imóvel</h4>
-                <p><strong>Logradouro:</strong> ${endLote}</p>
-                <p><strong>Bairro:</strong> ${im.bairro || '---'}</p>
-                <p><strong>Loteamento:</strong> ${im.loteamento || '---'}</p>
-            </div>
-            <div class="espelho-box" style="grid-column: span 2;">
-                <h4>📐 Dados Físicos do Lote</h4>
-                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                    <p><strong>Área do Terreno:</strong> ${im.areaterreno || '---'} m²</p>
-                    <p><strong>Testada:</strong> ${im.testada || '---'} m</p>
-                    <p><strong>Fração Ideal:</strong> ${im.fracaoideal || '---'} %</p>
+            <nav class="sidebar-nav">
+                <a class="nav-item active" onclick="navegarPara('inicio')" id="nav-inicio">🏠 Tela Inicial</a>
+                <a class="nav-item" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Nova Notificação</a>
+                <a class="nav-item" onclick="navegarPara('autos')" id="nav-autos">🚨 Novo Auto (Multa)</a>
+                <a class="nav-item" onclick="navegarPara('consulta')" id="nav-consulta">🔍 Consulta Cadastral</a>
+                <a class="nav-item" onclick="navegarPara('relatorios')" id="nav-relatorios">📈 Relatórios e Gráficos</a>
+                <a class="nav-item" onclick="navegarPara('perfil')" id="nav-perfil">👤 Meu Perfil</a>
+                
+                <div id="menu-admin-area" style="display: none;">
+                    <div class="nav-section-title">ADMINISTRAÇÃO</div>
+                    <a class="nav-item" onclick="navegarPara('auditoria')" id="nav-auditoria">🛡️ Auditoria do Sistema</a>
+                    <a class="nav-item" onclick="navegarPara('configuracoes')" id="nav-configuracoes">⚙️ Configurações</a>
                 </div>
+            </nav>
+            <div class="sidebar-footer">
+                <span id="userLoggedDisplay" style="display:block; margin-bottom: 10px; font-size: 11px;"></span>
+                <button class="btn-logout" onclick="realizarLogout()" style="width: 100%;">Sair do Sistema</button>
+            </div>
+        </aside>
+
+        <main id="main-content">
+            
+            <!-- VIEW 1: TELA INICIAL -->
+            <div id="view-inicio" class="view-section active-view">
+                <h2>Visão Geral do Setor</h2>
+                <div class="dashboard-cards">
+                    <div class="card card-total"><div class="num" id="dashTotalNotif">0</div><div class="label">Notificações</div></div>
+                    <div class="card card-total"><div class="num" id="dashTotalAutos">0</div><div class="label">Autos / Multas</div></div>
+                    <div class="card card-info"><div class="num" id="dashAREnviados">0</div><div class="label">ARs Enviados</div></div>
+                    <div class="card card-prazo"><div class="num" id="dashARRetornados">0</div><div class="label">ARs Recebidos</div></div>
+                    <div class="card card-vencida"><div class="num" id="dashVencidas">0</div><div class="label">Prazos Vencidos</div></div>
+                </div>
+
+                <div class="panel-container" style="margin-top: 20px;">
+                    <div class="toolbar">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                            <div class="filter-group">
+                                <button class="filter-type-btn active" onclick="aplicarFiltroTipo('Todos', this)">📋 Mostrar Todos</button>
+                                <button class="filter-type-btn" onclick="aplicarFiltroTipo('notificacao', this)">📝 Só Notificações</button>
+                                <button class="filter-type-btn" onclick="aplicarFiltroTipo('auto', this)">🚨 Só Autos</button>
+                            </div>
+                        </div>
+                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por rua, número, nome, lote, código AR..." onkeyup="renderizarPainel()">
+                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+                            <div class="filter-bar">
+                                <span style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 5px;">FILTROS:</span>
+                                <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
+                                <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
+                            </div>
+                            <div>
+                                <button class="btn-primary btn-outline" onclick="exportarVipp()" style="padding: 6px 12px; font-size: 12px;">📦 Exportar VIPP</button>
+                                <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px;" title="Baixar Excel">📊 Excel</button>
+                            </div>
+                        </div>
+                        <div class="btn-actions" id="areaBotoesAdminExcluir" style="display:none; margin-top:5px;">
+                            <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir Selecionadas</button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30px;"><input type="checkbox" id="selecionarTodos" onclick="toggleTodos(this)"></th>
+                                    <th>Tipo</th>
+                                    <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Reg. <span class="sort-icon">▼▲</span></th>
+                                    <th class="sortable" onclick="ordenarTabela('nome')">Nome / Alvo <span class="sort-icon">▼▲</span></th>
+                                    <th>Status (AR/Prazo)</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaCorpo"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 2: FORMULÁRIO DE NOTIFICAÇÕES -->
+            <div id="view-notificacoes" class="view-section">
+                <div class="form-container">
+                    <h2 id="mainHeaderTitleForm">Gerar Nova Notificação</h2>
+                    <form id="notifForm" onsubmit="salvarDocumento(event, 'notificacao')">
+                        <input type="hidden" id="editFirebaseIdNotif">
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1.2;"><label>Nº Notificação *</label><input type="text" id="numNotif" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria"></div>
+                            <div class="form-group" style="flex: 1.5;"><label>Data *</label><input type="date" id="dataNotif" required></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Forma de Notificação *</label>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item"><input type="radio" id="tipoPresencial" name="tipoNotif" value="Presencial" checked><label for="tipoPresencial">Presencial</label></div>
+                                <div class="checkbox-item"><input type="radio" id="tipoAR" name="tipoNotif" value="AR"><label for="tipoAR">Por AR</label></div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;"><label>Nome do Notificado *</label><input type="text" id="nome" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="doc" maxlength="18" required></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>CEP</label><input type="text" id="cep" maxlength="9"></div>
+                            <div class="form-group" style="flex: 2;"><label>Endereço de Correspondência</label><input type="text" id="endereco"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Bairro</label><input type="text" id="bairro"></div>
+                            <div class="form-group"><label>Telefone</label><input type="text" id="telefone" maxlength="15"></div>
+                        </div>
+
+                        <div style="font-weight: bold; margin: 10px 0 5px 0; color: #1b365d; font-size:13px;">Cadastro Imobiliário (Busca Automática)</div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Distr.</label><input type="text" id="cadDistrito" placeholder="01"></div>
+                            <div class="form-group"><label>Zona</label><input type="text" id="cadZona" placeholder="5"></div>
+                            <div class="form-group"><label>Quadr.</label><input type="text" id="cadQuadra" placeholder="071"></div>
+                            <div class="form-group"><label>Lote</label><input type="text" id="cadLote" placeholder="0015"></div>
+                            <div class="form-group" style="flex: 1.5;"><label>Cad. Imob.</label><input type="text" id="cadImob"></div>
+                        </div>
+                        <div class="form-group"><label>Endereço do Local da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
+
+                        <div class="form-group">
+                            <label>Irregularidades Verificadas</label>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item"><input type="checkbox" id="irrMato"><label for="irrMato">Vegetação/Mato</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="irrResiduos"><label for="irrResiduos">Resíduos Sólidos</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="irrEntulhos"><label for="irrEntulhos">Obra Irregular / Posturas</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="irrOutros"><label for="irrOutros">Outros</label></div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Ponto de Referência</label><input type="text" id="ref"></div>
+                            <div class="form-group"><label>Observações</label><input type="text" id="obs"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Base Legal</label>
+                            <div class="checkbox-group">
+                                <div class="checkbox-item"><input type="checkbox" id="lei5198" checked><label for="lei5198">Art. 6º, § 2º - L 5.198</label></div>
+                                <div class="checkbox-item"><input type="checkbox" id="lc56"><label for="lc56">Art. 41, inc. III - LC 56</label></div>
+                            </div>
+                        </div>
+
+                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Acompanhamento / Prazos</div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 1.5;"><label>Código AR (Correios)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
+                            <div class="form-group" style="flex: 1.5;">
+                                <label>Retorno Físico do AR?</label>
+                                <select id="statusRetornoAR">
+                                    <option value="aguardando">⏳ Aguardando Retorno</option>
+                                    <option value="transito">🚚 Em Trânsito</option>
+                                    <option value="saiu_entrega">🛵 Saiu para Entrega</option>
+                                    <option value="tentativa">⚠️ Tentativa de Entrega</option>
+                                    <option value="retirada">🏢 Aguardando Retirada</option>
+                                    <option value="entregue">✅ Entregue / Assinado</option>
+                                    <option value="devolvido">❌ Devolvido / Não Localizado</option>
+                                </select>
+                            </div>
+                            <div class="form-group"><label>Prazo p/ Regularizar</label><input type="date" id="dataPrazo"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Evidências Fotográficas <span id="indicadorFotosNotif" class="foto-loading" style="display:none;">Carregando...</span></label>
+                            <input type="file" id="inputFotosNotif" accept="image/*" multiple onchange="processarFotos(event, 'previewFotosNotif')" style="background: #fff; padding: 5px;">
+                            <div id="previewFotosNotif" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
+                        </div>
+
+                        <div class="btn-actions" id="areaBotoesSalvarNotif">
+                            <button type="submit" id="btnSalvarNotif" class="btn-success" style="flex: 2;">☁️ Salvar Notificação</button>
+                            <button type="button" class="btn-secondary" onclick="limparFormularios()">🔄 Limpar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- VIEW 3: AUTO DE INFRAÇÃO -->
+            <div id="view-autos" class="view-section">
+                <div class="form-container">
+                    <h2 style="color: #991b1b; border-color: #fecaca;">Gerar Auto de Infração (Multa)</h2>
+                    
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e1; margin-bottom: 20px;">
+                        <label>Vincular a uma Notificação Anterior</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="autoBuscaNotif" placeholder="Digite o Nº da Notificação Ex: 0520B">
+                            <button type="button" class="btn-primary" onclick="puxarDadosDaNotificacao()">🔍 Puxar Dados</button>
+                        </div>
+                    </div>
+
+                    <form id="autoForm" onsubmit="salvarDocumento(event, 'auto')">
+                        <input type="hidden" id="editFirebaseIdAuto">
+                        
+                        <div class="form-row">
+                            <div class="form-group"><label>Nº do Auto *</label><input type="text" id="autoNum" required></div>
+                            <div class="form-group"><label>Data da Autuação *</label><input type="date" id="autoData" required></div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;"><label>Nome do Infrator *</label><input type="text" id="autoNome" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="autoDoc" required></div>
+                        </div>
+                        
+                        <div class="form-group"><label>Endereço da Ocorrência *</label><input type="text" id="autoEndOcorrencia" required></div>
+                        <div class="form-group"><label>Enquadramento Legal (Descritivo)</label><input type="text" id="autoDescricaoLei" placeholder="Ex: Artigo 6º, da Lei Municipal 5.198"></div>
+
+                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #991b1b; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Cálculo da Multa Baseado na URM</div>
+                        
+                        <div class="form-row" style="align-items: center;">
+                            <div class="form-group">
+                                <label>Quantidade de URM Aplicada</label>
+                                <input type="number" id="autoMultaURM" step="0.01" value="100" oninput="calcularMultaReais()">
+                            </div>
+                            <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">X</div>
+                            <div class="form-group">
+                                <label>Valor URM do Ano (R$)</label>
+                                <input type="text" id="autoValorURMAtual" disabled style="background:#f1f5f9; font-weight:bold;">
+                            </div>
+                            <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">=</div>
+                            <div class="form-group" style="flex: 1.5;">
+                                <label style="color: #991b1b;">Total da Multa (R$)</label>
+                                <input type="text" id="autoMultaReais" disabled style="background:#fee2e2; color:#991b1b; font-size: 16px; font-weight:bold;">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Evidências Fotográficas <span id="indicadorFotosAuto" class="foto-loading" style="display:none;">Carregando...</span></label>
+                            <input type="file" id="inputFotosAuto" accept="image/*" multiple onchange="processarFotos(event, 'previewFotosAuto')" style="background: #fff; padding: 5px;">
+                            <div id="previewFotosAuto" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
+                        </div>
+
+                        <div class="btn-actions" id="areaBotoesSalvarAuto">
+                            <button type="submit" id="btnSalvarAuto" class="btn-danger" style="flex: 2;">☁️ Gravar Auto de Infração</button>
+                            <button type="button" class="btn-secondary" onclick="limparFormularios()">🔄 Limpar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- VIEW 4: CONSULTA CADASTRAL -->
+            <div id="view-consulta" class="view-section">
+                <h2>Consulta Rápida ao Cadastro Imobiliário</h2>
+                <div class="panel-container">
+                    <p style="color: #64748b; margin-bottom: 20px;">Pesquise propriedades na base da prefeitura. Você pode buscar pelo lote físico ou pelos dados do proprietário.</p>
+                    
+                    <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">📍 Opção 1: Busca por Lote (Chave)</h3>
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group"><label>Distr.</label><input type="text" id="consDistrito" placeholder="01"></div>
+                            <div class="form-group"><label>Zona</label><input type="text" id="consZona" placeholder="5"></div>
+                            <div class="form-group"><label>Quadra</label><input type="text" id="consQuadra" placeholder="071"></div>
+                            <div class="form-group"><label>Lote</label><input type="text" id="consLote" placeholder="0015"></div>
+                            <div class="form-group">
+                                <button class="btn-primary" onclick="buscarConsultaLivre('lote')" style="height: 35px; width: 100%;">🔍 Lote</button>
+                            </div>
+                        </div>
+
+                        <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 15px 0;">
+
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👤 Opção 2: Busca por Proprietário</h3>
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group" style="flex: 2;">
+                                <label>Nome do Proprietário (Digite o início)</label>
+                                <input type="text" id="consNome" placeholder="Ex: JOAO DA SILVA">
+                            </div>
+                            <div class="form-group" style="flex: 1.5;">
+                                <label>CPF / CNPJ</label>
+                                <input type="text" id="consDoc" placeholder="Ex: 01997677008">
+                            </div>
+                            <div class="form-group">
+                                <button class="btn-secondary" onclick="buscarConsultaLivre('pessoa')" style="height: 35px; width: 100%;">🔍 Pessoa</button>
+                            </div>
+                        </div>
+
+                        <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 15px 0;">
+
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">🏘️ Opção 3: Busca por Endereço Físico</h3>
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group" style="flex: 2;">
+                                <label>Nome da Rua (Logradouro)</label>
+                                <input type="text" id="consRua" placeholder="Ex: RUA LIVRAMENTO">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Número</label>
+                                <input type="text" id="consNumRua" placeholder="Ex: 635">
+                            </div>
+                            <div class="form-group">
+                                <button class="btn-success" onclick="buscarConsultaLivre('endereco')" style="height: 35px; width: 100%;">🔍 Endereço</button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- TABELA DE RESULTADOS -->
+                    <div id="resultadoConsulta" style="display: none; margin-top: 20px;">
+                        <h3 style="margin-top: 0; color: #16a34a; font-size: 16px;">✅ Imóveis Localizados: <span id="qtdResultadosConsulta">0</span></h3>
+                        <div class="table-container" style="max-height: 400px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Proprietário</th>
+                                        <th>CPF/CNPJ</th>
+                                        <th>Inscrição (Chave)</th>
+                                        <th>Endereço do Lote</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaResultadosConsulta"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS (SUPER PAINEL BI) -->
+            <div id="view-relatorios" class="view-section">
+                <h2>Painel Executivo de Gestão</h2>
+                
+                <div class="panel-container" style="display: flex; flex-direction: column;">
+                    <h3 style="margin-top: 0; font-size: 15px; color: #1b365d;">📈 Evolução de Demandas (Últimos Meses)</h3>
+                    <div style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="chartEvolucao"></canvas>
+                    </div>
+                </div>
+
+                <div class="form-row" style="gap: 15px; margin-bottom: 20px;">
+                    <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">📍 Top 10 Bairros Autuados</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="chartBairros"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">⚠️ Tipos de Infração</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="chartTipos"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">📊 Status Operacional</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="chartStatus"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row" style="gap: 15px;">
+                    <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👨‍💼 Produtividade por Servidor</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="chartFiscais"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0; justify-content: center; align-items: center; background: #f8fafc; border: 2px dashed #cbd5e1;">
+                        <h3 style="margin-top: 0; font-size: 14px; color: #64748b;">💰 Projeção de Arrecadação (Multas Ativas)</h3>
+                        <div style="font-size: 40px; font-weight: bold; color: #991b1b; margin: 15px 0;" id="painelFinanceiroValor">R$ 0,00</div>
+                        <p style="font-size: 11px; color: #94a3b8; text-align: center;">Valor bruto calculado sobre a URM vigente aplicado aos Autos de Infração gerados na plataforma.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 6: MEU PERFIL -->
+            <div id="view-perfil" class="view-section">
+                <h2>Meu Perfil</h2>
+                <div class="form-container" style="max-width: 600px;">
+                    <p style="color: #64748b; margin-bottom: 20px;">Mantenha seus dados atualizados.</p>
+                    <div class="form-group"><label>Nome</label><input type="text" id="perfilNome" disabled style="background:#f1f5f9;"></div>
+                    <div class="form-group"><label>Matrícula</label><input type="text" id="perfilMatricula" disabled style="background:#f1f5f9;"></div>
+                    <div class="form-group"><label>Setor / Nível</label><input type="text" id="perfilSetorNivel" disabled style="background:#f1f5f9;"></div>
+                    <div class="form-group"><label>Telefone Celular</label><input type="text" id="perfilTelefone" placeholder="(54) 99999-9999"></div>
+                    <div class="form-group"><label>Nova Senha (opcional)</label><input type="password" id="perfilSenha" placeholder="Digite apenas se quiser trocar"></div>
+                    <button class="btn-success" style="margin-top: 15px; width: 100%;">💾 Atualizar Meus Dados</button>
+                </div>
+            </div>
+
+            <!-- VIEW 7: AUDITORIA -->
+            <div id="view-auditoria" class="view-section">
+                <h2>Caixa Preta (Logs de Auditoria)</h2>
+                <div class="panel-container">
+                    <p style="color: #64748b;">Tabela imutável de rastreamento de ações do sistema.</p>
+                    <div class="table-container" style="max-height: 500px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Data/Hora</th><th>Usuário</th><th>Ação Realizada</th><th>Alvo</th></tr>
+                            </thead>
+                            <tbody id="tabelaAuditoriaCorpo"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 8: CONFIGURAÇÕES DO SISTEMA (ADMIN) -->
+            <div id="view-configuracoes" class="view-section">
+                <h2>Configurações do Sistema</h2>
+                
+                <div class="dashboard-cards" style="margin-bottom: 20px;">
+                    <div class="panel-container" style="flex: 2;">
+                        <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores</h3>
+                        <div class="table-container" style="max-height: 400px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Servidor / Cargo</th>
+                                        <th>Secretaria</th>
+                                        <th>E-mail</th>
+                                        <th>Status</th>
+                                        <th>Nível</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaUsuariosCorpo"></tbody>
+                            </table>
+                        </div>
+
+                        <!-- LISTA VIP DE E-MAILS -->
+                        <h3 style="margin-top: 20px; color: #1b365d; font-size: 15px; border-top: 1px dashed #ccc; padding-top: 15px;">Lista VIP (Liberar E-mails Externos)</h3>
+                        <p style="font-size:11px; color:#64748b;">E-mails diferentes de @bentogoncalves.rs.gov.br precisam ser adicionados aqui ANTES do cadastro.</p>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="email" id="adminVipEmail" placeholder="estagiario@gmail.com" style="flex:1;">
+                            <button class="btn-secondary" onclick="adicionarEmailVip()">➕ Autorizar</button>
+                        </div>
+                        <ul id="listaVipEmails" style="font-size: 12px; margin-top: 10px; color: #475569;"></ul>
+
+                    </div>
+
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+                        
+                        <div class="panel-container">
+                            <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Financeiro / Multas</h3>
+                            <div class="form-group">
+                                <label>Valor da URM Atual (R$)</label>
+                                <input type="number" id="configURM" step="0.01" placeholder="Ex: 175.50">
+                                <button class="btn-primary" style="margin-top: 10px; width: 100%;">Salvar URM</button>
+                            </div>
+                        </div>
+
+                        <!-- MÓDULO CORREIOS -->
+                        <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
+                            <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
+                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API agora.</p>
+                            <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
+                            <button class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
+                        </div>
+
+                        <!-- MÓDULO IPTU DELTA SYNC -->
+                        <div class="panel-container" style="border: 2px dashed #38bdf8; background: #f0f9ff;">
+                            <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">Importar IPTU Inteligente (JSON)</h3>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">O sistema comparará o arquivo novo com o do mês anterior e atualizará apenas as alterações para poupar o banco.</p>
+                            <input type="file" id="adminFileJson" accept=".json" style="margin-bottom: 10px; width: 100%;">
+                            <button class="btn-success" id="btnAdminImportarIptu" style="width: 100%; margin-top: 5px;">🚀 INICIAR DELTA SYNC</button>
+                            <div id="adminProgressoIptu" style="margin-top: 10px; font-size: 11px; font-weight: bold; color: #d97706;"></div>
+                        </div>
+
+                        <!-- DOCUMENTAÇÃO DO SISTEMA -->
+                        <div class="panel-container" style="background: #1e293b; color: white;">
+                            <h3 style="margin-top: 0; color: #38bdf8; font-size: 15px;">📖 Manual da Arquitetura</h3>
+                            <div style="font-size:11px; line-height:1.5; color:#cbd5e1; max-height:150px; overflow-y:auto; padding-right:5px;">
+                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore.<br>
+                                <strong>Custos (Plano Spark):</strong> Limite de 50.000 leituras/dia e 20.000 escritas/dia.<br>
+                                <strong>Segurança:</strong> Firebase Rules bloqueiam usuários não aprovados direto no backend.<br>
+                                <strong>Automação Correios:</strong> O primeiro acesso após as 08h e 13h dispara um robô invisível em *background* para varrer os status na BrasilAPI/Linketrack sem custo de servidor.<br>
+                                <strong>Cofre IPTU:</strong> A sincronização usa *Client-side Diffing* para comparar o arquivo localmente antes de enviar.<br>
+                                <hr style="border-color:#334155; margin:10px 0;">
+                                <button class="btn-danger" style="width: 100%; font-size: 10px; padding: 5px;" onclick="corrigirEnderecosAntigos()">🛠️ Injetar Cidade/UF nos Imóveis Antigos</button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MODAL FOTOS -->
+    <div id="photo-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close" onclick="fecharModalFoto()">&times;</span>
+            <img id="modal-image" src="" alt="Evidência Fotográfica Ampliada">
+            <div class="modal-actions">
+                <button class="btn-primary" onclick="baixarFotoAtual()" style="font-size: 15px; padding: 10px 20px;">⬇️ Baixar Foto (Download)</button>
             </div>
         </div>
-    `;
-    
-    document.getElementById('conteudo-espelho').innerHTML = html;
-    document.getElementById('modal-espelho-cadastral').style.display = 'flex';
-}
+    </div>
 
-window.fecharEspelhoCadastral = function() {
-    document.getElementById('modal-espelho-cadastral').style.display = 'none';
-}
+    <!-- MODAL ESPELHO CADASTRAL -->
+    <div id="modal-espelho-cadastral" class="modal-overlay" style="display: none;">
+        <div class="modal-content modal-cadastral">
+            <div style="background: #1b365d; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
+                <h3 style="margin: 0; font-size: 16px;">📄 Espelho Cadastral do Imóvel</h3>
+                <span style="font-size: 24px; cursor: pointer; line-height: 1;" onclick="fecharEspelhoCadastral()">&times;</span>
+            </div>
+            <div style="padding: 20px; max-height: 70vh; overflow-y: auto; text-align: left; width: 100%; box-sizing: border-box;" id="conteudo-espelho"></div>
+            <div style="padding: 15px 20px; border-top: 1px solid #e2e8f0; text-align: right; background: #fff; border-radius: 0 0 8px 8px;">
+                <button class="btn-danger" onclick="autuarDesteEspelho()" style="display: inline-flex; width: auto; margin-right: 10px;">📝 Gerar Notificação deste Lote</button>
+                <button class="btn-secondary" onclick="fecharEspelhoCadastral()" style="display: inline-flex; width: auto;">Fechar</button>
+            </div>
+        </div>
+    </div>
 
-window.autuarDesteEspelho = function() {
-    const im = window.imovelSelecionadoParaNotificacao;
-    if(!im) return;
-    
-    fecharEspelhoCadastral();
-    window.navegarPara('notificacoes');
-    window.limparFormularios();
-    
-    document.getElementById('nome').value = im.proprietario_principal || ''; 
-    document.getElementById('doc').value = im.cnpj_cpf || '';
-    
-    let endLote = im.logradouro || ''; 
-    if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; 
-    if(im.complemento) endLote += ` - ${im.complemento}`;
-    
-    document.getElementById('loteEndereco').value = endLote; 
-    document.getElementById('bairro').value = im.bairro || ''; 
-    document.getElementById('cadImob').value = im.cadastroimobiliario || '';
-
-    if(im.chaveinscricao && im.chaveinscricao.length >= 11) {
-        const chave = String(im.chaveinscricao);
-        document.getElementById('cadDistrito').value = chave.substring(0,2);
-        document.getElementById('cadZona').value = chave.substring(2,3);
-        document.getElementById('cadQuadra').value = chave.substring(3,6);
-        document.getElementById('cadLote').value = chave.substring(6,10);
-    }
-    
-    window.mostrarToast("Dados do Espelho carregados no formulário!");
-    window.scrollTo(0,0);
-}
-
-window.puxarDadosDaNotificacao = function() {
-    const numPesquisa = document.getElementById('autoBuscaNotif').value.trim();
-    if(!numPesquisa) return alert("Digite o número da notificação para puxar.");
-    
-    const notif = window.DB.find(i => i.numNotif === numPesquisa && i.tipoDocumento !== 'auto');
-    if(!notif) return alert("Notificação não encontrada ou ela não pertence ao seu Setor.");
-    
-    document.getElementById('autoNome').value = notif.nome; document.getElementById('autoDoc').value = notif.doc;
-    document.getElementById('autoEndOcorrencia').value = notif.loteEndereco; document.getElementById('autoDescricaoLei').value = "Ocorrência vinculada à Notificação " + notif.numNotif;
-    window.mostrarToast("Dados importados da Notificação!");
-}
-
-window.calcularMultaReais = function() {
-    const elUrm = document.getElementById('autoMultaURM'); const elReais = document.getElementById('autoMultaReais');
-    if(!elUrm || !elReais) return;
-    const qtdURM = parseFloat(elUrm.value) || 0;
-    const emReais = qtdURM * window.valorURMGlobal;
-    elReais.value = "R$ " + emReais.toFixed(2).replace('.', ',');
-}
-
-let chartBairrosInstance = null; let chartStatusInstance = null; let chartEvolucaoInstance = null; let chartTiposInstance = null; let chartFiscaisInstance = null;
-
-window.renderizarGraficos = function() {
-    if(window.DB.length === 0) return;
-
-    let countBairros = {}; let countMeses = {}; let countFiscais = {}; let countTipos = { 'Mato/Vegetação': 0, 'Resíduos/Entulhos': 0, 'Obra/Posturas': 0, 'Outros': 0 };
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    let stNoPrazo = 0; let stVencido = 0; let stAutos = 0; let totalMultasReais = 0;
-
-    window.DB.forEach(doc => { 
-        let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO'; countBairros[b] = (countBairros[b] || 0) + 1;
-        let f = (doc.fiscal && doc.fiscal.trim() !== '') ? doc.fiscal.toUpperCase() : 'NÃO IDENTIFICADO'; countFiscais[f] = (countFiscais[f] || 0) + 1;
-
-        if(doc.tipoDocumento === 'auto') {
-            stAutos++;
-            if(doc.autoMultaURM) totalMultasReais += (parseFloat(doc.autoMultaURM) * window.valorURMGlobal);
-        } else if(doc.dataPrazo) { 
-            const pz = new Date(doc.dataPrazo + "T00:00:00"); if(pz < hoje) stVencido++; else stNoPrazo++; 
-        }
-
-        if(doc.tipoDocumento !== 'auto') {
-            if(doc.irrMato) countTipos['Mato/Vegetação']++;
-            if(doc.irrResiduos) countTipos['Resíduos/Entulhos']++;
-            if(doc.irrEntulhos) countTipos['Obra/Posturas']++;
-            if(doc.irrOutros) countTipos['Outros']++;
-        }
-
-        if(doc.dataNotif) { let mesAno = doc.dataNotif.substring(0, 7); countMeses[mesAno] = (countMeses[mesAno] || 0) + 1; }
-    });
-
-    const painelDinheiro = document.getElementById('painelFinanceiroValor');
-    if(painelDinheiro) painelDinheiro.innerText = totalMultasReais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-    const ctxEvolucao = document.getElementById('chartEvolucao');
-    if(ctxEvolucao) {
-        if(chartEvolucaoInstance) chartEvolucaoInstance.destroy();
-        const mesesOrdenados = Object.keys(countMeses).sort();
-        const dadosMeses = mesesOrdenados.map(m => countMeses[m]);
-        const labelsMeses = mesesOrdenados.map(m => { const partes = m.split('-'); return `${partes[1]}/${partes[0]}`; });
-        chartEvolucaoInstance = new Chart(ctxEvolucao, { type: 'line', data: { labels: labelsMeses, datasets: [{ label: 'Novos Cadastros', data: dadosMeses, borderColor: '#1b365d', backgroundColor: 'rgba(27, 54, 93, 0.1)', tension: 0.3, fill: true, pointRadius: 5 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
-    }
-
-    const ctxB = document.getElementById('chartBairros');
-    if(ctxB) {
-        if(chartBairrosInstance) chartBairrosInstance.destroy();
-        const bairrosOrdenados = Object.entries(countBairros).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        const labelsBairros = bairrosOrdenados.map(item => item[0]); const dadosBairros = bairrosOrdenados.map(item => item[1]);
-        chartBairrosInstance = new Chart(ctxB, { type: 'bar', data: { labels: labelsBairros, datasets: [{ label: 'Volume', data: dadosBairros, backgroundColor: '#3b82f6', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-    }
-
-    const ctxTipos = document.getElementById('chartTipos');
-    if(ctxTipos) {
-        if(chartTiposInstance) chartTiposInstance.destroy();
-        chartTiposInstance = new Chart(ctxTipos, { type: 'pie', data: { labels: Object.keys(countTipos), datasets: [{ data: Object.values(countTipos), backgroundColor: ['#22c55e', '#a855f7', '#64748b', '#cbd5e1'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } } });
-    }
-
-    const ctxS = document.getElementById('chartStatus');
-    if(ctxS) {
-        if(chartStatusInstance) chartStatusInstance.destroy();
-        chartStatusInstance = new Chart(ctxS, { type: 'doughnut', data: { labels: ['No Prazo', 'Vencidos (Irregular)', 'Multas Geradas'], datasets: [{ data: [stNoPrazo, stVencido, stAutos], backgroundColor: ['#10b981', '#ef4444', '#f59e0b'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } } });
-    }
-
-    const ctxFiscais = document.getElementById('chartFiscais');
-    if(ctxFiscais) {
-        if(chartFiscaisInstance) chartFiscaisInstance.destroy();
-        const fiscaisOrdenados = Object.entries(countFiscais).sort((a, b) => b[1] - a[1]);
-        const labelsFiscais = fiscaisOrdenados.map(item => item[0]); const dadosFiscais = fiscaisOrdenados.map(item => item[1]);
-        chartFiscaisInstance = new Chart(ctxFiscais, { type: 'bar', data: { labels: labelsFiscais, datasets: [{ label: 'Documentos Emitidos', data: dadosFiscais, backgroundColor: '#0ea5e9', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-    }
-}
-
-window.carregarConfiguracoesAdmin = async function() {
-    const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); if(corpoUsuarios) corpoUsuarios.innerHTML = '';
-    try {
-        const usersSnapshot = await getDocs(collection(db, "usuarios"));
-        usersSnapshot.forEach(docSnap => {
-            const u = docSnap.data(); const uid = docSnap.id;
-            const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
-            const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
-            if(corpoUsuarios) corpoUsuarios.innerHTML += `<tr><td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td><span style="background:#e2e8f0; padding:3px; border-radius:4px; font-size:11px;">${u.setor || 'SMMAM'}</span></td><td>${u.email}</td><td>${selectStatus}</td><td>${selectNivel}</td></tr>`;
-        });
-    } catch(e) {}
-}
-
-window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) { try { await updateDoc(doc(db, "usuarios", uid), { [campo]: valorNovo }); window.mostrarToast(`Atualizado!`); if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`; } catch(e) { alert("Sem permissão."); } }
-
-const btnSalvarUrm = document.querySelector('#configURM')?.nextElementSibling;
-if(btnSalvarUrm) {
-    btnSalvarUrm.addEventListener('click', async function() {
-        const valor = parseFloat(document.getElementById('configURM').value); if(!valor || valor <= 0) return alert("Valor inválido.");
-        mostrarLoading(true);
-        try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; const elAtual = document.getElementById('autoValorURMAtual'); if(elAtual) elAtual.value = valor.toFixed(2); window.mostrarToast("Valor URM salvo!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
-        mostrarLoading(false);
-    });
-}
-
-const btnImportarIptu = document.getElementById('btnAdminImportarIptu');
-if(btnImportarIptu) {
-    btnImportarIptu.addEventListener('click', function() {
-        const file = document.getElementById('adminFileJson').files[0]; if(!file) return alert("Selecione o arquivo JSON.");
-        const startIndex = parseInt(document.getElementById('adminStartFrom').value) || 0;
-        const reader = new FileReader();
-        
-        reader.onload = async function(e) {
-            try {
-                const dados = JSON.parse(e.target.result);
-                if(!Array.isArray(dados)) return alert("Arquivo JSON inválido.");
-                if (startIndex >= dados.length) return alert("Número de início maior que o total!");
-
-                const progressDiv = document.getElementById('adminProgressoIptu');
-                if(progressDiv) progressDiv.innerText = `Preparando retomada a partir do registro ${startIndex}...`;
-                document.getElementById('btnAdminImportarIptu').disabled = true;
-
-                const TAMANHO_LOTE = 400; let enviados = startIndex;
-
-                for (let i = startIndex; i < dados.length; i += TAMANHO_LOTE) {
-                    const loteAtual = dados.slice(i, i + TAMANHO_LOTE);
-                    const batch = writeBatch(db);
-                    loteAtual.forEach(imovel => { if(imovel.chaveinscricao) { const chaveLimpa = String(imovel.chaveinscricao).trim(); batch.set(doc(db, "cadastro_imobiliario", chaveLimpa), imovel); } });
-                    await batch.commit(); enviados += loteAtual.length;
-                    if(progressDiv) progressDiv.innerText = `⏳ Enviando para Nuvem: ${enviados} de ${dados.length}...`;
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-                if(progressDiv) { progressDiv.innerText = `✅ SUCESSO! Base atualizada.`; progressDiv.style.color = 'green'; }
-            } catch(err) { alert("Erro: " + err.message); }
-        };
-        reader.readAsText(file);
-    });
-}
-
-window.carregarDadosNuvem = async function() {
-    mostrarLoading(true, "Baixando demandas...");
-    try {
-        const querySnapshot = await getDocs(notificacoesRef); window.DB = []; const meuSetor = perfilUsuario.setor || 'SMMAM';
-        querySnapshot.forEach((documento) => { 
-            let data = documento.data(); data.firebaseId = documento.id; 
-            if(!data.tipoDocumento) data.tipoDocumento = 'notificacao';
-            if ((data.setor || 'SMMAM') === meuSetor || perfilUsuario.nivel === 'admin') window.DB.push(data); 
-        });
-        window.renderizarPainel();
-    } catch (e) {} mostrarLoading(false);
-}
-
-window.salvarDocumento = async function(event, tipoDoc) {
-    event.preventDefault(); if(perfilUsuario.nivel === 'leitor') return alert("Leitores não salvam.");
-    mostrarLoading(true, "Salvando na Nuvem...");
-    
-    let editId = ''; let dados = {}; let btnForm = null; let base64Array = window.fotosTemp || [];
-
-    if(tipoDoc === 'notificacao') {
-        btnForm = document.getElementById('btnSalvarNotif'); editId = document.getElementById('editFirebaseIdNotif').value;
-        dados = { tipoDocumento: 'notificacao', numNotif: document.getElementById('numNotif').value, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: document.getElementById('codigoAR').value.toUpperCase(), statusRetornoAR: document.getElementById('statusRetornoAR').value, dataPrazo: document.getElementById('dataPrazo').value, dataNotif: document.getElementById('dataNotif').value, tipoAR: document.getElementById('tipoAR').checked, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: document.getElementById('nome').value, doc: document.getElementById('doc').value, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
-    } else {
-        btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value;
-        dados = { tipoDocumento: 'auto', numNotif: document.getElementById('autoNum').value, dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, autoMultaURM: document.getElementById('autoMultaURM').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
-    }
-    
-    if(btnForm) btnForm.disabled = true;
-    try {
-        let idDoDoc = editId;
-        if (editId) { await updateDoc(doc(db, "notificacoes", editId), dados); } 
-        else { dados.criadoPor = perfilUsuario.nome; dados.dataCriacao = new Date().toISOString(); const novoDoc = await addDoc(notificacoesRef, dados); idDoDoc = novoDoc.id; }
-        
-        const fotosSubRef = collection(db, "notificacoes", idDoDoc, "evidencias");
-        if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
-        for (let base64 of base64Array) { await addDoc(fotosSubRef, { imagemBinaria: base64 }); }
-        
-        await window.carregarDadosNuvem(); window.limparFormularios(); window.mostrarToast("Salvo na Nuvem!"); await registrarLog(editId ? `Editou ${tipoDoc}` : `Criou ${tipoDoc}`, dados.numNotif); window.navegarPara('inicio');
-    } catch (e) { alert("Erro ao salvar."); }
-    if(btnForm) btnForm.disabled = false; mostrarLoading(false);
-}
-
-window.excluirSelecionadas = async function() {
-    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(m.length === 0) return alert('Selecione.');
-    if(confirm(`Apagar ${m.length} registro(s) PARA SEMPRE?`)) {
-        mostrarLoading(true, "Excluindo...");
-        try {
-            for (let id of m) { const snaps = await getDocs(collection(db, "notificacoes", id, "evidencias")); for (let f of snaps.docs) { await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); }
-            await window.carregarDadosNuvem(); window.mostrarToast("Excluído!"); await registrarLog("Excluiu Lote", m.join(", "));
-        } catch(e) { alert("Erro"); } mostrarLoading(false);
-    }
-}
-
-window.fotoModalAtual = null;
-window.abrirModalFoto = function(i) { window.fotoModalAtual = window.fotosTemp[i]; document.getElementById('modal-image').src = window.fotoModalAtual; document.getElementById('photo-modal').style.display = 'flex'; }
-window.fecharModalFoto = function() { document.getElementById('photo-modal').style.display = 'none'; }
-window.baixarFotoAtual = function() { const a = document.createElement("a"); a.href = window.fotoModalAtual; a.download = `Evidencia_${Date.now()}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-window.processarFotos = function(e, containerId) { const files = e.target.files; if(!files) return; for(let file of files) { const r = new FileReader(); r.onload = function(ev) { const img = new Image(); img.onload = function() { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const MAX = 700; let w = img.width; let h = img.height; if (w > MAX) { h *= MAX / w; w = MAX; } canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h); window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.45)); window.renderizarPreviewFotos(containerId); }; img.src = ev.target.result; }; r.readAsDataURL(file); } e.target.value = ''; }
-window.renderizarPreviewFotos = function(containerId) { const container = document.getElementById(containerId); if(!container) return; container.innerHTML = ''; window.fotosTemp.forEach((f, i) => { const div = document.createElement('div'); div.style.position = 'relative'; div.innerHTML = `<img src="${f}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;cursor:pointer;" onclick="abrirModalFoto(${i})"><button type="button" onclick="removerFoto(${i}, '${containerId}')" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`; container.appendChild(div); }); }
-window.removerFoto = function(i, cid) { window.fotosTemp.splice(i, 1); window.renderizarPreviewFotos(cid); }
-
-window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
-window.aplicarFiltroTipo = function(tipo, btnElement) { window.filtroTipoDocumento = tipo; document.querySelectorAll('.filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
-window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
-window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => { cb.checked = master.checked; }); }
-
-window.atualizarDashboardGraficos = function() {
-    const hoje = new Date(); hoje.setHours(0,0,0,0); let tNotif = 0; let tAutos = 0; let arEnv = 0; let arRet = 0; let venc = 0;
-    window.DB.forEach(i => { 
-        if(i.tipoDocumento === 'auto') tAutos++; else tNotif++;
-        if(i.codigoAR && i.codigoAR.trim() !== '') { arEnv++; if(i.statusRetornoAR === 'entregue' || i.statusRetornoAR === 'devolvido') arRet++; }
-        if(i.dataPrazo) { const prazo = new Date(i.dataPrazo + "T00:00:00"); if(prazo < hoje) venc++; } 
-    });
-    if(document.getElementById('dashTotalNotif')) document.getElementById('dashTotalNotif').innerText = tNotif; 
-    if(document.getElementById('dashTotalAutos')) document.getElementById('dashTotalAutos').innerText = tAutos; 
-    if(document.getElementById('dashAREnviados')) document.getElementById('dashAREnviados').innerText = arEnv; 
-    if(document.getElementById('dashARRetornados')) document.getElementById('dashARRetornados').innerText = arRet; 
-    if(document.getElementById('dashVencidas')) document.getElementById('dashVencidas').innerText = venc; 
-}
-
-window.renderizarPainel = function() {
-    window.atualizarDashboardGraficos(); const corpo = document.getElementById('tabelaCorpo'); if(!corpo) return; corpo.innerHTML = ''; 
-    const buscaEl = document.getElementById('buscaInput'); const filtroTexto = buscaEl ? buscaEl.value.toLowerCase().trim() : ''; 
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    let filtrados = window.DB;
-    if(window.filtroTipoDocumento !== 'Todos') filtrados = filtrados.filter(item => item.tipoDocumento === window.filtroTipoDocumento);
-    
-    filtrados = filtrados.filter(item => { 
-        const stringGeral = `${item.nome || ''} ${item.numNotif || ''} ${item.loteEndereco || ''} ${item.endereco || ''} ${item.bairro || ''} ${item.procOuvidoria || ''} ${item.codigoAR || ''}`.toLowerCase();
-        return stringGeral.includes(filtroTexto); 
-    });
-
-    if (window.filtroStatusAtual === 'No Prazo') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") >= hoje); } else if (window.filtroStatusAtual === 'Vencidos') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") < hoje); } else if (window.filtroStatusAtual === 'Com AR') { filtrados = filtrados.filter(i => i.codigoAR && i.codigoAR.trim() !== ""); }
-    if (window.colunaOrdenacao) { filtrados.sort((a, b) => { let valA = (a[window.colunaOrdenacao] || '').toLowerCase(); let valB = (b[window.colunaOrdenacao] || '').toLowerCase(); if (valA < valB) return window.ordemCrescente ? -1 : 1; if (valA > valB) return window.ordemCrescente ? 1 : -1; return 0; }); }
-    window.itensFiltradosAtual = filtrados; 
-    
-    filtrados.forEach(item => {
-        const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
-        let statusHtml = ''; let botaoAutuar = '';
-        const badgeTipo = item.tipoDocumento === 'auto' ? `<span class="badge-tipo-auto">MULTA / AUTO</span>` : `<span class="badge-tipo-notif">NOTIFICAÇÃO</span>`;
-        
-        if(item.codigoAR) { 
-            let corFisica = 'border-color:#cbd5e1; background:#f8fafc; color:#475569;'; 
-            let txtStatus = '🟡 Aguardando';
-            const st = item.statusRetornoAR;
-            
-            if(st === 'entregue') { corFisica = 'border-color:#16a34a; background:#dcfce7; color:#166534;'; txtStatus = '✅ Entregue'; }
-            else if(st === 'devolvido') { corFisica = 'border-color:#dc2626; background:#fee2e2; color:#991b1b;'; txtStatus = '❌ Devolvido'; }
-            else if(st === 'transito') { corFisica = 'border-color:#3b82f6; background:#eff6ff; color:#1d4ed8;'; txtStatus = '🚚 Em Trânsito'; }
-            else if(st === 'saiu_entrega') { corFisica = 'border-color:#f59e0b; background:#fef3c7; color:#b45309;'; txtStatus = '🛵 Saiu p/ Entrega'; }
-            else if(st === 'tentativa') { corFisica = 'border-color:#f97316; background:#fff7ed; color:#c2410c;'; txtStatus = '⚠️ Tentativa (Falha)'; }
-            else if(st === 'retirada') { corFisica = 'border-color:#8b5cf6; background:#f5f3ff; color:#6d28d9;'; txtStatus = '🏢 Aguardando Retirada'; }
-            
-            let descCorreios = item.statusCorreiosTexto ? `<div style="font-size:9px; color:#64748b; margin-top:4px; line-height:1.2;">${item.statusCorreiosTexto}</div>` : '';
-
-            statusHtml += `
-            <div style="${corFisica} padding:6px; border-radius:4px; border:1px solid; text-align:center; min-width: 140px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                <div style="font-size:11px; font-weight:bold; margin-bottom:3px;">
-                    AR: ${item.codigoAR} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:inherit;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;margin-left:5px;" onclick="buscarStatusCorreios('${item.codigoAR}', 'ar-${item.firebaseId}', '${item.firebaseId}')">API</button></span>
+    <!-- MODAL EDIÇÃO DE USUÁRIO (NOVO) -->
+    <div id="modal-edicao-usuario" class="modal-overlay" style="display: none;">
+        <div class="modal-content modal-cadastral" style="max-width: 400px;">
+            <div style="background: #1b365d; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
+                <h3 style="margin: 0; font-size: 16px;">✏️ Editar Servidor</h3>
+                <span style="font-size: 24px; cursor: pointer; line-height: 1;" onclick="fecharModalEdicaoUsuario()">&times;</span>
+            </div>
+            <div style="padding: 20px; text-align: left; width: 100%; box-sizing: border-box;">
+                <input type="hidden" id="editUserId">
+                <div class="form-group"><label>Nome Completo</label><input type="text" id="editUserNome"></div>
+                <div class="form-group"><label>Cargo</label><input type="text" id="editUserCargo"></div>
+                <div class="form-group">
+                    <label>Setor / Secretaria</label>
+                    <select id="editUserSetor">
+                        <option value="SMMAM">SMMAM (Meio Ambiente)</option>
+                        <option value="MOBILIDADE">Mobilidade Urbana (Trânsito)</option>
+                        <option value="OBRAS">Obras e Posturas</option>
+                    </select>
                 </div>
-                <div style="font-size:11px; font-weight: bold;">${txtStatus}</div>
-                ${descCorreios}
-            </div>`; 
-        }
+                <div class="form-row">
+                    <div class="form-group"><label>Telefone</label><input type="text" id="editUserTelefone"></div>
+                    <div class="form-group"><label>Matrícula</label><input type="text" id="editUserMatricula"></div>
+                </div>
+            </div>
+            <div style="padding: 15px 20px; border-top: 1px solid #e2e8f0; text-align: right; background: #fff; border-radius: 0 0 8px 8px;">
+                <button class="btn-success" onclick="salvarEdicaoUsuario()" style="width: 100%;">💾 Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
 
-        if(item.dataPrazo) { const df = item.dataPrazo.split('-').reverse().join('/'); const pz = new Date(item.dataPrazo + "T00:00:00"); if(pz < hoje) { statusHtml += `<div style="margin-top:5px;"><span class="badge-vencido">Vencido: ${df}</span></div>`; if(item.tipoDocumento !== 'auto') botaoAutuar = `<a class="btn-autuar" onclick="navegarPara('autos')">📝 Autuar</a>`; } else { statusHtml += `<div style="margin-top:5px;"><span class="badge-prazo">No Prazo: ${df}</span></div>`; } }
-        
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}" onclick="handleShiftClick(event, this)"></td><td>${badgeTipo}</td><td><strong>${item.numNotif}</strong></td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div></td><td>${statusHtml || '<small style="color:#94a3b8">Sem acompanhamento</small>'}</td><td class="action-links"><a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a><a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
-        corpo.appendChild(tr);
-    });
-}
+    <!-- ESPELHO IMPRESSÃO NOTIFICAÇÃO -->
+    <div id="print-area">
+        <table class="main-grid">
+            <tr>
+                <td colspan="4" style="width: 65%; padding: 10px;">
+                    <div style="font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 0.3px;">Prefeitura de Bento Gonçalves</div>
+                    <div id="printSecretaria" style="font-size: 11px; margin-top: 3px; font-weight: bold;">Secretaria de Meio Ambiente</div>
+                    <div style="font-size: 11px; margin-top: 2px;">Setor de Fiscalização</div>
+                </td>
+                <td colspan="2" style="width: 35%; background-color: #fafafa; vertical-align: middle;">
+                    <span class="cell-label">2. DOCUMENTO N°</span>
+                    <div class="cell-value" id="pNum" style="font-weight: bold; font-size: 16px; color: #d32f2f; margin-top: 2px;"></div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="4"><span class="cell-label">3. DATA</span><div class="cell-value" id="pData"></div></td>
+                <td colspan="2" style="vertical-align: middle;">
+                    <div style="display: flex; justify-content: space-around; font-size: 9.5px; font-weight: bold;">
+                        <span id="pTipoPresencial">( ) Notificação Presencial</span><span id="pTipoAR">( ) Notificado por AR</span>
+                    </div>
+                </td>
+            </tr>
+            <tr><td colspan="6"><span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
+            <tr>
+                <td colspan="4" style="width: 65%;"><span class="cell-label">6. CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
+                <td colspan="2" style="width: 35%;"><span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span><div class="cell-value">---</div></td>
+            </tr>
+            <tr>
+                <td colspan="4"><span class="cell-label">8. ENDEREÇO DE CORRESPONDÊNCIA</span><div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div></td>
+                <td colspan="2"><span class="cell-label">9. TELEFONE</span><div class="cell-value" id="pTelefone"></div></td>
+            </tr>
+            <tr>
+                <td colspan="2" style="width: 45%;"><span class="cell-label">10. BAIRRO/DISTRITO</span><div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div></td>
+                <td style="width: 20%;"><span class="cell-label">11. MUNICÍPIO</span><div class="cell-value" id="pCidadePrint" style="font-weight: bold;">BENTO GONÇALVES</div></td>
+                <td style="width: 25%;"><span class="cell-label">12. CEP</span><div class="cell-value" id="pCep"></div></td>
+                <td colspan="2" style="width: 10%;"><span class="cell-label">13. UF</span><div class="cell-value" id="pUfPrint" style="font-weight: bold;">RS</div></td>
+            </tr>
+            <tr>
+                <td style="width: 15%;"><span class="cell-label">DISTRITO</span><div class="cell-value" id="pCadDistrito" style="font-weight: bold; text-align: center;"></div></td>
+                <td style="width: 15%;"><span class="cell-label">ZONA</span><div class="cell-value" id="pCadZona" style="font-weight: bold; text-align: center;"></div></td>
+                <td style="width: 15%;"><span class="cell-label">QUADRA</span><div class="cell-value" id="pCadQuadra" style="font-weight: bold; text-align: center;"></div></td>
+                <td style="width: 20%;"><span class="cell-label">LOTE</span><div class="cell-value" id="pCadLote" style="font-weight: bold; text-align: center;"></div></td>
+                <td colspan="2" style="width: 35%; background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
+            </tr>
+            <tr><td colspan="6" class="alert-row">14. O NÃO ATENDIMENTO DO PRESENTE PODERÁ CONSTITUIR CRIME DE DESOBEDIÊNCIA CONFORME O ARTIGO 330 DO CÓDIGO PENAL</td></tr>
+            <tr><td colspan="6" class="section-title">15. MOTIVO DO DOCUMENTO</td></tr>
+            <tr>
+                <td colspan="6" style="padding: 12px; line-height: 1.45;">
+                    <p style="margin: 0 0 10px 0;">Verificação de irregularidade, situada no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS.</p>
+                    <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
+                    <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
+                    <p style="margin: 15px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
+                        <strong><span id="pPrazoImpressao"></span></strong>
+                    </p>
+                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">OBSERVAÇÕES (MEIO AMBIENTE):</p>
+                    <ul class="bullet-rules">
+                        <li>Vegetais arbóreos, lenhosos e nativos deverão ser preservados.</li>
+                        <li>Fica proibido o emprego do fogo, bem como, a utilização da capina química para limpeza dos lotes.</li>
+                        <li>Após realizada limpeza, fica o notificado obrigado a apresentar levantamento fotográfico comprovando limpeza dos lotes.</li>
+                    </ul>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="4" style="width: 65%;">
+                    <span class="cell-label">16. Nome do Servidor Responsável</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
+                    <span class="cell-label">17. RE / MATRÍCULA</span><div class="cell-value" id="pMatricula"></div>
+                </td>
+                <td colspan="2" style="width: 35%;">
+                    <span class="cell-label">18. Endereço de Apresentação</span>
+                    <div id="pEnderecoSecretaria" class="cell-value" style="font-size: 9.5px; line-height: 1.4;">
+                        <strong>SMMAM / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="6" style="padding: 0; border: none;">
+                    <div class="signature-container">
+                        <div class="sig-box"><br><span class="cell-label">19. Assinatura do Responsável</span></div>
+                        <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;">Recebi o presente em _____/_____/_________</div><span class="cell-label">20. Assinatura do Munícipe</span></div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
 
-window.carregarParaEditar = async function(id) {
-    const item = window.DB.find(i => i.firebaseId === id); if (!item) return;
-    
-    if(item.tipoDocumento === 'auto') {
-        window.navegarPara('autos'); window.scrollTo(0,0);
-        if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = item.firebaseId; 
-        if(document.getElementById('autoNum')) document.getElementById('autoNum').value = item.numNotif || ''; 
-        if(document.getElementById('autoData')) document.getElementById('autoData').value = item.dataNotif || ''; 
-        if(document.getElementById('autoNome')) document.getElementById('autoNome').value = item.nome || ''; 
-        if(document.getElementById('autoDoc')) document.getElementById('autoDoc').value = item.doc || ''; 
-        if(document.getElementById('autoEndOcorrencia')) document.getElementById('autoEndOcorrencia').value = item.loteEndereco || ''; 
-        if(document.getElementById('autoDescricaoLei')) document.getElementById('autoDescricaoLei').value = item.autoDescricaoLei || ''; 
-        if(document.getElementById('autoMultaURM')) document.getElementById('autoMultaURM').value = item.autoMultaURM || ''; 
-        window.calcularMultaReais();
-        
-        window.fotosTemp = []; 
-        if(document.getElementById('indicadorFotosAuto')) document.getElementById('indicadorFotosAuto').style.display = 'inline-block'; 
-        try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {} 
-        if(document.getElementById('indicadorFotosAuto')) document.getElementById('indicadorFotosAuto').style.display = 'none'; 
-        window.renderizarPreviewFotos('previewFotosAuto');
-        return;
-    }
-
-    window.navegarPara('notificacoes'); window.scrollTo(0,0);
-    if(document.getElementById('editFirebaseIdNotif')) document.getElementById('editFirebaseIdNotif').value = item.firebaseId; 
-    if(document.getElementById('numNotif')) document.getElementById('numNotif').value = item.numNotif || ''; 
-    if(document.getElementById('procOuvidoria')) document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; 
-    if(document.getElementById('codigoAR')) document.getElementById('codigoAR').value = item.codigoAR || ''; 
-    
-    const selAR = document.getElementById('statusRetornoAR');
-    if(selAR) {
-        const novosStatus = [{v:'transito', t:'🚚 Em Trânsito'}, {v:'saiu_entrega', t:'🛵 Saiu para Entrega'}, {v:'tentativa', t:'⚠️ Tentativa de Entrega'}, {v:'retirada', t:'🏢 Aguardando Retirada'}];
-        novosStatus.forEach(op => { if(!selAR.querySelector(`option[value="${op.v}"]`)) selAR.add(new Option(op.t, op.v)); });
-        selAR.value = item.statusRetornoAR || 'aguardando'; 
-    }
-
-    if(document.getElementById('dataPrazo')) document.getElementById('dataPrazo').value = item.dataPrazo || ''; 
-    if(document.getElementById('dataNotif')) document.getElementById('dataNotif').value = item.dataNotif || ''; 
-    if(document.getElementById('tipoAR')) document.getElementById('tipoAR').checked = item.tipoAR; 
-    if(document.getElementById('tipoPresencial')) document.getElementById('tipoPresencial').checked = item.tipoPresencial; 
-    if(document.getElementById('nome')) document.getElementById('nome').value = item.nome || ''; 
-    if(document.getElementById('doc')) document.getElementById('doc').value = item.doc || ''; 
-    if(document.getElementById('endereco')) document.getElementById('endereco').value = item.endereco || ''; 
-    if(document.getElementById('telefone')) document.getElementById('telefone').value = item.telefone || ''; 
-    if(document.getElementById('bairro')) document.getElementById('bairro').value = item.bairro || ''; 
-    if(document.getElementById('cep')) document.getElementById('cep').value = item.cep || ''; 
-    if(document.getElementById('cadDistrito')) document.getElementById('cadDistrito').value = item.cadDistrito || ''; 
-    if(document.getElementById('cadZona')) document.getElementById('cadZona').value = item.cadZona || ''; 
-    if(document.getElementById('cadQuadra')) document.getElementById('cadQuadra').value = item.cadQuadra || ''; 
-    if(document.getElementById('cadLote')) document.getElementById('cadLote').value = item.cadLote || ''; 
-    if(document.getElementById('cadImob')) document.getElementById('cadImob').value = item.cadImob || ''; 
-    if(document.getElementById('loteEndereco')) document.getElementById('loteEndereco').value = item.loteEndereco || ''; 
-    if(document.getElementById('irrMato')) document.getElementById('irrMato').checked = item.irrMato; 
-    if(document.getElementById('irrResiduos')) document.getElementById('irrResiduos').checked = item.irrResiduos; 
-    if(document.getElementById('irrEntulhos')) document.getElementById('irrEntulhos').checked = item.irrEntulhos; 
-    if(document.getElementById('irrOutros')) document.getElementById('irrOutros').checked = item.irrOutros; 
-    if(document.getElementById('ref')) document.getElementById('ref').value = item.ref || ''; 
-    if(document.getElementById('obs')) document.getElementById('obs').value = item.obs || ''; 
-    if(document.getElementById('lei5198')) document.getElementById('lei5198').checked = item.lei5198; 
-    if(document.getElementById('lc56')) document.getElementById('lc56').checked = item.lc56;
-    
-    window.fotosTemp = []; 
-    if(document.getElementById('indicadorFotosNotif')) document.getElementById('indicadorFotosNotif').style.display = 'inline-block';
-    try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {}
-    if(document.getElementById('indicadorFotosNotif')) document.getElementById('indicadorFotosNotif').style.display = 'none'; 
-    window.renderizarPreviewFotos('previewFotosNotif');
-}
-
-window.limparFormularios = function() { 
-    if(document.getElementById('notifForm')) document.getElementById('notifForm').reset(); 
-    if(document.getElementById('autoForm')) document.getElementById('autoForm').reset(); 
-    if(document.getElementById('editFirebaseIdNotif')) document.getElementById('editFirebaseIdNotif').value = ''; 
-    if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = ''; 
-    if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = 'aguardando'; 
-    if(document.getElementById('dataNotif')) document.getElementById('dataNotif').valueAsDate = new Date(); 
-    if(document.getElementById('autoData')) document.getElementById('autoData').valueAsDate = new Date(); 
-    if(document.getElementById('autoMultaReais')) document.getElementById('autoMultaReais').value = ''; 
-    if(perfilUsuario) { 
-        if(document.getElementById('fiscal')) document.getElementById('fiscal').value = perfilUsuario.nome; 
-        if(document.getElementById('matricula')) document.getElementById('matricula').value = perfilUsuario.matricula; 
-    } 
-    window.fotosTemp = []; 
-    window.renderizarPreviewFotos('previewFotosNotif'); 
-    window.renderizarPreviewFotos('previewFotosAuto'); 
-}
-
-window.carregarDadosPerfil = function() { 
-    if(!perfilUsuario) return; 
-    if(document.getElementById('perfilNome')) document.getElementById('perfilNome').value = perfilUsuario.nome; 
-    if(document.getElementById('perfilMatricula')) document.getElementById('perfilMatricula').value = perfilUsuario.matricula; 
-    if(document.getElementById('perfilSetorNivel')) document.getElementById('perfilSetorNivel').value = `${perfilUsuario.setor || 'SMMAM'} - ${(perfilUsuario.nivel || 'LEITOR').toUpperCase()}`; 
-    if(document.getElementById('perfilTelefone')) document.getElementById('perfilTelefone').value = perfilUsuario.telefone || ''; 
-}
-
-window.imprimirRegistro = function(id) {
-    const item = window.DB.find(i => i.firebaseId === id); if (!item) return; const s = item.setor || 'SMMAM';
-    if(s === 'MOBILIDADE') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Obras e Posturas"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Mal Deodoro, 70"; } else { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Fiscalização</strong><br>Rua 10 de Novembro, 190"; }
-    let pzTxt = "Imediato"; if(item.dataPrazo) { const d1 = new Date(item.dataNotif + "T00:00:00"); const d2 = new Date(item.dataPrazo + "T00:00:00"); pzTxt = `${Math.ceil(Math.abs(d2 - d1) / 86400000)} dias`; }
-    if(document.getElementById('pNum')) document.getElementById('pNum').innerText = item.numNotif; if(document.getElementById('pData')) document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); if(document.getElementById('pNome')) document.getElementById('pNome').innerText = (item.nome || '').toUpperCase(); if(document.getElementById('pDoc')) document.getElementById('pDoc').innerText = item.doc; if(document.getElementById('pEndereco')) document.getElementById('pEndereco').innerText = item.endereco || '---'; if(document.getElementById('pTelefone')) document.getElementById('pTelefone').innerText = item.telefone || '---'; if(document.getElementById('pBairro')) document.getElementById('pBairro').innerText = item.bairro || '---'; if(document.getElementById('pCep')) document.getElementById('pCep').innerText = item.cep || '---'; if(document.getElementById('pCadDistrito')) document.getElementById('pCadDistrito').innerText = item.cadDistrito || '---'; if(document.getElementById('pCadZona')) document.getElementById('pCadZona').innerText = item.cadZona || '---'; if(document.getElementById('pCadQuadra')) document.getElementById('pCadQuadra').innerText = item.cadQuadra || '---'; if(document.getElementById('pCadLote')) document.getElementById('pCadLote').innerText = item.cadLote || '---'; if(document.getElementById('pCadImob')) document.getElementById('pCadImob').innerText = item.cadImob || ''; if(document.getElementById('pLoteEndereco')) document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; if(document.getElementById('pRef')) document.getElementById('pRef').innerText = item.ref || '---'; if(document.getElementById('pObs')) document.getElementById('pObs').innerText = item.obs || '---'; if(document.getElementById('pFiscal')) document.getElementById('pFiscal').innerText = item.fiscal || ''; if(document.getElementById('pMatricula')) document.getElementById('pMatricula').innerText = item.matricula || ''; if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; if(document.getElementById('pIrrMato')) document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação' : '( ) Vegetação'; if(document.getElementById('pIrrResiduos')) document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos' : '( ) Resíduos'; if(document.getElementById('pIrrEntulhos')) document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; if(document.getElementById('pIrrOutros')) document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; if(document.getElementById('pLei5198')) document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) Art 6º, L 5.198' : '( ) Art 6º, L 5.198'; if(document.getElementById('pLc56')) document.getElementById('pLc56').innerText = item.lc56 ? '( X ) Art 41, LC 56' : '( ) Art 41, LC 56'; if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
-    window.print();
-}
-
-window.exportarExcel = function() {
-    if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data;Nome;CPF/CNPJ;Lote Irregular;Bairro;Prazo;Codigo AR;Status AR;Fiscal\n";
-    window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.dataPrazo ? i.dataPrazo.split('-').reverse().join('/') : ''};${i.codigoAR||''};${i.statusRetornoAR||''};${i.fiscal||''}\n`; });
-    const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `SMMAM_Relatorio_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
-}
-
-window.exportarVipp = function() {
-    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
-    if(m.length === 0) return alert('Selecione notificações.');
-
-    const lotePadrao = "LOTE" + new Date().toISOString().slice(0,10).replace(/-/g,'');
-    const loteId = prompt("Defina um identificador para este lote de postagem:", lotePadrao);
-    if(!loteId) return; 
-
-    const itens = window.DB.filter(item => m.includes(item.firebaseId));
-    let csv = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME_REM;ENDERECO_REM;NUMERO_REM;COMPLEMENTO_REM;BAIRRO_REM;CIDADE_REM;UF_REM;CEP_REM;TELEFONE_CELULAR_REM;E_MAIL_REM;CPF_CNPJ_REM;IE_RG_REM;FILLER_REM;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER_POST;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER_LOTE;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER_REV;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER_NF;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO\n";
-
-    itens.forEach(i => {
-        const limpa = (str) => (str || '').toString().replace(/["'*%?\\/><\[\]{}()#:,;|]/g, '').trim().toUpperCase();
-
-        const nome = limpa(i.nome).substring(0, 50) || 'NAO INFORMADO';
-        
-        let rawAddress = (i.endereco || 'NAO INFORMADO').toUpperCase();
-        let logradouro = rawAddress;
-        let numero = "SN";
-        let complemento = "";
-
-        if (rawAddress.includes(',')) {
-            let parts = rawAddress.split(',');
-            logradouro = parts[0].trim();
-            let rest = parts.slice(1).join(' ').trim();
-            let matchRest = rest.match(/^(\S+)(?:\s*(?:-|\s)\s*(.*))?$/);
-            if (matchRest) {
-                numero = matchRest[1].trim();
-                if (matchRest[2]) complemento = matchRest[2].trim();
-            } else {
-                numero = rest;
-            }
-        } else {
-            let match = rawAddress.match(/^(.*?)\s+(\d+[A-Z]?|S\/N|SN)(?:\s*[-]*\s*(.*))?$/);
-            if (match) {
-                logradouro = match[1].trim();
-                numero = match[2].trim();
-                if (match[3]) complemento = match[3].trim();
-            }
-        }
-
-        logradouro = limpa(logradouro).substring(0, 90) || 'NAO INFORMADO';
-        numero = limpa(numero).replace(/S\/N/g, 'SN').substring(0, 15) || "SN";
-        complemento = limpa(complemento).substring(0, 50);
-
-        const bairro = limpa(i.bairro).substring(0, 50) || 'NAO INFORMADO';
-        const cep = (i.cep || '').replace(/\D/g, '').padEnd(8, '0');
-        const celular = (i.telefone || '').replace(/\D/g, '').substring(0, 11);
-        
-        let cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
-        if (!cpfCnpj) { cpfCnpj = "00000000000"; }
-        
-        const cnpjPrefeitura = "87849923000109"; 
-
-        const obs1 = limpa(`NOTIFICACAO SMMAM ${i.numNotif || ''} - ${loteId}`).substring(0, 100);
-        const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
-
-        let row = [
-            nome, "", "", logradouro, numero, complemento, bairro, "BENTO GONCALVES", "RS", cep, "BR", celular, "", cpfCnpj, "", "", 
-            "PREFEITURA DE BENTO GONCALVES", "AV OSVALDO ARANHA", "1075", "", "CIDADE ALTA", "BENTO GONCALVES", "RS", "95700010", "", "", cnpjPrefeitura, "", "", 
-            "80810", ar, "100", "1", "1", "11", "16", "AR", "0", "0", "9912740833", "79980660", "", "", 
-            obs1, "", "", "", "1", "1", "", "", "LOTESMMAM", "", 
-            "", "", "", "", "", 
-            "", "", "", "", "", "", "", "", "", "", 
-            "Documentos Administrativos|1|100" 
-        ];
-
-        csv += row.join(";") + "\n";
-    });
-
-    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `VIPP_Importacao_${loteId}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-window.importarRetornoCorreios = function(file) {
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const text = e.target.result;
-            const rows = text.split('\n');
-            
-            if(!rows[0].toUpperCase().includes('REGISTRO')) {
-                return alert("Arquivo inválido! Certifique-se de exportar o arquivo CSV correto do VIPP.");
-            }
-
-            mostrarLoading(true, "Analisando Rastreios...");
-            const batch = writeBatch(db);
-            let atualizados = 0;
-
-            for (let i = 1; i < rows.length; i++) {
-                const cols = rows[i].split(';');
-                if(cols.length < 18) continue; 
-                
-                const obs = cols[16] ? cols[16].replace(/['"]/g, '').trim() : "";
-                const rastreio = cols[18] ? cols[18].replace(/['"]/g, '').trim() : "";
-                
-                if(rastreio && obs.includes('NOTIFICACAO SMMAM')) {
-                    const partes = obs.split('-');
-                    const stringNotif = partes[0]; 
-                    const numeroNotif = stringNotif.replace('NOTIFICACAO SMMAM', '').trim();
-                    
-                    const docRef = window.DB.find(d => d.numNotif === numeroNotif);
-                    
-                    if(docRef) {
-                        batch.update(doc(db, "notificacoes", docRef.firebaseId), { 
-                            codigoAR: rastreio, 
-                            statusRetornoAR: 'aguardando' 
-                        });
-                        atualizados++;
-                    }
-                }
-            }
-            await batch.commit();
-            await window.carregarDadosNuvem();
-            mostrarLoading(false);
-            alert(`Sincronização Concluída! ${atualizados} notificações foram atualizadas com o Código de Rastreio Oficial.`);
-        } catch(error) {
-            mostrarLoading(false);
-            alert("Erro ao ler arquivo: " + error.message);
-        }
-    };
-    reader.readAsText(file, 'utf-8'); 
-}
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
