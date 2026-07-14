@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=9">
+    <link rel="stylesheet" href="css/style.css?v=10">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -149,7 +149,7 @@
                                 <label>Nº Notificação *</label>
                                 <div style="display: flex; gap: 5px;">
                                     <input type="text" id="numNotif" placeholder="Ex: 0528B/2026" required style="width: 100%;">
-                                    <button type="button" class="btn-secondary" title="Sugerir Próximo" onclick="document.getElementById('numNotif').value = sugerirNumero('notificacao')" style="padding: 0 10px;">🪄</button>
+                                    <button type="button" class="btn-secondary" title="Sugerir Próximo Número" onclick="document.getElementById('numNotif').value = sugerirNumero('notificacao')" style="padding: 0 10px;">🪄</button>
                                 </div>
                             </div>
                             <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria"></div>
@@ -442,7 +442,7 @@
             <div id="view-configuracoes" class="view-section">
                 <h2>Painel do Arquiteto (Configurações Gerais)</h2>
                 
-                <!-- GESTÃO DINÂMICA DE INFRAÇÕES (O NOVO MOTOR) -->
+                <!-- GESTÃO DINÂMICA DE INFRAÇÕES -->
                 <div class="panel-container" style="margin-bottom: 20px; border: 2px solid #1b365d;">
                     <h3 style="margin-top: 0; color: #1b365d; font-size: 16px;">📚 Motor de Infrações e Base Legal</h3>
                     <p style="font-size: 12px; color: #475569; margin-bottom: 15px;">Cadastre aqui os dispositivos legais e infrações. Eles aparecerão automaticamente nos formulários e serão impressos nas notificações. No Auto de Infração, os valores de URM selecionados serão somados.</p>
@@ -509,6 +509,14 @@
                                 <input type="number" id="configURM" step="0.01" placeholder="Ex: 175.50">
                                 <button class="btn-primary" style="margin-top: 10px; width: 100%;">Salvar URM Oficial</button>
                             </div>
+                        </div>
+
+                        <!-- MÓDULO CORREIOS (RESTAURADO) -->
+                        <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
+                            <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
+                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API nativa agora.</p>
+                            <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
+                            <button id="btnForcarCorreios" class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
                         </div>
 
                         <!-- MÓDULO IPTU DELTA SYNC -->
