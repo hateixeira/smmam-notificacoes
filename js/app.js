@@ -28,12 +28,13 @@ window.itensFiltradosAtual = [];
 window.fotosTemp = [];
 window.resultadosConsultaAtual = []; 
 window.imovelSelecionadoParaNotificacao = null; 
+window.bancoInfracoesGlobais = []; // O Banco de Infrações Dinâmico
 
 window.colunaOrdenacao = '';
 window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
 window.filtroTipoDocumento = 'Todos'; 
-window.filtroProcessoAtual = 'ativo'; // Novo Filtro de Arquivados
+window.filtroProcessoAtual = 'ativo'; 
 window.valorURMGlobal = 0; 
 window.lastCheckedCheckbox = null;
 
@@ -66,6 +67,111 @@ window.mostrarToast = function(msg) {
     }
 }
 
+// MOTOR DINÂMICO DE INFRAÇÕES (Lê do Firebase)
+window.carregarInfracoesGlobais = async function() {
+    try {
+        const snap = await getDocs(collection(db, "infracoes_config"));
+        window.bancoInfracoesGlobais = [];
+        snap.forEach(d => { window.bancoInfracoesGlobais.push({ id: d.id, ...d.data() }); });
+        
+        // Ordenar alfabeticamente
+        window.bancoInfracoesGlobais.sort((a,b) => a.nome.localeCompare(b.nome));
+
+        renderizarCheckboxesInfracoes('containerInfracoesDinamicasNotif', 'notificacao');
+        renderizarCheckboxesInfracoes('containerInfracoesDinamicasAuto', 'auto');
+        
+        if(perfilUsuario && perfilUsuario.nivel === 'admin') window.renderizarTabelaInfracoesAdmin();
+    } catch(e) { console.error("Erro ao carregar infrações", e); }
+}
+
+function renderizarCheckboxesInfracoes(containerId, tipoForm) {
+    const container = document.getElementById(containerId);
+    if(!container) return;
+    container.innerHTML = '';
+    
+    if(window.bancoInfracoesGlobais.length === 0) {
+        container.innerHTML = '<span style="color:#64748b; font-size:11px;">⚠️ Nenhuma infração/lei cadastrada. Solicite ao Admin para cadastrar nas Configurações.</span>';
+        return;
+    }
+
+    window.bancoInfracoesGlobais.forEach(inf => {
+        const div = document.createElement('div');
+        div.className = 'checkbox-item';
+        div.style.marginBottom = '5px';
+        
+        // Se for o Auto, passa a função que soma o dinheiro
+        const funcOnChange = tipoForm === 'auto' ? `onchange="somarUrmsDinamicamente()"` : '';
+        
+        div.innerHTML = `
+            <input type="checkbox" id="infr_${tipoForm}_${inf.id}" value="${inf.id}" class="dinamico-chk-${tipoForm}" data-urm="${inf.multaUrm}" ${funcOnChange}>
+            <label for="infr_${tipoForm}_${inf.id}" style="display:inline-block; font-size:12px;">
+                <strong>${inf.nome}</strong> 
+                <span style="color:#64748b; font-size:10px; margin-left:5px;">(${inf.baseLegal}) - ${inf.multaUrm} URM</span>
+            </label>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// Soma URM automática no formulário do Auto
+window.somarUrmsDinamicamente = function() {
+    const checkboxes = document.querySelectorAll('.dinamico-chk-auto:checked');
+    let totalUrm = 0;
+    checkboxes.forEach(chk => { totalUrm += parseFloat(chk.getAttribute('data-urm') || 0); });
+    const campoUrm = document.getElementById('autoMultaURM');
+    if(campoUrm) {
+        campoUrm.value = totalUrm;
+        window.calcularMultaReais();
+    }
+}
+
+// ADM DE INFRAÇÕES
+window.salvarInfracaoNoBanco = async function() {
+    const nome = document.getElementById('adminNomeInfr').value.trim();
+    const baseLegal = document.getElementById('adminBaseInfr').value.trim();
+    const texto = document.getElementById('adminTextoInfr').value.trim();
+    const multaUrm = parseFloat(document.getElementById('adminUrmInfr').value) || 0;
+
+    if(!nome || !baseLegal || !texto) return alert("Preencha Nome, Base e Texto.");
+
+    mostrarLoading(true, "Salvando Lei/Infração...");
+    try {
+        await addDoc(collection(db, "infracoes_config"), { nome, baseLegal, textoPadrao: texto, multaUrm });
+        window.mostrarToast("Infração cadastrada com sucesso!");
+        document.getElementById('adminNomeInfr').value = '';
+        document.getElementById('adminBaseInfr').value = '';
+        document.getElementById('adminTextoInfr').value = '';
+        await window.carregarInfracoesGlobais();
+    } catch(e) { alert("Erro ao salvar: " + e.message); }
+    mostrarLoading(false);
+}
+
+window.removerInfracaoDoBanco = async function(id) {
+    if(!confirm("Atenção: Apagar essa infração removerá ela dos novos formulários. Os documentos antigos não serão alterados. Prosseguir?")) return;
+    try {
+        await deleteDoc(doc(db, "infracoes_config", id));
+        window.mostrarToast("Removida!");
+        await window.carregarInfracoesGlobais();
+    } catch(e) { alert("Erro ao remover."); }
+}
+
+window.renderizarTabelaInfracoesAdmin = function() {
+    const tbody = document.getElementById('tabelaInfracoesAdmin');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    window.bancoInfracoesGlobais.forEach(inf => {
+        tbody.innerHTML += `
+            <tr>
+                <td><strong>${inf.nome}</strong></td>
+                <td><span style="background:#e2e8f0; padding:3px 6px; font-size:11px; border-radius:4px;">${inf.baseLegal}</span></td>
+                <td style="font-size:11px; color:#475569;">${inf.textoPadrao}</td>
+                <td><strong>${inf.multaUrm}</strong></td>
+                <td><button class="btn-danger" style="padding:4px; font-size:10px;" onclick="removerInfracaoDoBanco('${inf.id}')">Excluir</button></td>
+            </tr>
+        `;
+    });
+}
+
 window.navegarPara = function(viewId) {
     document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active-view'));
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -81,7 +187,6 @@ window.navegarPara = function(viewId) {
     if(viewId === 'configuracoes' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarConfiguracoesAdmin();
     if(viewId === 'auditoria' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarAuditoria();
     
-    // Auto preenchimento ao abrir o formulário
     if(viewId === 'notificacoes' && !document.getElementById('editFirebaseIdNotif').value) {
         document.getElementById('numNotif').value = window.sugerirNumero('notificacao');
     }
@@ -140,7 +245,7 @@ window.toggleAuthMode = function() {
     }
 }
 
-// O ROBÔ DOS CORREIOS (NATIVO COM DELAY DE 3 SEGUNDOS PARA NÃO SER BANIDO)
+// O ROBÔ DOS CORREIOS (DIRETO BRASILAPI + FREIO DE 3s)
 window.verificarRotinaCorreios = async function(forcar = false) {
     if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; 
     
@@ -181,7 +286,6 @@ window.verificarRotinaCorreios = async function(forcar = false) {
                 consultados++;
                 let desc = "";
                 
-                // Chamada direta para a BrasilAPI (Custo zero, sem proxy)
                 try {
                     const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${d.codigoAR}`);
                     if (res.ok) {
@@ -198,7 +302,7 @@ window.verificarRotinaCorreios = async function(forcar = false) {
                     if (desc.includes('entregue')) {
                         novoStatus = 'entregue';
                         statusVida = 'recebido';
-                        if(!dtRecebimento) dtRecebimento = new Date().toISOString().slice(0, 10); // A mágica da API gravando o recebimento!
+                        if(!dtRecebimento) dtRecebimento = new Date().toISOString().slice(0, 10); 
                     }
                     else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
                     else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
@@ -219,12 +323,12 @@ window.verificarRotinaCorreios = async function(forcar = false) {
                     falhas++; 
                 }
                 
-                // O FREIO DE MÃO DEFINITIVO (3 SEGUNDOS ENTRE CARTAS PARA NÃO SER BLOQUEADO)
+                // FREIO DE 3 SEGUNDOS PARA NÃO SER BANIDO DA BRASILAPI
                 await new Promise(r => setTimeout(r, 3000));
             }
 
             if (forcar) {
-                alert(`✅ Verificação Concluída!\n\n${consultados} AR(s) processados.\n${atualizados} sofreram alterações de status.\n${falhas} falharam (API instável).`);
+                alert(`✅ Verificação Concluída!\n\n${consultados} AR(s) processados.\n${atualizados} sofreram alterações de status.\n${falhas} falharam (API bloqueou ou instável).`);
                 if(btnForcar) { btnForcar.innerText = "🔄 Forçar Sync da API"; btnForcar.disabled = false; }
             } else if (atualizados > 0) {
                 window.mostrarToast(`✅ Correios: ${atualizados} AR(s) atualizados no fundo!`);
@@ -246,7 +350,9 @@ onAuthStateChanged(auth, async (user) => {
             if(configSnap.exists()) window.valorURMGlobal = configSnap.data().valorURM || 0;
             const campoURM = document.getElementById('autoValorURMAtual');
             if(campoURM) campoURM.value = window.valorURMGlobal.toFixed(2);
-        } catch(e) { console.log("Aviso: Configurações não lidas."); }
+        } catch(e) {}
+
+        await window.carregarInfracoesGlobais(); // LÊ AS LEIS DINÂMICAS
 
         try {
             const userDocRef = doc(db, "usuarios", user.uid);
@@ -390,7 +496,6 @@ if(cadLoteInput) {
 window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     const span = document.getElementById(spanId); 
     if(!span) return;
-    
     span.innerHTML = `<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 5px; border-radius:4px;">⏳ API...</span>`;
     
     try {
@@ -429,7 +534,7 @@ window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
 
         if(docId) {
             const dadosAtualizacao = { statusRetornoAR: novoStatus, statusCorreiosTexto: desc.toUpperCase(), statusNotificacao: statusVida };
-            if(statusVida === 'recebido') dadosAtualizacao.dataRecebimento = dtReceb; // Injeta a data para iniciar o prazo
+            if(statusVida === 'recebido') dadosAtualizacao.dataRecebimento = dtReceb; 
             await updateDoc(doc(db, "notificacoes", docId), dadosAtualizacao);
         }
 
@@ -441,7 +546,7 @@ window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     }
 }
 
-// ATUALIZADA: BUSCA POR ENDEREÇO (ARRAY-CONTAINS)
+// ATUALIZADA: BUSCA POR ENDEREÇO (ARRAY-CONTAINS COM ALERTA INTELIGENTE)
 const limpaString = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^\w\s]/gi, '') : '';
 
 window.buscarConsultaLivre = async function(tipoBusca) {
@@ -537,13 +642,18 @@ window.buscarConsultaLivre = async function(tipoBusca) {
                 if(boxResult) boxResult.style.display = 'block'; 
                 window.mostrarToast("Busca concluída!");
             } else {
-                alert("A rua foi encontrada, mas o NÚMERO não corresponde a nenhum lote ou a importação IPTU (Delta Sync) precisa ser refeita para gerar o índice.");
+                alert("A rua foi encontrada, mas o NÚMERO não bateu. Tente buscar só pela rua sem o número.");
             }
         } else { 
-            alert("Nenhum imóvel localizado. Dica: Se for rua, certifique-se de refazer o Delta Sync do IPTU para o sistema criar as palavras-chave invisíveis."); 
+            // O ALERTA INTELIGENTE PARA O CASO DE FALTA DE ÍNDICE
+            if(tipoBusca === 'endereco') {
+                alert("Nenhuma rua encontrada.\n\n⚠️ ATENÇÃO: Se o endereço existe, você precisa ir na aba Configurações e rodar o 'INICIAR DELTA SYNC' do IPTU novamente para que o sistema crie as chaves de busca para endereços!");
+            } else {
+                alert("Nenhum imóvel localizado com os dados informados.");
+            }
         }
     } catch(e) { 
-        console.error(e); alert("Erro na consulta."); 
+        console.error(e); alert("Erro na consulta técnica: " + e.message); 
     }
     mostrarLoading(false);
 }
@@ -658,7 +768,7 @@ window.renderizarGraficos = function() {
     let stNoPrazo = 0; let stVencido = 0; let stAutos = 0; let totalMultasReais = 0;
 
     window.DB.forEach(doc => { 
-        if(doc.statusProcesso === 'arquivado') return; // Gráficos ignoram arquivados
+        if(doc.statusProcesso === 'arquivado') return; 
         let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO'; countBairros[b] = (countBairros[b] || 0) + 1;
         let f = (doc.fiscal && doc.fiscal.trim() !== '') ? doc.fiscal.toUpperCase() : 'NÃO IDENTIFICADO'; countFiscais[f] = (countFiscais[f] || 0) + 1;
 
@@ -668,13 +778,6 @@ window.renderizarGraficos = function() {
         } else if(doc.dataRecebimento && doc.prazoDias) { 
             const dataVenc = calcularDataVencimento(doc.dataRecebimento, doc.prazoDias);
             if(dataVenc) { const pz = new Date(dataVenc + "T00:00:00"); if(pz < hoje) stVencido++; else stNoPrazo++; }
-        }
-
-        if(doc.tipoDocumento !== 'auto') {
-            if(doc.irrMato) countTipos['Mato/Vegetação']++;
-            if(doc.irrResiduos) countTipos['Resíduos/Entulhos']++;
-            if(doc.irrEntulhos) countTipos['Obra/Posturas']++;
-            if(doc.irrOutros) countTipos['Outros']++;
         }
 
         if(doc.dataNotif) { let mesAno = doc.dataNotif.substring(0, 7); countMeses[mesAno] = (countMeses[mesAno] || 0) + 1; }
@@ -731,100 +834,6 @@ window.baixarBackupLocal = function() {
     a.download = `Backup_SMMAM_Notificacoes_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-}
-
-// ADMIN: GESTÃO DE USUÁRIOS
-window.usuariosEmMemoria = [];
-window.carregarConfiguracoesAdmin = async function() {
-    const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); if(corpoUsuarios) corpoUsuarios.innerHTML = '';
-    window.usuariosEmMemoria = [];
-    try {
-        const usersSnapshot = await getDocs(collection(db, "usuarios"));
-        usersSnapshot.forEach(docSnap => {
-            const u = docSnap.data(); const uid = docSnap.id;
-            u.uid = uid; window.usuariosEmMemoria.push(u);
-            const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
-            const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
-            if(corpoUsuarios) corpoUsuarios.innerHTML += `<tr><td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td><span style="background:#e2e8f0; padding:3px; border-radius:4px; font-size:11px;">${u.setor || 'SMMAM'}</span></td><td>${u.email}</td><td>${selectStatus}</td><td>${selectNivel}</td><td><button style="font-size:10px; padding:4px;" class="btn-primary" onclick="abrirModalEdicaoUsuario('${uid}')">✏️ Editar</button> <button style="font-size:10px; padding:4px;" class="btn-secondary" onclick="enviarResetSenha('${u.email}')">🔑 Reset Senha</button></td></tr>`;
-        });
-        window.carregarListaVip();
-    } catch(e) {}
-}
-
-window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) { try { await updateDoc(doc(db, "usuarios", uid), { [campo]: valorNovo }); window.mostrarToast(`Atualizado!`); if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`; } catch(e) { alert("Sem permissão."); } }
-
-window.abrirModalEdicaoUsuario = function(uid) {
-    const u = window.usuariosEmMemoria.find(user => user.uid === uid);
-    if(!u) return;
-    document.getElementById('editUserId').value = u.uid;
-    document.getElementById('editUserNome').value = u.nome || '';
-    document.getElementById('editUserCargo').value = u.cargo || '';
-    document.getElementById('editUserSetor').value = u.setor || 'SMMAM';
-    document.getElementById('editUserTelefone').value = u.telefone || '';
-    document.getElementById('editUserMatricula').value = u.matricula || '';
-    document.getElementById('modal-edicao-usuario').style.display = 'flex';
-}
-window.fecharModalEdicaoUsuario = function() { document.getElementById('modal-edicao-usuario').style.display = 'none'; }
-window.salvarEdicaoUsuario = async function() {
-    const uid = document.getElementById('editUserId').value;
-    const novosDados = {
-        nome: document.getElementById('editUserNome').value,
-        cargo: document.getElementById('editUserCargo').value,
-        setor: document.getElementById('editUserSetor').value,
-        telefone: document.getElementById('editUserTelefone').value,
-        matricula: document.getElementById('editUserMatricula').value
-    };
-    mostrarLoading(true);
-    try {
-        await updateDoc(doc(db, "usuarios", uid), novosDados);
-        window.mostrarToast("Dados do servidor atualizados!");
-        window.fecharModalEdicaoUsuario();
-        window.carregarConfiguracoesAdmin();
-    } catch(e) { alert("Erro ao editar."); }
-    mostrarLoading(false);
-}
-
-window.enviarResetSenha = function(email) {
-    if(confirm(`Enviar link oficial de troca de senha para ${email}?`)) {
-        sendPasswordResetEmail(auth, email).then(() => window.mostrarToast("E-mail de reset enviado com sucesso!")).catch((e)=>alert(e.message));
-    }
-}
-
-// LISTA VIP
-window.carregarListaVip = async function() {
-    const ul = document.getElementById('listaVipEmails'); if(!ul) return; ul.innerHTML = '';
-    try {
-        const snap = await getDoc(doc(db, "configuracoes", "lista_vip"));
-        if(snap.exists() && snap.data().emails) {
-            snap.data().emails.forEach(e => { ul.innerHTML += `<li>${e}</li>`; });
-        }
-    } catch(e){}
-}
-window.adicionarEmailVip = async function() {
-    const email = document.getElementById('adminVipEmail').value.trim().toLowerCase();
-    if(!email) return;
-    try {
-        const ref = doc(db, "configuracoes", "lista_vip");
-        const snap = await getDoc(ref);
-        let lista = snap.exists() ? (snap.data().emails || []) : [];
-        if(!lista.includes(email)) {
-            lista.push(email);
-            await setDoc(ref, { emails: lista }, { merge: true });
-            window.mostrarToast("E-mail autorizado na Lista VIP!");
-            document.getElementById('adminVipEmail').value = '';
-            window.carregarListaVip();
-        } else { alert("E-mail já está na lista."); }
-    } catch(e) { alert("Erro ao adicionar VIP"); }
-}
-
-const btnSalvarUrm = document.querySelector('#configURM')?.nextElementSibling;
-if(btnSalvarUrm) {
-    btnSalvarUrm.addEventListener('click', async function() {
-        const valor = parseFloat(document.getElementById('configURM').value); if(!valor || valor <= 0) return alert("Valor inválido.");
-        mostrarLoading(true);
-        try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; const elAtual = document.getElementById('autoValorURMAtual'); if(elAtual) elAtual.value = valor.toFixed(2); window.mostrarToast("Valor URM salvo!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
-        mostrarLoading(false);
-    });
 }
 
 // DELTA SYNC IPTU
@@ -928,14 +937,14 @@ window.carregarDadosNuvem = async function() {
         querySnapshot.forEach((documento) => { 
             let data = documento.data(); data.firebaseId = documento.id; 
             if(!data.tipoDocumento) data.tipoDocumento = 'notificacao';
-            if(!data.statusProcesso) data.statusProcesso = 'ativo'; // Padrão
+            if(!data.statusProcesso) data.statusProcesso = 'ativo'; 
             if ((data.setor || 'SMMAM') === meuSetor || perfilUsuario.nivel === 'admin') window.DB.push(data); 
         });
         window.renderizarPainel();
     } catch (e) {} mostrarLoading(false);
 }
 
-// SALVAR DOCUMENTO (NOVO WORKFLOW E PRAZOS)
+// SALVAR DOCUMENTO COM INFRAÇÕES DINÂMICAS
 window.salvarDocumento = async function(event, tipoDoc) {
     event.preventDefault(); if(perfilUsuario.nivel === 'leitor') return alert("Leitores não salvam.");
     mostrarLoading(true, "Verificando e Salvando...");
@@ -944,13 +953,16 @@ window.salvarDocumento = async function(event, tipoDoc) {
     let numeroOriginal = '';
     const anoAtual = new Date().getFullYear();
 
+    // Ler as infrações dinâmicas marcadas
+    const infracoesMarcadas = [];
+    document.querySelectorAll(`.dinamico-chk-${tipoDoc}:checked`).forEach(chk => { infracoesMarcadas.push(chk.value); });
+
     if(tipoDoc === 'notificacao') {
         btnForm = document.getElementById('btnSalvarNotif'); editId = document.getElementById('editFirebaseIdNotif').value;
         numeroOriginal = document.getElementById('numNotif').value.trim();
         if(!numeroOriginal.includes('/')) numeroOriginal += `/${anoAtual}`;
         document.getElementById('numNotif').value = numeroOriginal; 
 
-        // Lógica de Status da Notificação
         let dtRecebimento = document.getElementById('dataRecebimento').value;
         let tipoAR = document.getElementById('tipoAR').checked;
         let codAR = document.getElementById('codigoAR').value.toUpperCase();
@@ -966,14 +978,14 @@ window.salvarDocumento = async function(event, tipoDoc) {
             if (dtRecebimento && nomeNotificado && docNotificado) statusVida = 'recebido';
         }
 
-        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, numNotif: numeroOriginal, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: document.getElementById('prazoDias').value, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, irrMato: document.getElementById('irrMato').checked, irrResiduos: document.getElementById('irrResiduos').checked, irrEntulhos: document.getElementById('irrEntulhos').checked, irrOutros: document.getElementById('irrOutros').checked, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, lei5198: document.getElementById('lei5198').checked, lc56: document.getElementById('lc56').checked, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
+        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, numNotif: numeroOriginal, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: document.getElementById('prazoDias').value, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
     } else {
         btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value;
         numeroOriginal = document.getElementById('autoNum').value.trim();
         if(!numeroOriginal.includes('/')) numeroOriginal += `/${anoAtual}`;
         document.getElementById('autoNum').value = numeroOriginal;
 
-        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', numNotif: numeroOriginal, dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
+        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', numNotif: numeroOriginal, dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, arrayInfracoes: infracoesMarcadas, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
     }
     
     if(btnForm) btnForm.disabled = true;
@@ -1108,7 +1120,6 @@ window.renderizarPainel = function() {
             botaoArquivar = '';
             statusHtml += `<div style="background:#f1f5f9; padding:6px; border-radius:4px; text-align:center; color:#475569; font-weight:bold; font-size:11px;">📂 ARQUIVADO<br><small style="font-weight:normal;">${item.motivoArquivamento || ''}</small></div>`;
         } else {
-            // RENDERIZAÇÃO DO CICLO DE VIDA E AR
             if(item.statusNotificacao === 'rascunho') {
                 statusHtml += `<div style="background:#fef3c7; color:#b45309; padding:4px; text-align:center; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #fde68a;">📝 RASCUNHO</div>`;
             } else if (item.statusNotificacao === 'enviado_ar') {
@@ -1127,7 +1138,6 @@ window.renderizarPainel = function() {
                 </div>`; 
             }
 
-            // CALCULO DO PRAZO
             if(item.tipoDocumento !== 'auto') {
                 if(item.dataRecebimento && item.prazoDias) { 
                     const dataVenc = calcularDataVencimento(item.dataRecebimento, item.prazoDias);
@@ -1164,6 +1174,9 @@ window.carregarParaEditar = async function(id) {
         if(document.getElementById('autoEndOcorrencia')) document.getElementById('autoEndOcorrencia').value = item.loteEndereco || ''; 
         if(document.getElementById('autoDescricaoLei')) document.getElementById('autoDescricaoLei').value = item.autoDescricaoLei || ''; 
         if(document.getElementById('autoMultaURM')) document.getElementById('autoMultaURM').value = item.autoMultaURM || ''; 
+        
+        document.querySelectorAll('.dinamico-chk-auto').forEach(chk => { chk.checked = (item.arrayInfracoes || []).includes(chk.value); });
+        
         window.calcularMultaReais();
         
         window.fotosTemp = []; 
@@ -1198,14 +1211,12 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('cadLote')) document.getElementById('cadLote').value = item.cadLote || ''; 
     if(document.getElementById('cadImob')) document.getElementById('cadImob').value = item.cadImob || ''; 
     if(document.getElementById('loteEndereco')) document.getElementById('loteEndereco').value = item.loteEndereco || ''; 
-    if(document.getElementById('irrMato')) document.getElementById('irrMato').checked = item.irrMato; 
-    if(document.getElementById('irrResiduos')) document.getElementById('irrResiduos').checked = item.irrResiduos; 
-    if(document.getElementById('irrEntulhos')) document.getElementById('irrEntulhos').checked = item.irrEntulhos; 
-    if(document.getElementById('irrOutros')) document.getElementById('irrOutros').checked = item.irrOutros; 
+    
+    // Suporte Legado (antigos checkboxes hardcoded) + Novo Dinâmico
+    document.querySelectorAll('.dinamico-chk-notificacao').forEach(chk => { chk.checked = (item.arrayInfracoes || []).includes(chk.value); });
+    
     if(document.getElementById('ref')) document.getElementById('ref').value = item.ref || ''; 
     if(document.getElementById('obs')) document.getElementById('obs').value = item.obs || ''; 
-    if(document.getElementById('lei5198')) document.getElementById('lei5198').checked = item.lei5198; 
-    if(document.getElementById('lc56')) document.getElementById('lc56').checked = item.lc56;
     
     window.fotosTemp = []; 
     if(document.getElementById('indicadorFotosNotif')) document.getElementById('indicadorFotosNotif').style.display = 'inline-block';
@@ -1241,6 +1252,7 @@ window.carregarDadosPerfil = function() {
     if(document.getElementById('perfilTelefone')) document.getElementById('perfilTelefone').value = perfilUsuario.telefone || ''; 
 }
 
+// IMPRESSÃO DINÂMICA COM O LAYOUT ANTIGO RESTAURADO E MOTOR DE LEIS NOVO
 window.imprimirRegistro = function(id) {
     const item = window.DB.find(i => i.firebaseId === id); if (!item) return; const s = item.setor || 'SMMAM';
     if(s === 'MOBILIDADE') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Obras e Posturas"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Mal Deodoro, 70"; } else { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Fiscalização</strong><br>Rua 10 de Novembro, 190"; }
@@ -1251,7 +1263,6 @@ window.imprimirRegistro = function(id) {
     if(document.getElementById('pNum')) document.getElementById('pNum').innerText = item.numNotif; 
     if(document.getElementById('pData')) document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); 
     
-    // Tratamento de Rascunho para impressão
     if(document.getElementById('pNome')) document.getElementById('pNome').innerText = (item.nome || '_____________________________________________________').toUpperCase(); 
     if(document.getElementById('pDoc')) document.getElementById('pDoc').innerText = item.doc || '_________________________'; 
     if(document.getElementById('pDataRecebimentoPrint')) document.getElementById('pDataRecebimentoPrint').innerText = item.dataRecebimento ? `Data de Recebimento: ${item.dataRecebimento.split('-').reverse().join('/')}` : 'Data de Recebimento: _____/_____/_________';
@@ -1273,15 +1284,36 @@ window.imprimirRegistro = function(id) {
     
     if(document.getElementById('pCidadePrint')) document.getElementById('pCidadePrint').innerText = item.cidade || 'BENTO GONÇALVES';
     if(document.getElementById('pUfPrint')) document.getElementById('pUfPrint').innerText = item.uf || 'RS';
+    if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Notificação Presencial' : '( ) Notificação Presencial'; 
+    if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Notificado por AR' : '( ) Notificado por AR'; 
 
-    if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Presencial' : '( ) Presencial'; 
-    if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Por AR' : '( ) Por AR'; 
-    if(document.getElementById('pIrrMato')) document.getElementById('pIrrMato').innerText = item.irrMato ? '( X ) Vegetação' : '( ) Vegetação'; 
-    if(document.getElementById('pIrrResiduos')) document.getElementById('pIrrResiduos').innerText = item.irrResiduos ? '( X ) Resíduos' : '( ) Resíduos'; 
-    if(document.getElementById('pIrrEntulhos')) document.getElementById('pIrrEntulhos').innerText = item.irrEntulhos ? '( X ) Obra / Posturas' : '( ) Obra / Posturas'; 
-    if(document.getElementById('pIrrOutros')) document.getElementById('pIrrOutros').innerText = item.irrOutros ? '( X ) Outros' : '( ) Outros'; 
-    if(document.getElementById('pLei5198')) document.getElementById('pLei5198').innerText = item.lei5198 ? '( X ) Art 6º, L 5.198' : '( ) Art 6º, L 5.198'; 
-    if(document.getElementById('pLc56')) document.getElementById('pLc56').innerText = item.lc56 ? '( X ) Art 41, LC 56' : '( ) Art 41, LC 56'; 
+    // Renderização Dinâmica do Layout Original de Caixinhas
+    const boxInfr = document.getElementById('boxInfracoesImpresso');
+    const listTextos = document.getElementById('listaTextosLegaisImpresso');
+    if(boxInfr && listTextos) {
+        boxInfr.innerHTML = '';
+        listTextos.innerHTML = '';
+        
+        let marcadasLegado = [];
+        if(item.irrMato) marcadasLegado.push('Vegetação');
+        if(item.irrResiduos) marcadasLegado.push('Resíduos');
+        if(item.irrEntulhos) marcadasLegado.push('Obras');
+        if(item.irrOutros) marcadasLegado.push('Outros');
+
+        window.bancoInfracoesGlobais.forEach(inf => {
+            const isChecked = (item.arrayInfracoes && item.arrayInfracoes.includes(inf.id)) || marcadasLegado.includes(inf.nome);
+            const marcaX = isChecked ? '( X )' : '(   )';
+            boxInfr.innerHTML += `<div style="font-weight:bold; font-size:11px; margin-right:15px;">${marcaX} ${inf.nome}</div>`;
+            
+            if(isChecked) {
+                listTextos.innerHTML += `<li><strong>${inf.baseLegal}:</strong> ${inf.textoPadrao}</li>`;
+            }
+        });
+        
+        // Compatibilidade Legado de Texto Padrão caso o banco dinâmico esteja vazio
+        if(item.lei5198 && window.bancoInfracoesGlobais.length === 0) listTextos.innerHTML += `<li>Vegetais arbóreos, lenhosos e nativos deverão ser preservados. Fica proibido o emprego do fogo, bem como, a utilização da capina química para limpeza dos lotes. Após realizada limpeza, fica o notificado obrigado a apresentar levantamento fotográfico.</li>`;
+    }
+
     if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
     window.print();
 }
