@@ -523,7 +523,7 @@
                                 <strong>Custos (Plano Spark):</strong> Limite de 50.000 leituras/dia e 20.000 escritas/dia.<br>
                                 <strong>Segurança:</strong> Firebase Rules bloqueiam usuários não aprovados direto no backend.<br>
                                 <strong>Regra de Duplicidade:</strong> Sistema auto-injeta "/ANO" no registro e bloqueia salvamento de duplicados.<br>
-                                <strong>Automação Correios:</strong> O primeiro acesso após as 08h e 13h dispara um robô invisível em *background* para varrer os status na BrasilAPI/Linketrack. Feedback no Tooltip (mouse-over).<br>
+                                <strong>Automação Correios:</strong> O primeiro acesso após as 08h e 13h dispara um robô invisível em *background* para varrer os status via Proxy Público para contornar CORS e rate-limits. Feedback no Tooltip (mouse-over).<br>
                                 <strong>Busca Endereço:</strong> O Delta Sync fraciona o endereço em 'logradouro_keywords' para permitir a busca (array-contains) instantânea.<br>
                                 <strong>Cofre IPTU:</strong> A sincronização usa *Client-side Diffing* na memória RAM para comparar o arquivo localmente antes de enviar os deltas.<br>
                             </div>
