@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=6">
+    <link rel="stylesheet" href="css/style.css?v=7">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -104,7 +104,7 @@
                                 <button class="filter-type-btn" onclick="aplicarFiltroTipo('auto', this)">🚨 Só Autos</button>
                             </div>
                         </div>
-                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por rua, número, nome, lote, código AR..." onkeyup="renderizarPainel()">
+                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por rua, número, nome, lote, código AR..." onkeyup="onBuscaKeyUp()">
                         <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
                             <div class="filter-bar">
                                 <span style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 5px;">FILTROS:</span>
@@ -148,7 +148,7 @@
                     <form id="notifForm" onsubmit="salvarDocumento(event, 'notificacao')">
                         <input type="hidden" id="editFirebaseIdNotif">
                         <div class="form-row">
-                            <div class="form-group" style="flex: 1.2;"><label>Nº Notificação *</label><input type="text" id="numNotif" required></div>
+                            <div class="form-group" style="flex: 1.2;"><label>Nº Notificação *</label><input type="text" id="numNotif" placeholder="Ex: 0528B (O ano será adicionado auto.)" required></div>
                             <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria"></div>
                             <div class="form-group" style="flex: 1.5;"><label>Data *</label><input type="date" id="dataNotif" required></div>
                         </div>
@@ -252,7 +252,7 @@
                         <input type="hidden" id="editFirebaseIdAuto">
                         
                         <div class="form-row">
-                            <div class="form-group"><label>Nº do Auto *</label><input type="text" id="autoNum" required></div>
+                            <div class="form-group"><label>Nº do Auto *</label><input type="text" id="autoNum" placeholder="Ex: 105 (O ano será adicionado auto.)" required></div>
                             <div class="form-group"><label>Data da Autuação *</label><input type="date" id="autoData" required></div>
                         </div>
                         
@@ -339,7 +339,7 @@
                         <div class="form-row" style="align-items: flex-end;">
                             <div class="form-group" style="flex: 2;">
                                 <label>Nome da Rua (Logradouro)</label>
-                                <input type="text" id="consRua" placeholder="Ex: RUA LIVRAMENTO">
+                                <input type="text" id="consRua" placeholder="Ex: LIVRAMENTO">
                             </div>
                             <div class="form-group" style="flex: 1;">
                                 <label>Número</label>
@@ -503,7 +503,7 @@
                             <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
                             <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API agora.</p>
                             <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
-                            <button class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
+                            <button id="btnForcarCorreios" class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
                         </div>
 
                         <!-- MÓDULO IPTU DELTA SYNC -->
@@ -518,15 +518,17 @@
                         <!-- DOCUMENTAÇÃO DO SISTEMA -->
                         <div class="panel-container" style="background: #1e293b; color: white;">
                             <h3 style="margin-top: 0; color: #38bdf8; font-size: 15px;">📖 Manual da Arquitetura</h3>
-                            <div style="font-size:11px; line-height:1.5; color:#cbd5e1; max-height:150px; overflow-y:auto; padding-right:5px;">
-                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore.<br>
+                            <div style="font-size:11px; line-height:1.5; color:#cbd5e1; max-height:150px; overflow-y:auto; padding-right:5px; margin-bottom: 10px;">
+                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore (NoSQL).<br>
                                 <strong>Custos (Plano Spark):</strong> Limite de 50.000 leituras/dia e 20.000 escritas/dia.<br>
                                 <strong>Segurança:</strong> Firebase Rules bloqueiam usuários não aprovados direto no backend.<br>
-                                <strong>Automação Correios:</strong> O primeiro acesso após as 08h e 13h dispara um robô invisível em *background* para varrer os status na BrasilAPI/Linketrack sem custo de servidor.<br>
-                                <strong>Cofre IPTU:</strong> A sincronização usa *Client-side Diffing* para comparar o arquivo localmente antes de enviar.<br>
-                                <hr style="border-color:#334155; margin:10px 0;">
-                                <button class="btn-danger" style="width: 100%; font-size: 10px; padding: 5px;" onclick="corrigirEnderecosAntigos()">🛠️ Injetar Cidade/UF nos Imóveis Antigos</button>
+                                <strong>Regra de Duplicidade:</strong> Sistema auto-injeta "/ANO" no registro e bloqueia salvamento de duplicados.<br>
+                                <strong>Automação Correios:</strong> O primeiro acesso após as 08h e 13h dispara um robô invisível em *background* para varrer os status na BrasilAPI/Linketrack. Feedback no Tooltip (mouse-over).<br>
+                                <strong>Busca Endereço:</strong> O Delta Sync fraciona o endereço em 'logradouro_keywords' para permitir a busca (array-contains) instantânea.<br>
+                                <strong>Cofre IPTU:</strong> A sincronização usa *Client-side Diffing* na memória RAM para comparar o arquivo localmente antes de enviar os deltas.<br>
                             </div>
+                            <button class="btn-success" style="width: 100%; font-size: 10px; padding: 5px; margin-bottom: 5px;" onclick="baixarBackupLocal()">📥 Baixar Backup Local JSON</button>
+                            <button class="btn-danger" style="width: 100%; font-size: 10px; padding: 5px;" onclick="corrigirEnderecosAntigos()">🛠️ Injetar Cidade/UF nos Imóveis Antigos</button>
                         </div>
 
                     </div>
