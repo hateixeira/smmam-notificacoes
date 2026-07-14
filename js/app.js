@@ -16,7 +16,6 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const notificacoesRef = collection(db, "notificacoes");
 
-// ATIVANDO PERSISTÊNCIA OFFLINE
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code == 'failed-precondition') console.log('Persistência: Múltiplas abas abertas.');
     else if (err.code == 'unimplemented') console.log('Persistência: Navegador não suporta.');
@@ -93,7 +92,7 @@ window.toggleAuthMode = function() {
     }
 }
 
-// O ROBÔ DOS CORREIOS (LAZY CRON AUTOMATION)
+// O ROBÔ DOS CORREIOS ATUALIZADO (MOTOR DUPLO)
 async function verificarRotinaCorreios() {
     if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; 
     
@@ -116,7 +115,7 @@ async function verificarRotinaCorreios() {
         if (dadosAuto[campoTurno] !== dataHoje) {
             await setDoc(autoRef, { [campoTurno]: dataHoje }, { merge: true });
             
-            console.log(`[LazyCron] Iniciando rastreamento de ARs no turno: ${turno}`);
+            console.log(`[LazyCron] Iniciando rastreamento Motor Duplo: ${turno}`);
             window.mostrarToast(`🔄 Robô em ação: Atualizando status dos ARs em 2º plano...`);
 
             const q = query(collection(db, "notificacoes"), where("codigoAR", "!=", ""));
@@ -129,32 +128,47 @@ async function verificarRotinaCorreios() {
                 if (!d.codigoAR || d.codigoAR.length < 13) continue;
                 if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
 
+                let desc = "";
+                
+                // 1. Tenta BrasilAPI
                 try {
                     const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${d.codigoAR}`);
-                    if (!res.ok) continue; 
-                    
-                    const apiData = await res.json();
-                    if (apiData.eventos && apiData.eventos.length > 0) {
-                        const ultimoEvento = apiData.eventos[0];
-                        const desc = ultimoEvento.descricao.toLowerCase();
-                        let novoStatus = d.statusRetornoAR || 'aguardando';
-
-                        if (desc.includes('entregue')) novoStatus = 'entregue';
-                        else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
-                        else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
-                        else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
-                        else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
-                        else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
-
-                        if (novoStatus !== d.statusRetornoAR || ultimoEvento.descricao !== d.statusCorreiosTexto) {
-                            await updateDoc(document.ref, {
-                                statusRetornoAR: novoStatus,
-                                statusCorreiosTexto: ultimoEvento.descricao
-                            });
-                            atualizados++;
-                        }
+                    if (res.ok) {
+                        const apiData = await res.json();
+                        if (apiData.eventos && apiData.eventos.length > 0) desc = apiData.eventos[0].descricao.toLowerCase();
                     }
-                } catch (err) { }
+                } catch(e) {}
+
+                // 2. Se falhou, tenta Linketrack (Plano B)
+                if (!desc) {
+                    try {
+                        const res2 = await fetch(`https://api.linketrack.com/track/json?user=teste&token=1abcd00b2731640e886fb41a8a9671ad1434c599dbaa0a0de9a5aa619f29a83f&codigo=${d.codigoAR}`);
+                        if (res2.ok) {
+                            const data2 = await res2.json();
+                            if (data2.eventos && data2.eventos.length > 0) desc = data2.eventos[0].status.toLowerCase();
+                        }
+                    } catch(e) {}
+                }
+
+                if (desc) {
+                    let novoStatus = d.statusRetornoAR || 'aguardando';
+
+                    if (desc.includes('entregue')) novoStatus = 'entregue';
+                    else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
+                    else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
+                    else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
+                    else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
+                    else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
+
+                    if (novoStatus !== d.statusRetornoAR || desc.toUpperCase() !== d.statusCorreiosTexto) {
+                        await updateDoc(document.ref, {
+                            statusRetornoAR: novoStatus,
+                            statusCorreiosTexto: desc.toUpperCase()
+                        });
+                        atualizados++;
+                    }
+                }
+                
                 await new Promise(r => setTimeout(r, 600));
             }
 
@@ -285,34 +299,62 @@ if(cadLoteInput) {
     });
 }
 
-// NOVA FUNÇÃO DE API (TRATAMENTO DE 404 E 500)
-window.buscarStatusCorreios = async function(codigoAR, spanId) {
+// AÇÃO MANUAL DA TABELA: ATUALIZA BANCO DE DADOS EM TEMPO REAL COM MOTOR DUPLO
+window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     const span = document.getElementById(spanId); 
     if(!span) return;
     
     span.innerHTML = `<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 5px; border-radius:4px;">⏳ Consultando API...</span>`;
     
     try {
-        const response = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
-        
-        if (response.status === 404) {
-            span.innerHTML = `<span style="background:#fef3c7; color:#b45309; border: 1px solid #f59e0b; font-size:10px; padding:2px 5px; border-radius:4px;">🟡 Aguardando Bipar</span>`;
+        let desc = "";
+
+        // 1. Tenta BrasilAPI
+        try {
+            const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.eventos && data.eventos.length > 0) desc = data.eventos[0].descricao.toLowerCase();
+            }
+        } catch(e) {}
+
+        // 2. Se falhou, tenta Linketrack
+        if (!desc) {
+            try {
+                const res2 = await fetch(`https://api.linketrack.com/track/json?user=teste&token=1abcd00b2731640e886fb41a8a9671ad1434c599dbaa0a0de9a5aa619f29a83f&codigo=${codigoAR}`);
+                if (res2.ok) {
+                    const data2 = await res2.json();
+                    if (data2.eventos && data2.eventos.length > 0) desc = data2.eventos[0].status.toLowerCase();
+                }
+            } catch(e) {}
+        }
+
+        if (!desc) {
+            span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ API Falhou (Ver)</a>`; 
             return;
         }
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        
-        const data = await response.json();
-        
-        if (data.isDelivered) { 
-            span.innerHTML = `<span style="background:#dcfce7; color:#166534; border: 1px solid #22c55e; font-size:10px; padding:2px 5px; border-radius:4px;">📬 Entregue (API)</span>`; 
-        } else { 
-            span.innerHTML = `<span style="background:#eff6ff; color:#1d4ed8; border: 1px solid #3b82f6; font-size:10px; padding:2px 5px; border-radius:4px;">🚚 Em Trânsito (API)</span>`; 
+        let novoStatus = 'aguardando';
+        if (desc.includes('entregue')) novoStatus = 'entregue';
+        else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
+        else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
+        else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
+        else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
+        else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
+
+        // O SEGREDO: Atualiza o Banco de Dados definitivamente!
+        if(docId) {
+            await updateDoc(doc(db, "notificacoes", docId), {
+                statusRetornoAR: novoStatus,
+                statusCorreiosTexto: desc.toUpperCase()
+            });
         }
+
+        span.innerHTML = `<span style="color:green; font-weight:bold;">✅ Salvo!</span>`;
+        setTimeout(() => { window.carregarDadosNuvem(); }, 800);
         
     } catch(e) { 
-        console.error(`Falha no Rastreio do AR ${codigoAR}:`, e.message);
-        span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ API Falhou (Ver Link ↗)</a>`; 
+        span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ API Falhou</a>`; 
     }
 }
 
@@ -711,7 +753,6 @@ window.renderizarPainel = function() {
     let filtrados = window.DB;
     if(window.filtroTipoDocumento !== 'Todos') filtrados = filtrados.filter(item => item.tipoDocumento === window.filtroTipoDocumento);
     
-    // Pesquisa Híbrida: Busca em todo o endereço, nome e lote
     filtrados = filtrados.filter(item => { 
         const stringGeral = `${item.nome || ''} ${item.numNotif || ''} ${item.loteEndereco || ''} ${item.endereco || ''} ${item.bairro || ''} ${item.procOuvidoria || ''} ${item.codigoAR || ''}`.toLowerCase();
         return stringGeral.includes(filtroTexto); 
@@ -726,9 +767,8 @@ window.renderizarPainel = function() {
         let statusHtml = ''; let botaoAutuar = '';
         const badgeTipo = item.tipoDocumento === 'auto' ? `<span class="badge-tipo-auto">MULTA / AUTO</span>` : `<span class="badge-tipo-notif">NOTIFICAÇÃO</span>`;
         
-        // RENDERIZAÇÃO INTELIGENTE DO AR COM AS 7 CORES
         if(item.codigoAR) { 
-            let corFisica = 'border-color:#cbd5e1; background:#f8fafc; color:#475569;'; // Padrão: Aguardando Postagem
+            let corFisica = 'border-color:#cbd5e1; background:#f8fafc; color:#475569;'; 
             let txtStatus = '🟡 Aguardando';
             const st = item.statusRetornoAR;
             
@@ -744,7 +784,7 @@ window.renderizarPainel = function() {
             statusHtml += `
             <div style="${corFisica} padding:6px; border-radius:4px; border:1px solid; text-align:center; min-width: 140px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                 <div style="font-size:11px; font-weight:bold; margin-bottom:3px;">
-                    AR: ${item.codigoAR} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:inherit;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;margin-left:5px;" onclick="buscarStatusCorreios('${item.codigoAR}', 'ar-${item.firebaseId}')">API</button></span>
+                    AR: ${item.codigoAR} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:inherit;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;margin-left:5px;" onclick="buscarStatusCorreios('${item.codigoAR}', 'ar-${item.firebaseId}', '${item.firebaseId}')">API</button></span>
                 </div>
                 <div style="font-size:11px; font-weight: bold;">${txtStatus}</div>
                 ${descCorreios}
