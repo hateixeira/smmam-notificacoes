@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=8">
+    <link rel="stylesheet" href="css/style.css?v=9">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -149,7 +149,7 @@
                                 <label>Nº Notificação *</label>
                                 <div style="display: flex; gap: 5px;">
                                     <input type="text" id="numNotif" placeholder="Ex: 0528B/2026" required style="width: 100%;">
-                                    <button type="button" class="btn-secondary" title="Sugerir Próximo Número" onclick="document.getElementById('numNotif').value = sugerirNumero('notificacao')" style="padding: 0 10px;">🪄</button>
+                                    <button type="button" class="btn-secondary" title="Sugerir Próximo" onclick="document.getElementById('numNotif').value = sugerirNumero('notificacao')" style="padding: 0 10px;">🪄</button>
                                 </div>
                             </div>
                             <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria"></div>
@@ -190,35 +190,26 @@
                         </div>
                         <div class="form-group"><label>Endereço Físico da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
 
+                        <!-- MOTORES DINÂMICOS -->
                         <div class="form-group">
-                            <label>Irregularidades Verificadas</label>
-                            <div class="checkbox-group">
-                                <div class="checkbox-item"><input type="checkbox" id="irrMato"><label for="irrMato">Vegetação/Mato</label></div>
-                                <div class="checkbox-item"><input type="checkbox" id="irrResiduos"><label for="irrResiduos">Resíduos Sólidos</label></div>
-                                <div class="checkbox-item"><input type="checkbox" id="irrEntulhos"><label for="irrEntulhos">Obra Irregular / Posturas</label></div>
-                                <div class="checkbox-item"><input type="checkbox" id="irrOutros"><label for="irrOutros">Outros</label></div>
+                            <label style="color: #991b1b;">Selecione as Infrações Verificadas no Local</label>
+                            <div class="checkbox-group" id="containerInfracoesDinamicasNotif">
+                                <i>Carregando base legal...</i>
                             </div>
                         </div>
+
                         <div class="form-row">
                             <div class="form-group"><label>Ponto de Referência</label><input type="text" id="ref"></div>
                             <div class="form-group"><label>Observações</label><input type="text" id="obs"></div>
                         </div>
-                        <div class="form-group">
-                            <label>Base Legal</label>
-                            <div class="checkbox-group">
-                                <div class="checkbox-item"><input type="checkbox" id="lei5198" checked><label for="lei5198">Art. 6º, § 2º - L 5.198</label></div>
-                                <div class="checkbox-item"><input type="checkbox" id="lc56"><label for="lc56">Art. 41, inc. III - LC 56</label></div>
-                            </div>
-                        </div>
 
                         <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Ciência e Prazos Matemáticos (Dias Corridos)</div>
-                        <p style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">O prazo só começa a contar a partir da Data de Recebimento. Em caso de AR, o sistema preencherá a data sozinho quando entregue.</p>
+                        <p style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">O prazo só começa a contar a partir da Data de Recebimento. Em caso de AR, a API injetará a data sozinha quando entregue.</p>
                         
                         <div class="form-row">
                             <div class="form-group"><label>Código AR (Opcional)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
                             <div class="form-group"><label>Data de Recebimento / Ciência</label><input type="date" id="dataRecebimento"></div>
-                            <div class="form-group"><label>Prazo p/ Regularizar (Em Dias)</label><input type="number" id="prazoDias" value="15" style="font-weight: bold; color: #1b365d;"></div>
-                            
+                            <div class="form-group"><label>Prazo p/ Regularizar (Dias)</label><input type="number" id="prazoDias" value="15" style="font-weight: bold; color: #1b365d;"></div>
                             <input type="hidden" id="statusRetornoAR" value="aguardando">
                         </div>
 
@@ -242,10 +233,10 @@
                     <h2 style="color: #991b1b; border-color: #fecaca;">Gerar Auto de Infração (Multa)</h2>
                     
                     <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e1; margin-bottom: 20px;">
-                        <label>Vincular a uma Notificação Anterior</label>
+                        <label>Vincular a uma Notificação Anterior (Gatilho)</label>
                         <div style="display: flex; gap: 10px;">
                             <input type="text" id="autoBuscaNotif" placeholder="Digite o Nº da Notificação Ex: 0520B/2026">
-                            <button type="button" class="btn-primary" onclick="puxarDadosDaNotificacao()">🔍 Puxar Dados</button>
+                            <button type="button" class="btn-primary" onclick="puxarDadosDaNotificacao()">🔍 Importar Infrator</button>
                         </div>
                     </div>
 
@@ -267,25 +258,32 @@
                             <div class="form-group" style="flex: 2;"><label>Nome do Infrator *</label><input type="text" id="autoNome" required></div>
                             <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="autoDoc" required></div>
                         </div>
-                        
                         <div class="form-group"><label>Endereço da Ocorrência *</label><input type="text" id="autoEndOcorrencia" required></div>
-                        <div class="form-group"><label>Enquadramento Legal (Descritivo)</label><input type="text" id="autoDescricaoLei" placeholder="Ex: Artigo 6º, da Lei Municipal 5.198"></div>
 
-                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #991b1b; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Cálculo da Multa Baseado na URM</div>
+                        <div class="form-group">
+                            <label style="color: #991b1b;">Selecione as Infrações para Aplicar a Multa (Calcula URM Automático)</label>
+                            <div class="checkbox-group" id="containerInfracoesDinamicasAuto">
+                                <i>Carregando base legal...</i>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group"><label>Descrição Manual / Complemento do Enquadramento</label><input type="text" id="autoDescricaoLei" placeholder="Opcional. Ex: Omitiu-se de regularizar a calçada após 15 dias."></div>
+
+                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #991b1b; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Cálculo da Multa Baseado na URM Dinâmica</div>
                         
                         <div class="form-row" style="align-items: center;">
                             <div class="form-group">
-                                <label>Qtd URM Aplicada</label>
-                                <input type="number" id="autoMultaURM" step="0.01" value="100" oninput="calcularMultaReais()">
+                                <label>Soma URM Aplicada</label>
+                                <input type="number" id="autoMultaURM" step="0.01" value="0" oninput="calcularMultaReais()">
                             </div>
                             <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">X</div>
                             <div class="form-group">
-                                <label>Valor URM Atual</label>
+                                <label>Valor URM Atual (R$)</label>
                                 <input type="text" id="autoValorURMAtual" disabled style="background:#f1f5f9; font-weight:bold;">
                             </div>
                             <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">=</div>
                             <div class="form-group" style="flex: 1.5;">
-                                <label style="color: #991b1b;">Total da Multa (R$)</label>
+                                <label style="color: #991b1b;">Total da Multa em Reais (R$)</label>
                                 <input type="text" id="autoMultaReais" disabled style="background:#fee2e2; color:#991b1b; font-size: 16px; font-weight:bold;">
                             </div>
                         </div>
@@ -380,52 +378,32 @@
                 </div>
             </div>
 
-            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS (SUPER PAINEL BI) -->
+            <!-- VIEW 5: RELATÓRIOS E GRÁFICOS -->
             <div id="view-relatorios" class="view-section">
                 <h2>Painel Executivo de Gestão</h2>
-                
+                <!-- Mantido intacto o dashboard do BI -->
                 <div class="panel-container" style="display: flex; flex-direction: column;">
-                    <h3 style="margin-top: 0; font-size: 15px; color: #1b365d;">📈 Evolução de Demandas (Últimos Meses)</h3>
-                    <div style="position: relative; height: 300px; width: 100%;">
-                        <canvas id="chartEvolucao"></canvas>
-                    </div>
+                    <h3 style="margin-top: 0; font-size: 15px; color: #1b365d;">📈 Evolução de Demandas</h3>
+                    <div style="position: relative; height: 300px; width: 100%;"><canvas id="chartEvolucao"></canvas></div>
                 </div>
-
                 <div class="form-row" style="gap: 15px; margin-bottom: 20px;">
-                    <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
+                    <div class="panel-container" style="flex: 1.5; margin-bottom: 0;">
                         <h3 style="margin-top: 0; font-size: 14px; text-align: center;">📍 Top 10 Bairros Autuados</h3>
-                        <div style="position: relative; height: 250px; width: 100%;">
-                            <canvas id="chartBairros"></canvas>
-                        </div>
+                        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartBairros"></canvas></div>
                     </div>
-
-                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
-                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">⚠️ Tipos de Infração</h3>
-                        <div style="position: relative; height: 250px; width: 100%;">
-                            <canvas id="chartTipos"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0;">
+                    <div class="panel-container" style="flex: 1; margin-bottom: 0;">
                         <h3 style="margin-top: 0; font-size: 14px; text-align: center;">📊 Status Operacional</h3>
-                        <div style="position: relative; height: 250px; width: 100%;">
-                            <canvas id="chartStatus"></canvas>
-                        </div>
+                        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartStatus"></canvas></div>
                     </div>
                 </div>
-
                 <div class="form-row" style="gap: 15px;">
-                    <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
+                    <div class="panel-container" style="flex: 1.5; margin-bottom: 0;">
                         <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👨‍💼 Produtividade por Servidor</h3>
-                        <div style="position: relative; height: 250px; width: 100%;">
-                            <canvas id="chartFiscais"></canvas>
-                        </div>
+                        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartFiscais"></canvas></div>
                     </div>
-
-                    <div class="panel-container" style="flex: 1; display: flex; flex-direction: column; margin-bottom: 0; justify-content: center; align-items: center; background: #f8fafc; border: 2px dashed #cbd5e1;">
-                        <h3 style="margin-top: 0; font-size: 14px; color: #64748b;">💰 Projeção de Arrecadação (Multas Ativas)</h3>
+                    <div class="panel-container" style="flex: 1; background: #f8fafc; border: 2px dashed #cbd5e1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                        <h3 style="margin-top: 0; font-size: 14px; color: #64748b;">💰 Projeção de Arrecadação (Multas)</h3>
                         <div style="font-size: 40px; font-weight: bold; color: #991b1b; margin: 15px 0;" id="painelFinanceiroValor">R$ 0,00</div>
-                        <p style="font-size: 11px; color: #94a3b8; text-align: center;">Valor bruto calculado sobre a URM vigente aplicado aos Autos de Infração gerados na plataforma.</p>
                     </div>
                 </div>
             </div>
@@ -462,11 +440,40 @@
 
             <!-- VIEW 8: CONFIGURAÇÕES DO SISTEMA (ADMIN) -->
             <div id="view-configuracoes" class="view-section">
-                <h2>Configurações do Sistema</h2>
+                <h2>Painel do Arquiteto (Configurações Gerais)</h2>
                 
+                <!-- GESTÃO DINÂMICA DE INFRAÇÕES (O NOVO MOTOR) -->
+                <div class="panel-container" style="margin-bottom: 20px; border: 2px solid #1b365d;">
+                    <h3 style="margin-top: 0; color: #1b365d; font-size: 16px;">📚 Motor de Infrações e Base Legal</h3>
+                    <p style="font-size: 12px; color: #475569; margin-bottom: 15px;">Cadastre aqui os dispositivos legais e infrações. Eles aparecerão automaticamente nos formulários e serão impressos nas notificações. No Auto de Infração, os valores de URM selecionados serão somados.</p>
+                    
+                    <div style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <div class="form-group" style="flex:1; min-width: 150px;"><label>Nome (Ex: Mato)</label><input type="text" id="adminNomeInfr"></div>
+                        <div class="form-group" style="flex:2; min-width: 250px;"><label>Base Legal (Ex: Art 6º L5198)</label><input type="text" id="adminBaseInfr"></div>
+                        <div class="form-group" style="flex:3; min-width: 300px;"><label>Texto Padrão (Vai no papel)</label><input type="text" id="adminTextoInfr"></div>
+                        <div class="form-group" style="flex:1; min-width: 100px;"><label>Valor (URM)</label><input type="number" id="adminUrmInfr" value="100"></div>
+                        <div class="form-group" style="display:flex; align-items:flex-end;">
+                            <button class="btn-success" onclick="salvarInfracaoNoBanco()" style="height: 35px;">➕ Adicionar</button>
+                        </div>
+                    </div>
+                    
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width:15%">Nome</th>
+                                <th style="width:25%">Base Legal</th>
+                                <th style="width:40%">Texto no Documento</th>
+                                <th style="width:10%">URM</th>
+                                <th style="width:10%">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaInfracoesAdmin"></tbody>
+                    </table>
+                </div>
+
                 <div class="dashboard-cards" style="margin-bottom: 20px;">
                     <div class="panel-container" style="flex: 2;">
-                        <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores</h3>
+                        <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores e Acessos</h3>
                         <div class="table-container" style="max-height: 400px;">
                             <table class="data-table">
                                 <thead>
@@ -491,32 +498,23 @@
                             <button class="btn-secondary" onclick="adicionarEmailVip()">➕ Autorizar</button>
                         </div>
                         <ul id="listaVipEmails" style="font-size: 12px; margin-top: 10px; color: #475569;"></ul>
-
                     </div>
 
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
                         
                         <div class="panel-container">
-                            <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Financeiro / Multas</h3>
+                            <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Cotação Base (Financeiro)</h3>
                             <div class="form-group">
                                 <label>Valor da URM Atual (R$)</label>
                                 <input type="number" id="configURM" step="0.01" placeholder="Ex: 175.50">
-                                <button class="btn-primary" style="margin-top: 10px; width: 100%;">Salvar URM</button>
+                                <button class="btn-primary" style="margin-top: 10px; width: 100%;">Salvar URM Oficial</button>
                             </div>
-                        </div>
-
-                        <!-- MÓDULO CORREIOS -->
-                        <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
-                            <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
-                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API nativa agora.</p>
-                            <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
-                            <button id="btnForcarCorreios" class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
                         </div>
 
                         <!-- MÓDULO IPTU DELTA SYNC -->
                         <div class="panel-container" style="border: 2px dashed #38bdf8; background: #f0f9ff;">
                             <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">Importar IPTU Inteligente (JSON)</h3>
-                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">O sistema comparará o arquivo novo com o do mês anterior e atualizará apenas as alterações para poupar o banco.</p>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">O sistema comparará o arquivo novo com o do mês anterior e atualizará apenas as alterações para poupar o banco de dados. <strong>Gera os índices de busca por Endereço automaticamente.</strong></p>
                             <input type="file" id="adminFileJson" accept=".json" style="margin-bottom: 10px; width: 100%;">
                             <button class="btn-success" id="btnAdminImportarIptu" style="width: 100%; margin-top: 5px;">🚀 INICIAR DELTA SYNC</button>
                             <div id="adminProgressoIptu" style="margin-top: 10px; font-size: 11px; font-weight: bold; color: #d97706;"></div>
@@ -524,18 +522,16 @@
 
                         <!-- DOCUMENTAÇÃO DO SISTEMA -->
                         <div class="panel-container" style="background: #1e293b; color: white;">
-                            <h3 style="margin-top: 0; color: #38bdf8; font-size: 15px;">📖 Manual da Arquitetura</h3>
+                            <h3 style="margin-top: 0; color: #38bdf8; font-size: 15px;">📖 Manual da Arquitetura (SaaS)</h3>
                             <div style="font-size:11px; line-height:1.5; color:#cbd5e1; max-height:150px; overflow-y:auto; padding-right:5px; margin-bottom: 10px;">
-                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore.<br>
-                                <strong>Custos (Plano Spark):</strong> Limite de 50.000 leituras/dia e 20.000 escritas/dia.<br>
+                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore (NoSQL).<br>
                                 <strong>Regra de Duplicidade:</strong> Sistema auto-injeta "/ANO" no registro e bloqueia salvamento de duplicados.<br>
-                                <strong>Workflow de Prazos:</strong> O prazo em "Dias Corridos" é dinâmico e só começa a contar a partir do preenchimento da Data de Recebimento. Cartas AR atualizam a data sozinhas quando a API acusa 'Entregue'.<br>
+                                <strong>Workflow de Prazos:</strong> O prazo em "Dias Corridos" é dinâmico e só começa a contar a partir do preenchimento da Data de Recebimento.<br>
                                 <strong>Busca Endereço:</strong> O Delta Sync fraciona o endereço em 'logradouro_keywords' para permitir a busca (array-contains) instantânea.<br>
+                                <strong>Infrações Dinâmicas:</strong> Formulários e Impressões lêem a base de dados de Leis e calculam as URMs selecionadas no laço de repetição.<br>
                             </div>
                             <button class="btn-success" style="width: 100%; font-size: 10px; padding: 5px; margin-bottom: 5px;" onclick="baixarBackupLocal()">📥 Baixar Backup Local JSON</button>
-                            <button class="btn-danger" style="width: 100%; font-size: 10px; padding: 5px;" onclick="corrigirEnderecosAntigos()">🛠️ Injetar Cidade/UF nos Imóveis Antigos</button>
                         </div>
-
                     </div>
                 </div>
             </div>
@@ -597,7 +593,7 @@
         </div>
     </div>
 
-    <!-- ESPELHO IMPRESSÃO NOTIFICAÇÃO -->
+    <!-- ESPELHO IMPRESSÃO (LAYOUT ORIGINAL RESTAURADO + MOTOR DINÂMICO DE INFRAÇÕES) -->
     <div id="print-area">
         <table class="main-grid">
             <tr>
@@ -642,20 +638,26 @@
                 <td colspan="2" style="width: 35%; background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
             </tr>
             <tr><td colspan="6" class="alert-row">14. O NÃO ATENDIMENTO DO PRESENTE PODERÁ CONSTITUIR CRIME DE DESOBEDIÊNCIA CONFORME O ARTIGO 330 DO CÓDIGO PENAL</td></tr>
-            <tr><td colspan="6" class="section-title">15. MOTIVO DO DOCUMENTO</td></tr>
+            
+            <tr><td colspan="6" class="section-title">15. MOTIVO DO DOCUMENTO E BASE LEGAL (PREENCHIDO AUTOMATICAMENTE)</td></tr>
             <tr>
                 <td colspan="6" style="padding: 12px; line-height: 1.45;">
                     <p style="margin: 0 0 10px 0;">Verificação de irregularidade, situada no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS.</p>
                     <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
                     <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
+                    
+                    <!-- ESTRUTURA ORIGINAL DE CAIXAS (AGORA DINÂMICAS) -->
+                    <div id="boxInfracoesImpresso" style="margin-top: 10px; display:flex; flex-wrap:wrap; gap:10px;">
+                        <!-- O Javascript vai inserir os ( X ) Mato, ( ) Entulhos aqui igualzinho era antes -->
+                    </div>
+
                     <p style="margin: 15px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
                         <strong><span id="pPrazoImpressao"></span></strong>
                     </p>
-                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">OBSERVAÇÕES (MEIO AMBIENTE):</p>
-                    <ul class="bullet-rules">
-                        <li>Vegetais arbóreos, lenhosos e nativos deverão ser preservados.</li>
-                        <li>Fica proibido o emprego do fogo, bem como, a utilização da capina química para limpeza dos lotes.</li>
-                        <li>Após realizada limpeza, fica o notificado obrigado a apresentar levantamento fotográfico comprovando limpeza dos lotes.</li>
+                    
+                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">OBSERVAÇÕES E TEXTOS LEGAIS:</p>
+                    <ul class="bullet-rules" id="listaTextosLegaisImpresso">
+                        <!-- O Javascript vai inserir as descrições legais das infrações que foram marcadas com (X) -->
                     </ul>
                 </td>
             </tr>
