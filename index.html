@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=5">
+    <link rel="stylesheet" href="css/style.css?v=6">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -24,6 +24,9 @@
             <button class="btn-primary" onclick="realizarLogin()" style="width: 100%;">Entrar no Sistema</button>
         </div>
         <div id="register-fields" style="display:none;">
+            <div style="font-size: 11px; background: #e2e8f0; color: #1e293b; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
+                ⚠️ <strong>Atenção:</strong> Apenas e-mails com domínio <strong>@bentogoncalves.rs.gov.br</strong> são permitidos, salvo exceções autorizadas pelo Administrador.
+            </div>
             <input type="text" id="regNome" placeholder="Nome Completo">
             <input type="text" id="regCargo" placeholder="Cargo (Ex: Fiscal, Agente Administrativo)">
             <select id="regSetor" style="margin-bottom: 12px; padding: 12px; font-weight: bold; color: #1b365d;">
@@ -101,7 +104,7 @@
                                 <button class="filter-type-btn" onclick="aplicarFiltroTipo('auto', this)">🚨 Só Autos</button>
                             </div>
                         </div>
-                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por nome, endereço, lote, número ou ouvidoria..." onkeyup="renderizarPainel()">
+                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por rua, número, nome, lote, código AR..." onkeyup="renderizarPainel()">
                         <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
                             <div class="filter-bar">
                                 <span style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 5px;">FILTROS:</span>
@@ -207,6 +210,10 @@
                                 <label>Retorno Físico do AR?</label>
                                 <select id="statusRetornoAR">
                                     <option value="aguardando">⏳ Aguardando Retorno</option>
+                                    <option value="transito">🚚 Em Trânsito</option>
+                                    <option value="saiu_entrega">🛵 Saiu para Entrega</option>
+                                    <option value="tentativa">⚠️ Tentativa de Entrega</option>
+                                    <option value="retirada">🏢 Aguardando Retirada</option>
                                     <option value="entregue">✅ Entregue / Assinado</option>
                                     <option value="devolvido">❌ Devolvido / Não Localizado</option>
                                 </select>
@@ -305,7 +312,7 @@
                             <div class="form-group"><label>Quadra</label><input type="text" id="consQuadra" placeholder="071"></div>
                             <div class="form-group"><label>Lote</label><input type="text" id="consLote" placeholder="0015"></div>
                             <div class="form-group">
-                                <button class="btn-primary" onclick="buscarConsultaLivre('lote')" style="height: 35px; width: 100%;">🔍 Pesquisar Lote</button>
+                                <button class="btn-primary" onclick="buscarConsultaLivre('lote')" style="height: 35px; width: 100%;">🔍 Lote</button>
                             </div>
                         </div>
 
@@ -314,7 +321,7 @@
                         <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👤 Opção 2: Busca por Proprietário</h3>
                         <div class="form-row" style="align-items: flex-end;">
                             <div class="form-group" style="flex: 2;">
-                                <label>Nome do Proprietário (Digite o início do nome)</label>
+                                <label>Nome do Proprietário (Digite o início)</label>
                                 <input type="text" id="consNome" placeholder="Ex: JOAO DA SILVA">
                             </div>
                             <div class="form-group" style="flex: 1.5;">
@@ -322,7 +329,24 @@
                                 <input type="text" id="consDoc" placeholder="Ex: 01997677008">
                             </div>
                             <div class="form-group">
-                                <button class="btn-secondary" onclick="buscarConsultaLivre('pessoa')" style="height: 35px; width: 100%;">🔍 Pesquisar Pessoa</button>
+                                <button class="btn-secondary" onclick="buscarConsultaLivre('pessoa')" style="height: 35px; width: 100%;">🔍 Pessoa</button>
+                            </div>
+                        </div>
+
+                        <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 15px 0;">
+
+                        <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">🏘️ Opção 3: Busca por Endereço Físico</h3>
+                        <div class="form-row" style="align-items: flex-end;">
+                            <div class="form-group" style="flex: 2;">
+                                <label>Nome da Rua (Logradouro)</label>
+                                <input type="text" id="consRua" placeholder="Ex: RUA LIVRAMENTO">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Número</label>
+                                <input type="text" id="consNumRua" placeholder="Ex: 635">
+                            </div>
+                            <div class="form-group">
+                                <button class="btn-success" onclick="buscarConsultaLivre('endereco')" style="height: 35px; width: 100%;">🔍 Endereço</button>
                             </div>
                         </div>
 
@@ -353,7 +377,6 @@
             <div id="view-relatorios" class="view-section">
                 <h2>Painel Executivo de Gestão</h2>
                 
-                <!-- Andar 1: Evolução Mensal (Linha) -->
                 <div class="panel-container" style="display: flex; flex-direction: column;">
                     <h3 style="margin-top: 0; font-size: 15px; color: #1b365d;">📈 Evolução de Demandas (Últimos Meses)</h3>
                     <div style="position: relative; height: 300px; width: 100%;">
@@ -361,9 +384,7 @@
                     </div>
                 </div>
 
-                <!-- Andar 2: Fatias (Top Bairros, Tipos e Status) -->
                 <div class="form-row" style="gap: 15px; margin-bottom: 20px;">
-                    
                     <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
                         <h3 style="margin-top: 0; font-size: 14px; text-align: center;">📍 Top 10 Bairros Autuados</h3>
                         <div style="position: relative; height: 250px; width: 100%;">
@@ -384,12 +405,9 @@
                             <canvas id="chartStatus"></canvas>
                         </div>
                     </div>
-
                 </div>
 
-                <!-- Andar 3: Produtividade e Projeção Financeira -->
                 <div class="form-row" style="gap: 15px;">
-                    
                     <div class="panel-container" style="flex: 1.5; display: flex; flex-direction: column; margin-bottom: 0;">
                         <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👨‍💼 Produtividade por Servidor</h3>
                         <div style="position: relative; height: 250px; width: 100%;">
@@ -402,7 +420,6 @@
                         <div style="font-size: 40px; font-weight: bold; color: #991b1b; margin: 15px 0;" id="painelFinanceiroValor">R$ 0,00</div>
                         <p style="font-size: 11px; color: #94a3b8; text-align: center;">Valor bruto calculado sobre a URM vigente aplicado aos Autos de Infração gerados na plataforma.</p>
                     </div>
-
                 </div>
             </div>
 
@@ -425,6 +442,14 @@
                 <h2>Caixa Preta (Logs de Auditoria)</h2>
                 <div class="panel-container">
                     <p style="color: #64748b;">Tabela imutável de rastreamento de ações do sistema.</p>
+                    <div class="table-container" style="max-height: 500px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr><th>Data/Hora</th><th>Usuário</th><th>Ação Realizada</th><th>Alvo</th></tr>
+                            </thead>
+                            <tbody id="tabelaAuditoriaCorpo"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -441,14 +466,25 @@
                                     <tr>
                                         <th>Servidor / Cargo</th>
                                         <th>Secretaria</th>
-                                        <th>Contato / Matrícula</th>
+                                        <th>E-mail</th>
                                         <th>Status</th>
                                         <th>Nível</th>
+                                        <th>Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabelaUsuariosCorpo"></tbody>
                             </table>
                         </div>
+
+                        <!-- LISTA VIP DE E-MAILS -->
+                        <h3 style="margin-top: 20px; color: #1b365d; font-size: 15px; border-top: 1px dashed #ccc; padding-top: 15px;">Lista VIP (Liberar E-mails Externos)</h3>
+                        <p style="font-size:11px; color:#64748b;">E-mails diferentes de @bentogoncalves.rs.gov.br precisam ser adicionados aqui ANTES do cadastro.</p>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="email" id="adminVipEmail" placeholder="estagiario@gmail.com" style="flex:1;">
+                            <button class="btn-secondary" onclick="adicionarEmailVip()">➕ Autorizar</button>
+                        </div>
+                        <ul id="listaVipEmails" style="font-size: 12px; margin-top: 10px; color: #475569;"></ul>
+
                     </div>
 
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
@@ -462,24 +498,35 @@
                             </div>
                         </div>
 
-                        <!-- MÓDULO ADICIONADO: PROCESSAR RETORNO CORREIOS -->
-                        <div class="panel-container" style="border: 2px dashed #38bdf8; background: #f0f9ff;">
-                            <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">📥 Processar Retorno VIPP</h3>
-                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV (Relatório de Objetos) do VIPP para preencher os Rastreios automaticamente.</p>
-                            <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%;">
+                        <!-- MÓDULO CORREIOS -->
+                        <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
+                            <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
+                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API agora.</p>
+                            <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
+                            <button class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
                         </div>
 
+                        <!-- MÓDULO IPTU DELTA SYNC -->
                         <div class="panel-container" style="border: 2px dashed #38bdf8; background: #f0f9ff;">
-                            <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">Importar IPTU (JSON)</h3>
-                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo da Prefeitura direto para o Firebase Cloud.</p>
-                            
+                            <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">Importar IPTU Inteligente (JSON)</h3>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">O sistema comparará o arquivo novo com o do mês anterior e atualizará apenas as alterações para poupar o banco.</p>
                             <input type="file" id="adminFileJson" accept=".json" style="margin-bottom: 10px; width: 100%;">
-                            <div class="form-group">
-                                <label style="font-size: 11px;">Retomar a partir de:</label>
-                                <input type="number" id="adminStartFrom" value="0">
-                            </div>
-                            <button class="btn-success" id="btnAdminImportarIptu" style="width: 100%; margin-top: 5px;">🚀 INICIAR UPLOAD</button>
+                            <button class="btn-success" id="btnAdminImportarIptu" style="width: 100%; margin-top: 5px;">🚀 INICIAR DELTA SYNC</button>
                             <div id="adminProgressoIptu" style="margin-top: 10px; font-size: 11px; font-weight: bold; color: #d97706;"></div>
+                        </div>
+
+                        <!-- DOCUMENTAÇÃO DO SISTEMA -->
+                        <div class="panel-container" style="background: #1e293b; color: white;">
+                            <h3 style="margin-top: 0; color: #38bdf8; font-size: 15px;">📖 Manual da Arquitetura</h3>
+                            <div style="font-size:11px; line-height:1.5; color:#cbd5e1; max-height:150px; overflow-y:auto; padding-right:5px;">
+                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore.<br>
+                                <strong>Custos (Plano Spark):</strong> Limite de 50.000 leituras/dia e 20.000 escritas/dia.<br>
+                                <strong>Segurança:</strong> Firebase Rules bloqueiam usuários não aprovados direto no backend.<br>
+                                <strong>Automação Correios:</strong> O primeiro acesso após as 08h e 13h dispara um robô invisível em *background* para varrer os status na BrasilAPI/Linketrack sem custo de servidor.<br>
+                                <strong>Cofre IPTU:</strong> A sincronização usa *Client-side Diffing* para comparar o arquivo localmente antes de enviar.<br>
+                                <hr style="border-color:#334155; margin:10px 0;">
+                                <button class="btn-danger" style="width: 100%; font-size: 10px; padding: 5px;" onclick="corrigirEnderecosAntigos()">🛠️ Injetar Cidade/UF nos Imóveis Antigos</button>
+                            </div>
                         </div>
 
                     </div>
@@ -489,7 +536,7 @@
         </main>
     </div>
 
-    <!-- MODAIS E ESPELHO (MANTIDOS 100% IGUAIS) -->
+    <!-- MODAL FOTOS -->
     <div id="photo-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <span class="modal-close" onclick="fecharModalFoto()">&times;</span>
@@ -500,18 +547,47 @@
         </div>
     </div>
 
+    <!-- MODAL ESPELHO CADASTRAL -->
     <div id="modal-espelho-cadastral" class="modal-overlay" style="display: none;">
         <div class="modal-content modal-cadastral">
             <div style="background: #1b365d; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
                 <h3 style="margin: 0; font-size: 16px;">📄 Espelho Cadastral do Imóvel</h3>
                 <span style="font-size: 24px; cursor: pointer; line-height: 1;" onclick="fecharEspelhoCadastral()">&times;</span>
             </div>
-            <div style="padding: 20px; max-height: 70vh; overflow-y: auto; text-align: left; width: 100%; box-sizing: border-box;" id="conteudo-espelho">
-                <!-- Preenchido pelo JS -->
-            </div>
+            <div style="padding: 20px; max-height: 70vh; overflow-y: auto; text-align: left; width: 100%; box-sizing: border-box;" id="conteudo-espelho"></div>
             <div style="padding: 15px 20px; border-top: 1px solid #e2e8f0; text-align: right; background: #fff; border-radius: 0 0 8px 8px;">
                 <button class="btn-danger" onclick="autuarDesteEspelho()" style="display: inline-flex; width: auto; margin-right: 10px;">📝 Gerar Notificação deste Lote</button>
                 <button class="btn-secondary" onclick="fecharEspelhoCadastral()" style="display: inline-flex; width: auto;">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIÇÃO DE USUÁRIO (NOVO) -->
+    <div id="modal-edicao-usuario" class="modal-overlay" style="display: none;">
+        <div class="modal-content modal-cadastral" style="max-width: 400px;">
+            <div style="background: #1b365d; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
+                <h3 style="margin: 0; font-size: 16px;">✏️ Editar Servidor</h3>
+                <span style="font-size: 24px; cursor: pointer; line-height: 1;" onclick="fecharModalEdicaoUsuario()">&times;</span>
+            </div>
+            <div style="padding: 20px; text-align: left; width: 100%; box-sizing: border-box;">
+                <input type="hidden" id="editUserId">
+                <div class="form-group"><label>Nome Completo</label><input type="text" id="editUserNome"></div>
+                <div class="form-group"><label>Cargo</label><input type="text" id="editUserCargo"></div>
+                <div class="form-group">
+                    <label>Setor / Secretaria</label>
+                    <select id="editUserSetor">
+                        <option value="SMMAM">SMMAM (Meio Ambiente)</option>
+                        <option value="MOBILIDADE">Mobilidade Urbana (Trânsito)</option>
+                        <option value="OBRAS">Obras e Posturas</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Telefone</label><input type="text" id="editUserTelefone"></div>
+                    <div class="form-group"><label>Matrícula</label><input type="text" id="editUserMatricula"></div>
+                </div>
+            </div>
+            <div style="padding: 15px 20px; border-top: 1px solid #e2e8f0; text-align: right; background: #fff; border-radius: 0 0 8px 8px;">
+                <button class="btn-success" onclick="salvarEdicaoUsuario()" style="width: 100%;">💾 Salvar Alterações</button>
             </div>
         </div>
     </div>
@@ -549,9 +625,9 @@
             </tr>
             <tr>
                 <td colspan="2" style="width: 45%;"><span class="cell-label">10. BAIRRO/DISTRITO</span><div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div></td>
-                <td style="width: 20%;"><span class="cell-label">11. MUNICÍPIO</span><div class="cell-value" style="font-weight: bold;">BENTO GONÇALVES</div></td>
+                <td style="width: 20%;"><span class="cell-label">11. MUNICÍPIO</span><div class="cell-value" id="pCidadePrint" style="font-weight: bold;">BENTO GONÇALVES</div></td>
                 <td style="width: 25%;"><span class="cell-label">12. CEP</span><div class="cell-value" id="pCep"></div></td>
-                <td colspan="2" style="width: 10%;"><span class="cell-label">13. UF</span><div class="cell-value" style="font-weight: bold;">RS</div></td>
+                <td colspan="2" style="width: 10%;"><span class="cell-label">13. UF</span><div class="cell-value" id="pUfPrint" style="font-weight: bold;">RS</div></td>
             </tr>
             <tr>
                 <td style="width: 15%;"><span class="cell-label">DISTRITO</span><div class="cell-value" id="pCadDistrito" style="font-weight: bold; text-align: center;"></div></td>
