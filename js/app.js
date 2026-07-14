@@ -16,7 +16,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const notificacoesRef = collection(db, "notificacoes");
 
-// ATIVANDO PERSISTÊNCIA OFFLINE (Garante que os fiscais não percam dados sem internet)
+// ATIVANDO PERSISTÊNCIA OFFLINE
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code == 'failed-precondition') console.log('Persistência: Múltiplas abas abertas.');
     else if (err.code == 'unimplemented') console.log('Persistência: Navegador não suporta.');
@@ -93,21 +93,19 @@ window.toggleAuthMode = function() {
     }
 }
 
-// -------------------------------------------------------------
-// NOVA FUNÇÃO: O ROBÔ DOS CORREIOS (LAZY CRON AUTOMATION)
-// -------------------------------------------------------------
+// O ROBÔ DOS CORREIOS (LAZY CRON AUTOMATION)
 async function verificarRotinaCorreios() {
-    if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; // Apenas Fiscais/Admin rodarão o motor
+    if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; 
     
     const agora = new Date();
     const hora = agora.getHours();
-    const dataHoje = agora.toISOString().slice(0, 10); // Formato YYYY-MM-DD
+    const dataHoje = agora.toISOString().slice(0, 10); 
 
     let turno = null;
     if (hora >= 8 && hora < 13) turno = 'manha';
     else if (hora >= 13) turno = 'tarde';
 
-    if (!turno) return; // Antes das 08h, não faz nada.
+    if (!turno) return; 
 
     const autoRef = doc(db, "configuracoes", "automacao");
     try {
@@ -115,15 +113,12 @@ async function verificarRotinaCorreios() {
         let dadosAuto = snap.exists() ? snap.data() : {};
         const campoTurno = turno === 'manha' ? 'ultimaSyncManha' : 'ultimaSyncTarde';
 
-        // Verifica se a rotina já rodou hoje no turno atual
         if (dadosAuto[campoTurno] !== dataHoje) {
-            // GRAVAÇÃO IMEDIATA: Bloqueia a execução para que outro fiscal logando 1 seg depois não duplique a rotina
             await setDoc(autoRef, { [campoTurno]: dataHoje }, { merge: true });
             
             console.log(`[LazyCron] Iniciando rastreamento de ARs no turno: ${turno}`);
             window.mostrarToast(`🔄 Robô em ação: Atualizando status dos ARs em 2º plano...`);
 
-            // Busca APENAS notificações que têm AR, mas que NÃO estão finalizadas
             const q = query(collection(db, "notificacoes"), where("codigoAR", "!=", ""));
             const pendingSnaps = await getDocs(q);
 
@@ -132,7 +127,7 @@ async function verificarRotinaCorreios() {
             for (let document of pendingSnaps.docs) {
                 const d = document.data();
                 if (!d.codigoAR || d.codigoAR.length < 13) continue;
-                if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; // Estão finalizadas
+                if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
 
                 try {
                     const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${d.codigoAR}`);
@@ -144,7 +139,6 @@ async function verificarRotinaCorreios() {
                         const desc = ultimoEvento.descricao.toLowerCase();
                         let novoStatus = d.statusRetornoAR || 'aguardando';
 
-                        // A Nossa Máquina de Estados (Mapeamento Correios -> Sistema)
                         if (desc.includes('entregue')) novoStatus = 'entregue';
                         else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
                         else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
@@ -152,7 +146,6 @@ async function verificarRotinaCorreios() {
                         else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
                         else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
 
-                        // Atualiza no Firebase SOMENTE se o status mudou (Protege sua cota do Firebase)
                         if (novoStatus !== d.statusRetornoAR || ultimoEvento.descricao !== d.statusCorreiosTexto) {
                             await updateDoc(document.ref, {
                                 statusRetornoAR: novoStatus,
@@ -161,23 +154,19 @@ async function verificarRotinaCorreios() {
                             atualizados++;
                         }
                     }
-                } catch (err) {
-                    // Ignora falhas individuais para não parar a esteira
-                }
-                // Delay de 0.6s entre chamadas para a BrasilAPI não bloquear sua prefeitura
+                } catch (err) { }
                 await new Promise(r => setTimeout(r, 600));
             }
 
             if (atualizados > 0) {
                 window.mostrarToast(`✅ Correios: ${atualizados} AR(s) sofreram movimentação e foram atualizados!`);
-                await window.carregarDadosNuvem(); // Atualiza a tabela com as novas cores
+                await window.carregarDadosNuvem(); 
             }
         }
     } catch(e) {
         console.error("Falha na rotina em background dos Correios", e);
     }
 }
-// -------------------------------------------------------------
 
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -214,7 +203,7 @@ onAuthStateChanged(auth, async (user) => {
                     aplicarRestricoesDeTela(); 
                     await window.carregarDadosNuvem(); 
                     window.navegarPara('inicio');
-                    verificarRotinaCorreios(); // Dispara o robô dos Correios
+                    verificarRotinaCorreios(); 
                 }
             } else {
                 const novoPerfil = { nome: "Humberto", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
@@ -226,7 +215,7 @@ onAuthStateChanged(auth, async (user) => {
                 aplicarRestricoesDeTela(); 
                 await window.carregarDadosNuvem(); 
                 window.navegarPara('inicio');
-                verificarRotinaCorreios(); // Dispara o robô dos Correios
+                verificarRotinaCorreios(); 
             }
         } catch(e) { console.error(e); alert("Erro na inicialização: " + e.message + "\n\nTire um print se isso continuar!"); }
         mostrarLoading(false);
@@ -294,6 +283,37 @@ if(cadLoteInput) {
             } else { window.mostrarToast("Lote não encontrado."); }
         } catch(e) {} mostrarLoading(false);
     });
+}
+
+// NOVA FUNÇÃO DE API (TRATAMENTO DE 404 E 500)
+window.buscarStatusCorreios = async function(codigoAR, spanId) {
+    const span = document.getElementById(spanId); 
+    if(!span) return;
+    
+    span.innerHTML = `<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 5px; border-radius:4px;">⏳ Consultando API...</span>`;
+    
+    try {
+        const response = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
+        
+        if (response.status === 404) {
+            span.innerHTML = `<span style="background:#fef3c7; color:#b45309; border: 1px solid #f59e0b; font-size:10px; padding:2px 5px; border-radius:4px;">🟡 Aguardando Bipar</span>`;
+            return;
+        }
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        
+        if (data.isDelivered) { 
+            span.innerHTML = `<span style="background:#dcfce7; color:#166534; border: 1px solid #22c55e; font-size:10px; padding:2px 5px; border-radius:4px;">📬 Entregue (API)</span>`; 
+        } else { 
+            span.innerHTML = `<span style="background:#eff6ff; color:#1d4ed8; border: 1px solid #3b82f6; font-size:10px; padding:2px 5px; border-radius:4px;">🚚 Em Trânsito (API)</span>`; 
+        }
+        
+    } catch(e) { 
+        console.error(`Falha no Rastreio do AR ${codigoAR}:`, e.message);
+        span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ API Falhou (Ver Link ↗)</a>`; 
+    }
 }
 
 window.buscarConsultaLivre = async function(tipoBusca) {
@@ -724,7 +744,7 @@ window.renderizarPainel = function() {
             statusHtml += `
             <div style="${corFisica} padding:6px; border-radius:4px; border:1px solid; text-align:center; min-width: 140px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                 <div style="font-size:11px; font-weight:bold; margin-bottom:3px;">
-                    <a href="https://linketrack.com/track?codigo=${item.codigoAR}" target="_blank" style="color:inherit; text-decoration:none;" title="Ver linha do tempo completa">AR: ${item.codigoAR} ↗</a>
+                    AR: ${item.codigoAR} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:inherit;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;margin-left:5px;" onclick="buscarStatusCorreios('${item.codigoAR}', 'ar-${item.firebaseId}')">API</button></span>
                 </div>
                 <div style="font-size:11px; font-weight: bold;">${txtStatus}</div>
                 ${descCorreios}
@@ -768,7 +788,6 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('procOuvidoria')) document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; 
     if(document.getElementById('codigoAR')) document.getElementById('codigoAR').value = item.codigoAR || ''; 
     
-    // Injeta os novos status dinamicamente no Select de edição para não quebrar a tela
     const selAR = document.getElementById('statusRetornoAR');
     if(selAR) {
         const novosStatus = [{v:'transito', t:'🚚 Em Trânsito'}, {v:'saiu_entrega', t:'🛵 Saiu para Entrega'}, {v:'tentativa', t:'⚠️ Tentativa de Entrega'}, {v:'retirada', t:'🏢 Aguardando Retirada'}];
@@ -854,7 +873,7 @@ window.exportarVipp = function() {
 
     const lotePadrao = "LOTE" + new Date().toISOString().slice(0,10).replace(/-/g,'');
     const loteId = prompt("Defina um identificador para este lote de postagem:", lotePadrao);
-    if(!loteId) return; // Se cancelar, aborta.
+    if(!loteId) return; 
 
     const itens = window.DB.filter(item => m.includes(item.firebaseId));
     let csv = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME_REM;ENDERECO_REM;NUMERO_REM;COMPLEMENTO_REM;BAIRRO_REM;CIDADE_REM;UF_REM;CEP_REM;TELEFONE_CELULAR_REM;E_MAIL_REM;CPF_CNPJ_REM;IE_RG_REM;FILLER_REM;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER_POST;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER_LOTE;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER_REV;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER_NF;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO\n";
