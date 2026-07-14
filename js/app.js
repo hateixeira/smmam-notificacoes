@@ -147,8 +147,22 @@ window.realizarLogout = function() { signOut(auth).then(() => { window.DB = []; 
 function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
     const setorEl = document.getElementById('sidebar-setor'); if(setorEl) setorEl.innerText = perfilUsuario.setor || 'SMMAM';
-    const nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
-    const userLogEl = document.getElementById('userLoggedDisplay'); if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
+    
+    // Atualiza o nome padrão para Humberto caso seja o "Legado" e salva no banco silenciosamente
+    if (perfilUsuario.nome === 'Administrador Legado') {
+        perfilUsuario.nome = 'Humberto';
+        if (usuarioLogado) {
+            updateDoc(doc(db, "usuarios", usuarioLogado.uid), { nome: 'Humberto' }).catch(()=>{});
+        }
+    }
+    
+    // Encurta a exibição do nível ADMIN para ADM
+    let nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
+    if (nivelStr === 'ADMIN') nivelStr = 'ADM';
+
+    const userLogEl = document.getElementById('userLoggedDisplay'); 
+    if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
+    
     const fiscalEl = document.getElementById('fiscal'); if(fiscalEl) fiscalEl.value = perfilUsuario.nome || ''; 
     const matEl = document.getElementById('matricula'); if(matEl) matEl.value = perfilUsuario.matricula || '';
     
@@ -589,11 +603,17 @@ window.atualizarDashboardGraficos = function() {
 
 window.renderizarPainel = function() {
     window.atualizarDashboardGraficos(); const corpo = document.getElementById('tabelaCorpo'); if(!corpo) return; corpo.innerHTML = ''; 
-    const buscaEl = document.getElementById('buscaInput'); const filtroTexto = buscaEl ? buscaEl.value.toLowerCase() : ''; 
+    const buscaEl = document.getElementById('buscaInput'); const filtroTexto = buscaEl ? buscaEl.value.toLowerCase().trim() : ''; 
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     let filtrados = window.DB;
     if(window.filtroTipoDocumento !== 'Todos') filtrados = filtrados.filter(item => item.tipoDocumento === window.filtroTipoDocumento);
-    filtrados = filtrados.filter(item => { return (item.nome || '').toLowerCase().includes(filtroTexto) || (item.numNotif || '').toLowerCase().includes(filtroTexto) || (item.loteEndereco || '').toLowerCase().includes(filtroTexto) || (item.procOuvidoria || '').toLowerCase().includes(filtroTexto) || (item.codigoAR || '').toLowerCase().includes(filtroTexto); });
+    
+    // Filtro aprimorado: Busca em praticamente todos os campos de texto relevantes
+    filtrados = filtrados.filter(item => { 
+        const stringGeral = `${item.nome || ''} ${item.numNotif || ''} ${item.loteEndereco || ''} ${item.endereco || ''} ${item.bairro || ''} ${item.procOuvidoria || ''} ${item.codigoAR || ''}`.toLowerCase();
+        return stringGeral.includes(filtroTexto); 
+    });
+
     if (window.filtroStatusAtual === 'No Prazo') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") >= hoje); } else if (window.filtroStatusAtual === 'Vencidos') { filtrados = filtrados.filter(i => i.dataPrazo && new Date(i.dataPrazo + "T00:00:00") < hoje); } else if (window.filtroStatusAtual === 'Com AR') { filtrados = filtrados.filter(i => i.codigoAR && i.codigoAR.trim() !== ""); }
     if (window.colunaOrdenacao) { filtrados.sort((a, b) => { let valA = (a[window.colunaOrdenacao] || '').toLowerCase(); let valB = (b[window.colunaOrdenacao] || '').toLowerCase(); if (valA < valB) return window.ordemCrescente ? -1 : 1; if (valA > valB) return window.ordemCrescente ? 1 : -1; return 0; }); }
     window.itensFiltradosAtual = filtrados; 
@@ -712,7 +732,6 @@ window.exportarExcel = function() {
     const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `SMMAM_Relatorio_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
 }
 
-// EXPORTAÇÃO VIPP ATUALIZADA (Com identificador de Lote e Hífen)
 window.exportarVipp = function() {
     const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
     if(m.length === 0) return alert('Selecione notificações.');
@@ -793,7 +812,6 @@ window.exportarVipp = function() {
     document.body.removeChild(link);
 }
 
-// NOVA FUNÇÃO INTEGRADORA: Importar Retorno CSV dos Correios
 window.importarRetornoCorreios = function(file) {
     if(!file) return;
     const reader = new FileReader();
@@ -820,7 +838,6 @@ window.importarRetornoCorreios = function(file) {
                 const rastreio = cols[18] ? cols[18].replace(/['"]/g, '').trim() : "";
                 
                 if(rastreio && obs.includes('NOTIFICACAO SMMAM')) {
-                    // Extrair o número: Exemplo "NOTIFICACAO SMMAM 0538B - LOTE2026"
                     const partes = obs.split('-');
                     const stringNotif = partes[0]; 
                     const numeroNotif = stringNotif.replace('NOTIFICACAO SMMAM', '').trim();
