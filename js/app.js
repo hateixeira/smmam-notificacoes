@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit, orderBy, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
@@ -15,6 +15,12 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const notificacoesRef = collection(db, "notificacoes");
+
+// ATIVANDO PERSISTÊNCIA OFFLINE (Garante que os fiscais não percam dados sem internet)
+enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code == 'failed-precondition') console.log('Persistência: Múltiplas abas abertas.');
+    else if (err.code == 'unimplemented') console.log('Persistência: Navegador não suporta.');
+});
 
 window.DB = [];
 window.itensFiltradosAtual = [];
@@ -87,6 +93,92 @@ window.toggleAuthMode = function() {
     }
 }
 
+// -------------------------------------------------------------
+// NOVA FUNÇÃO: O ROBÔ DOS CORREIOS (LAZY CRON AUTOMATION)
+// -------------------------------------------------------------
+async function verificarRotinaCorreios() {
+    if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; // Apenas Fiscais/Admin rodarão o motor
+    
+    const agora = new Date();
+    const hora = agora.getHours();
+    const dataHoje = agora.toISOString().slice(0, 10); // Formato YYYY-MM-DD
+
+    let turno = null;
+    if (hora >= 8 && hora < 13) turno = 'manha';
+    else if (hora >= 13) turno = 'tarde';
+
+    if (!turno) return; // Antes das 08h, não faz nada.
+
+    const autoRef = doc(db, "configuracoes", "automacao");
+    try {
+        const snap = await getDoc(autoRef);
+        let dadosAuto = snap.exists() ? snap.data() : {};
+        const campoTurno = turno === 'manha' ? 'ultimaSyncManha' : 'ultimaSyncTarde';
+
+        // Verifica se a rotina já rodou hoje no turno atual
+        if (dadosAuto[campoTurno] !== dataHoje) {
+            // GRAVAÇÃO IMEDIATA: Bloqueia a execução para que outro fiscal logando 1 seg depois não duplique a rotina
+            await setDoc(autoRef, { [campoTurno]: dataHoje }, { merge: true });
+            
+            console.log(`[LazyCron] Iniciando rastreamento de ARs no turno: ${turno}`);
+            window.mostrarToast(`🔄 Robô em ação: Atualizando status dos ARs em 2º plano...`);
+
+            // Busca APENAS notificações que têm AR, mas que NÃO estão finalizadas
+            const q = query(collection(db, "notificacoes"), where("codigoAR", "!=", ""));
+            const pendingSnaps = await getDocs(q);
+
+            let atualizados = 0;
+
+            for (let document of pendingSnaps.docs) {
+                const d = document.data();
+                if (!d.codigoAR || d.codigoAR.length < 13) continue;
+                if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; // Estão finalizadas
+
+                try {
+                    const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${d.codigoAR}`);
+                    if (!res.ok) continue; 
+                    
+                    const apiData = await res.json();
+                    if (apiData.eventos && apiData.eventos.length > 0) {
+                        const ultimoEvento = apiData.eventos[0];
+                        const desc = ultimoEvento.descricao.toLowerCase();
+                        let novoStatus = d.statusRetornoAR || 'aguardando';
+
+                        // A Nossa Máquina de Estados (Mapeamento Correios -> Sistema)
+                        if (desc.includes('entregue')) novoStatus = 'entregue';
+                        else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
+                        else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
+                        else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
+                        else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
+                        else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
+
+                        // Atualiza no Firebase SOMENTE se o status mudou (Protege sua cota do Firebase)
+                        if (novoStatus !== d.statusRetornoAR || ultimoEvento.descricao !== d.statusCorreiosTexto) {
+                            await updateDoc(document.ref, {
+                                statusRetornoAR: novoStatus,
+                                statusCorreiosTexto: ultimoEvento.descricao
+                            });
+                            atualizados++;
+                        }
+                    }
+                } catch (err) {
+                    // Ignora falhas individuais para não parar a esteira
+                }
+                // Delay de 0.6s entre chamadas para a BrasilAPI não bloquear sua prefeitura
+                await new Promise(r => setTimeout(r, 600));
+            }
+
+            if (atualizados > 0) {
+                window.mostrarToast(`✅ Correios: ${atualizados} AR(s) sofreram movimentação e foram atualizados!`);
+                await window.carregarDadosNuvem(); // Atualiza a tabela com as novas cores
+            }
+        }
+    } catch(e) {
+        console.error("Falha na rotina em background dos Correios", e);
+    }
+}
+// -------------------------------------------------------------
+
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioLogado = user; mostrarLoading(true, "Carregando Plataforma...");
@@ -119,16 +211,22 @@ onAuthStateChanged(auth, async (user) => {
                     if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
                     if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
                     if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
-                    aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
+                    aplicarRestricoesDeTela(); 
+                    await window.carregarDadosNuvem(); 
+                    window.navegarPara('inicio');
+                    verificarRotinaCorreios(); // Dispara o robô dos Correios
                 }
             } else {
-                const novoPerfil = { nome: "Administrador Legado", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
+                const novoPerfil = { nome: "Humberto", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
                 await setDoc(userDocRef, novoPerfil); 
                 perfilUsuario = novoPerfil;
                 if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
                 if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
                 if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
-                aplicarRestricoesDeTela(); window.carregarDadosNuvem(); window.navegarPara('inicio');
+                aplicarRestricoesDeTela(); 
+                await window.carregarDadosNuvem(); 
+                window.navegarPara('inicio');
+                verificarRotinaCorreios(); // Dispara o robô dos Correios
             }
         } catch(e) { console.error(e); alert("Erro na inicialização: " + e.message + "\n\nTire um print se isso continuar!"); }
         mostrarLoading(false);
@@ -148,15 +246,11 @@ function aplicarRestricoesDeTela() {
     if(!perfilUsuario) return;
     const setorEl = document.getElementById('sidebar-setor'); if(setorEl) setorEl.innerText = perfilUsuario.setor || 'SMMAM';
     
-    // Atualiza o nome padrão para Humberto caso seja o "Legado" e salva no banco silenciosamente
     if (perfilUsuario.nome === 'Administrador Legado') {
         perfilUsuario.nome = 'Humberto';
-        if (usuarioLogado) {
-            updateDoc(doc(db, "usuarios", usuarioLogado.uid), { nome: 'Humberto' }).catch(()=>{});
-        }
+        if (usuarioLogado) { updateDoc(doc(db, "usuarios", usuarioLogado.uid), { nome: 'Humberto' }).catch(()=>{}); }
     }
     
-    // Encurta a exibição do nível ADMIN para ADM
     let nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
     if (nivelStr === 'ADMIN') nivelStr = 'ADM';
 
@@ -200,17 +294,6 @@ if(cadLoteInput) {
             } else { window.mostrarToast("Lote não encontrado."); }
         } catch(e) {} mostrarLoading(false);
     });
-}
-
-window.buscarStatusCorreios = async function(codigoAR, spanId) {
-    const span = document.getElementById(spanId); if(!span) return;
-    span.innerHTML = `<span class="correios-status" style="background:#e2e8f0;color:#64748b;">⏳ API...</span>`;
-    try {
-        const response = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
-        if(!response.ok) throw new Error('Falha');
-        const data = await response.json();
-        if(data.isDelivered) { span.innerHTML = `<span class="correios-status correios-entregue">📬 Entregue (API)</span>`; } else { span.innerHTML = `<span class="correios-status correios-transito">🚚 Transito (API)</span>`; }
-    } catch(e) { span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" class="correios-status correios-erro">Correios ↗</a>`; }
 }
 
 window.buscarConsultaLivre = async function(tipoBusca) {
@@ -608,7 +691,7 @@ window.renderizarPainel = function() {
     let filtrados = window.DB;
     if(window.filtroTipoDocumento !== 'Todos') filtrados = filtrados.filter(item => item.tipoDocumento === window.filtroTipoDocumento);
     
-    // Filtro aprimorado: Busca em praticamente todos os campos de texto relevantes
+    // Pesquisa Híbrida: Busca em todo o endereço, nome e lote
     filtrados = filtrados.filter(item => { 
         const stringGeral = `${item.nome || ''} ${item.numNotif || ''} ${item.loteEndereco || ''} ${item.endereco || ''} ${item.bairro || ''} ${item.procOuvidoria || ''} ${item.codigoAR || ''}`.toLowerCase();
         return stringGeral.includes(filtroTexto); 
@@ -622,8 +705,33 @@ window.renderizarPainel = function() {
         const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
         let statusHtml = ''; let botaoAutuar = '';
         const badgeTipo = item.tipoDocumento === 'auto' ? `<span class="badge-tipo-auto">MULTA / AUTO</span>` : `<span class="badge-tipo-notif">NOTIFICAÇÃO</span>`;
-        if(item.codigoAR) { let corFisica = ''; if(item.statusRetornoAR === 'entregue') corFisica = 'border-color:#16a34a; background:#dcfce7; color:#166534;'; else if(item.statusRetornoAR === 'devolvido') corFisica = 'border-color:#dc2626; background:#fee2e2; color:#991b1b;'; statusHtml += `<span class="badge-ar" style="${corFisica}">AR: ${item.codigoAR} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:inherit;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;margin-left:5px;" onclick="buscarStatusCorreios('${item.codigoAR}', 'ar-${item.firebaseId}')">Status API</button></span></span>`; }
-        if(item.dataPrazo) { const df = item.dataPrazo.split('-').reverse().join('/'); const pz = new Date(item.dataPrazo + "T00:00:00"); if(pz < hoje) { statusHtml += `<span class="badge-vencido">Vencido: ${df}</span>`; if(item.tipoDocumento !== 'auto') botaoAutuar = `<a class="btn-autuar" onclick="navegarPara('autos')">📝 Autuar</a>`; } else { statusHtml += `<span class="badge-prazo">No Prazo: ${df}</span>`; } }
+        
+        // RENDERIZAÇÃO INTELIGENTE DO AR COM AS 7 CORES
+        if(item.codigoAR) { 
+            let corFisica = 'border-color:#cbd5e1; background:#f8fafc; color:#475569;'; // Padrão: Aguardando Postagem
+            let txtStatus = '🟡 Aguardando';
+            const st = item.statusRetornoAR;
+            
+            if(st === 'entregue') { corFisica = 'border-color:#16a34a; background:#dcfce7; color:#166534;'; txtStatus = '✅ Entregue'; }
+            else if(st === 'devolvido') { corFisica = 'border-color:#dc2626; background:#fee2e2; color:#991b1b;'; txtStatus = '❌ Devolvido'; }
+            else if(st === 'transito') { corFisica = 'border-color:#3b82f6; background:#eff6ff; color:#1d4ed8;'; txtStatus = '🚚 Em Trânsito'; }
+            else if(st === 'saiu_entrega') { corFisica = 'border-color:#f59e0b; background:#fef3c7; color:#b45309;'; txtStatus = '🛵 Saiu p/ Entrega'; }
+            else if(st === 'tentativa') { corFisica = 'border-color:#f97316; background:#fff7ed; color:#c2410c;'; txtStatus = '⚠️ Tentativa (Falha)'; }
+            else if(st === 'retirada') { corFisica = 'border-color:#8b5cf6; background:#f5f3ff; color:#6d28d9;'; txtStatus = '🏢 Aguardando Retirada'; }
+            
+            let descCorreios = item.statusCorreiosTexto ? `<div style="font-size:9px; color:#64748b; margin-top:4px; line-height:1.2;">${item.statusCorreiosTexto}</div>` : '';
+
+            statusHtml += `
+            <div style="${corFisica} padding:6px; border-radius:4px; border:1px solid; text-align:center; min-width: 140px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                <div style="font-size:11px; font-weight:bold; margin-bottom:3px;">
+                    <a href="https://linketrack.com/track?codigo=${item.codigoAR}" target="_blank" style="color:inherit; text-decoration:none;" title="Ver linha do tempo completa">AR: ${item.codigoAR} ↗</a>
+                </div>
+                <div style="font-size:11px; font-weight: bold;">${txtStatus}</div>
+                ${descCorreios}
+            </div>`; 
+        }
+
+        if(item.dataPrazo) { const df = item.dataPrazo.split('-').reverse().join('/'); const pz = new Date(item.dataPrazo + "T00:00:00"); if(pz < hoje) { statusHtml += `<div style="margin-top:5px;"><span class="badge-vencido">Vencido: ${df}</span></div>`; if(item.tipoDocumento !== 'auto') botaoAutuar = `<a class="btn-autuar" onclick="navegarPara('autos')">📝 Autuar</a>`; } else { statusHtml += `<div style="margin-top:5px;"><span class="badge-prazo">No Prazo: ${df}</span></div>`; } }
         
         const tr = document.createElement('tr');
         tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}" onclick="handleShiftClick(event, this)"></td><td>${badgeTipo}</td><td><strong>${item.numNotif}</strong></td><td><div style="font-weight:bold; color:#1b365d;">${item.nome.toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div></td><td>${statusHtml || '<small style="color:#94a3b8">Sem acompanhamento</small>'}</td><td class="action-links"><a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a><a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoAutuar}</td>`;
@@ -659,7 +767,15 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('numNotif')) document.getElementById('numNotif').value = item.numNotif || ''; 
     if(document.getElementById('procOuvidoria')) document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; 
     if(document.getElementById('codigoAR')) document.getElementById('codigoAR').value = item.codigoAR || ''; 
-    if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = item.statusRetornoAR || 'aguardando'; 
+    
+    // Injeta os novos status dinamicamente no Select de edição para não quebrar a tela
+    const selAR = document.getElementById('statusRetornoAR');
+    if(selAR) {
+        const novosStatus = [{v:'transito', t:'🚚 Em Trânsito'}, {v:'saiu_entrega', t:'🛵 Saiu para Entrega'}, {v:'tentativa', t:'⚠️ Tentativa de Entrega'}, {v:'retirada', t:'🏢 Aguardando Retirada'}];
+        novosStatus.forEach(op => { if(!selAR.querySelector(`option[value="${op.v}"]`)) selAR.add(new Option(op.t, op.v)); });
+        selAR.value = item.statusRetornoAR || 'aguardando'; 
+    }
+
     if(document.getElementById('dataPrazo')) document.getElementById('dataPrazo').value = item.dataPrazo || ''; 
     if(document.getElementById('dataNotif')) document.getElementById('dataNotif').value = item.dataNotif || ''; 
     if(document.getElementById('tipoAR')) document.getElementById('tipoAR').checked = item.tipoAR; 
@@ -784,9 +900,8 @@ window.exportarVipp = function() {
         let cpfCnpj = (i.doc || '').replace(/\D/g, '').substring(0, 14);
         if (!cpfCnpj) { cpfCnpj = "00000000000"; }
         
-        const cnpjPrefeitura = "87849923000109"; // CNPJ Válido
+        const cnpjPrefeitura = "87849923000109"; 
 
-        // A MÁGICA ACONTECE AQUI: Cria a Observação com a Tag
         const obs1 = limpa(`NOTIFICACAO SMMAM ${i.numNotif || ''} - ${loteId}`).substring(0, 100);
         const ar = (i.codigoAR && i.codigoAR.length === 13) ? i.codigoAR : "";
 
@@ -820,7 +935,6 @@ window.importarRetornoCorreios = function(file) {
             const text = e.target.result;
             const rows = text.split('\n');
             
-            // Verificação básica se é o arquivo exportado pelo VIPP
             if(!rows[0].toUpperCase().includes('REGISTRO')) {
                 return alert("Arquivo inválido! Certifique-se de exportar o arquivo CSV correto do VIPP.");
             }
@@ -833,7 +947,6 @@ window.importarRetornoCorreios = function(file) {
                 const cols = rows[i].split(';');
                 if(cols.length < 18) continue; 
                 
-                // No VIPP, geralmente Obs = coluna 16 e Registro = coluna 18
                 const obs = cols[16] ? cols[16].replace(/['"]/g, '').trim() : "";
                 const rastreio = cols[18] ? cols[18].replace(/['"]/g, '').trim() : "";
                 
