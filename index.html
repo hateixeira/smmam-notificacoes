@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=7">
+    <link rel="stylesheet" href="css/style.css?v=8">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -86,33 +86,30 @@
             
             <!-- VIEW 1: TELA INICIAL -->
             <div id="view-inicio" class="view-section active-view">
-                <h2>Visão Geral do Setor</h2>
+                <h2>Gestão de Fluxo de Trabalho (Workflow)</h2>
                 <div class="dashboard-cards">
-                    <div class="card card-total"><div class="num" id="dashTotalNotif">0</div><div class="label">Notificações</div></div>
-                    <div class="card card-total"><div class="num" id="dashTotalAutos">0</div><div class="label">Autos / Multas</div></div>
-                    <div class="card card-info"><div class="num" id="dashAREnviados">0</div><div class="label">ARs Enviados</div></div>
-                    <div class="card card-prazo"><div class="num" id="dashARRetornados">0</div><div class="label">ARs Recebidos</div></div>
+                    <div class="card card-info"><div class="num" id="dashRascunhos">0</div><div class="label">Rascunhos (Pendentes)</div></div>
+                    <div class="card card-total"><div class="num" id="dashAtivos">0</div><div class="label">Processos Ativos</div></div>
+                    <div class="card card-total"><div class="num" id="dashArquivados">0</div><div class="label">Arquivados / Baixados</div></div>
+                    <div class="card card-prazo"><div class="num" id="dashAREnviados">0</div><div class="label">Aguardando AR</div></div>
                     <div class="card card-vencida"><div class="num" id="dashVencidas">0</div><div class="label">Prazos Vencidos</div></div>
                 </div>
 
                 <div class="panel-container" style="margin-top: 20px;">
                     <div class="toolbar">
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; justify-content: space-between; width: 100%;">
                             <div class="filter-group">
-                                <button class="filter-type-btn active" onclick="aplicarFiltroTipo('Todos', this)">📋 Mostrar Todos</button>
-                                <button class="filter-type-btn" onclick="aplicarFiltroTipo('notificacao', this)">📝 Só Notificações</button>
-                                <button class="filter-type-btn" onclick="aplicarFiltroTipo('auto', this)">🚨 Só Autos</button>
+                                <button class="filter-type-btn active" onclick="aplicarFiltroProcesso('ativo', this)">🟢 Processos Ativos</button>
+                                <button class="filter-type-btn" onclick="aplicarFiltroProcesso('arquivado', this)">📂 Ver Arquivados</button>
+                            </div>
+                            <div class="filter-group">
+                                <button class="filter-btn active" onclick="aplicarFiltroTipo('Todos', this)">📋 Mostrar Todos</button>
+                                <button class="filter-btn" onclick="aplicarFiltroTipo('notificacao', this)">📝 Só Notificações</button>
+                                <button class="filter-btn" onclick="aplicarFiltroTipo('auto', this)">🚨 Só Autos</button>
                             </div>
                         </div>
-                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por rua, número, nome, lote, código AR..." onkeyup="onBuscaKeyUp()">
-                        <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
-                            <div class="filter-bar">
-                                <span style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 5px;">FILTROS:</span>
-                                <button class="filter-btn active" onclick="aplicarFiltro('Todos', this)">Todos</button>
-                                <button class="filter-btn" onclick="aplicarFiltro('No Prazo', this)">⏳ No Prazo</button>
-                                <button class="filter-btn" onclick="aplicarFiltro('Vencidos', this)">⚠️ Vencidos</button>
-                                <button class="filter-btn" onclick="aplicarFiltro('Com AR', this)">📬 Com AR</button>
-                            </div>
+                        <input type="text" id="buscaInput" class="search-box" placeholder="🔍 Buscar por rua, número, nome, lote, código AR, status..." onkeyup="onBuscaKeyUp()">
+                        <div style="display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
                             <div>
                                 <button class="btn-primary btn-outline" onclick="exportarVipp()" style="padding: 6px 12px; font-size: 12px;">📦 Exportar VIPP</button>
                                 <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px;" title="Baixar Excel">📊 Excel</button>
@@ -131,7 +128,7 @@
                                     <th>Tipo</th>
                                     <th class="sortable" onclick="ordenarTabela('numNotif')">Nº Reg. <span class="sort-icon">▼▲</span></th>
                                     <th class="sortable" onclick="ordenarTabela('nome')">Nome / Alvo <span class="sort-icon">▼▲</span></th>
-                                    <th>Status (AR/Prazo)</th>
+                                    <th>Status (Acompanhamento)</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
@@ -148,21 +145,32 @@
                     <form id="notifForm" onsubmit="salvarDocumento(event, 'notificacao')">
                         <input type="hidden" id="editFirebaseIdNotif">
                         <div class="form-row">
-                            <div class="form-group" style="flex: 1.2;"><label>Nº Notificação *</label><input type="text" id="numNotif" placeholder="Ex: 0528B (O ano será adicionado auto.)" required></div>
+                            <div class="form-group" style="flex: 1.2;">
+                                <label>Nº Notificação *</label>
+                                <div style="display: flex; gap: 5px;">
+                                    <input type="text" id="numNotif" placeholder="Ex: 0528B/2026" required style="width: 100%;">
+                                    <button type="button" class="btn-secondary" title="Sugerir Próximo Número" onclick="document.getElementById('numNotif').value = sugerirNumero('notificacao')" style="padding: 0 10px;">🪄</button>
+                                </div>
+                            </div>
                             <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria"></div>
-                            <div class="form-group" style="flex: 1.5;"><label>Data *</label><input type="date" id="dataNotif" required></div>
+                            <div class="form-group" style="flex: 1.5;"><label>Data de Emissão *</label><input type="date" id="dataNotif" required></div>
                         </div>
                         <div class="form-group">
-                            <label>Forma de Notificação *</label>
+                            <label>Forma de Envio *</label>
                             <div class="checkbox-group">
-                                <div class="checkbox-item"><input type="radio" id="tipoPresencial" name="tipoNotif" value="Presencial" checked><label for="tipoPresencial">Presencial</label></div>
-                                <div class="checkbox-item"><input type="radio" id="tipoAR" name="tipoNotif" value="AR"><label for="tipoAR">Por AR</label></div>
+                                <div class="checkbox-item"><input type="radio" id="tipoPresencial" name="tipoNotif" value="Presencial" checked><label for="tipoPresencial">Presencial (Em Mãos)</label></div>
+                                <div class="checkbox-item"><input type="radio" id="tipoAR" name="tipoNotif" value="AR"><label for="tipoAR">Por AR (Correios)</label></div>
                             </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 2;"><label>Nome do Notificado *</label><input type="text" id="nome" required></div>
-                            <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ *</label><input type="text" id="doc" maxlength="18" required></div>
+                        
+                        <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e1; margin-bottom: 20px;">
+                            <p style="font-size: 11px; color: #475569; margin: 0 0 10px 0;"><strong>💡 Dica:</strong> Se for a campo, deixe Nome e CPF em branco. O sistema salvará como <strong>Rascunho</strong> para preenchimento posterior.</p>
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 2;"><label>Nome do Notificado</label><input type="text" id="nome"></div>
+                                <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ</label><input type="text" id="doc" maxlength="18"></div>
+                            </div>
                         </div>
+
                         <div class="form-row">
                             <div class="form-group"><label>CEP</label><input type="text" id="cep" maxlength="9"></div>
                             <div class="form-group" style="flex: 2;"><label>Endereço de Correspondência</label><input type="text" id="endereco"></div>
@@ -172,7 +180,7 @@
                             <div class="form-group"><label>Telefone</label><input type="text" id="telefone" maxlength="15"></div>
                         </div>
 
-                        <div style="font-weight: bold; margin: 10px 0 5px 0; color: #1b365d; font-size:13px;">Cadastro Imobiliário (Busca Automática)</div>
+                        <div style="font-weight: bold; margin: 10px 0 5px 0; color: #1b365d; font-size:13px;">Cadastro Imobiliário do Local Irregular</div>
                         <div class="form-row">
                             <div class="form-group"><label>Distr.</label><input type="text" id="cadDistrito" placeholder="01"></div>
                             <div class="form-group"><label>Zona</label><input type="text" id="cadZona" placeholder="5"></div>
@@ -180,7 +188,7 @@
                             <div class="form-group"><label>Lote</label><input type="text" id="cadLote" placeholder="0015"></div>
                             <div class="form-group" style="flex: 1.5;"><label>Cad. Imob.</label><input type="text" id="cadImob"></div>
                         </div>
-                        <div class="form-group"><label>Endereço do Local da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
+                        <div class="form-group"><label>Endereço Físico da Ocorrência *</label><input type="text" id="loteEndereco" required></div>
 
                         <div class="form-group">
                             <label>Irregularidades Verificadas</label>
@@ -203,22 +211,15 @@
                             </div>
                         </div>
 
-                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Acompanhamento / Prazos</div>
+                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Ciência e Prazos Matemáticos (Dias Corridos)</div>
+                        <p style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">O prazo só começa a contar a partir da Data de Recebimento. Em caso de AR, o sistema preencherá a data sozinho quando entregue.</p>
+                        
                         <div class="form-row">
-                            <div class="form-group" style="flex: 1.5;"><label>Código AR (Correios)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
-                            <div class="form-group" style="flex: 1.5;">
-                                <label>Retorno Físico do AR?</label>
-                                <select id="statusRetornoAR">
-                                    <option value="aguardando">⏳ Aguardando Retorno</option>
-                                    <option value="transito">🚚 Em Trânsito</option>
-                                    <option value="saiu_entrega">🛵 Saiu para Entrega</option>
-                                    <option value="tentativa">⚠️ Tentativa de Entrega</option>
-                                    <option value="retirada">🏢 Aguardando Retirada</option>
-                                    <option value="entregue">✅ Entregue / Assinado</option>
-                                    <option value="devolvido">❌ Devolvido / Não Localizado</option>
-                                </select>
-                            </div>
-                            <div class="form-group"><label>Prazo p/ Regularizar</label><input type="date" id="dataPrazo"></div>
+                            <div class="form-group"><label>Código AR (Opcional)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
+                            <div class="form-group"><label>Data de Recebimento / Ciência</label><input type="date" id="dataRecebimento"></div>
+                            <div class="form-group"><label>Prazo p/ Regularizar (Em Dias)</label><input type="number" id="prazoDias" value="15" style="font-weight: bold; color: #1b365d;"></div>
+                            
+                            <input type="hidden" id="statusRetornoAR" value="aguardando">
                         </div>
 
                         <div class="form-group">
@@ -228,7 +229,7 @@
                         </div>
 
                         <div class="btn-actions" id="areaBotoesSalvarNotif">
-                            <button type="submit" id="btnSalvarNotif" class="btn-success" style="flex: 2;">☁️ Salvar Notificação</button>
+                            <button type="submit" id="btnSalvarNotif" class="btn-success" style="flex: 2;">☁️ Salvar Notificação / Rascunho</button>
                             <button type="button" class="btn-secondary" onclick="limparFormularios()">🔄 Limpar</button>
                         </div>
                     </form>
@@ -243,7 +244,7 @@
                     <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px dashed #cbd5e1; margin-bottom: 20px;">
                         <label>Vincular a uma Notificação Anterior</label>
                         <div style="display: flex; gap: 10px;">
-                            <input type="text" id="autoBuscaNotif" placeholder="Digite o Nº da Notificação Ex: 0520B">
+                            <input type="text" id="autoBuscaNotif" placeholder="Digite o Nº da Notificação Ex: 0520B/2026">
                             <button type="button" class="btn-primary" onclick="puxarDadosDaNotificacao()">🔍 Puxar Dados</button>
                         </div>
                     </div>
@@ -252,7 +253,13 @@
                         <input type="hidden" id="editFirebaseIdAuto">
                         
                         <div class="form-row">
-                            <div class="form-group"><label>Nº do Auto *</label><input type="text" id="autoNum" placeholder="Ex: 105 (O ano será adicionado auto.)" required></div>
+                            <div class="form-group" style="flex: 1.2;">
+                                <label>Nº do Auto *</label>
+                                <div style="display: flex; gap: 5px;">
+                                    <input type="text" id="autoNum" placeholder="Ex: 105/2026" required style="width: 100%;">
+                                    <button type="button" class="btn-secondary" title="Sugerir Próximo" onclick="document.getElementById('autoNum').value = sugerirNumero('auto')" style="padding: 0 10px;">🪄</button>
+                                </div>
+                            </div>
                             <div class="form-group"><label>Data da Autuação *</label><input type="date" id="autoData" required></div>
                         </div>
                         
@@ -268,12 +275,12 @@
                         
                         <div class="form-row" style="align-items: center;">
                             <div class="form-group">
-                                <label>Quantidade de URM Aplicada</label>
+                                <label>Qtd URM Aplicada</label>
                                 <input type="number" id="autoMultaURM" step="0.01" value="100" oninput="calcularMultaReais()">
                             </div>
                             <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">X</div>
                             <div class="form-group">
-                                <label>Valor URM do Ano (R$)</label>
+                                <label>Valor URM Atual</label>
                                 <input type="text" id="autoValorURMAtual" disabled style="background:#f1f5f9; font-weight:bold;">
                             </div>
                             <div style="font-size: 20px; font-weight: bold; color: #475569; margin: 0 10px;">=</div>
@@ -501,7 +508,7 @@
                         <!-- MÓDULO CORREIOS -->
                         <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
                             <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
-                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API agora.</p>
+                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API nativa agora.</p>
                             <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
                             <button id="btnForcarCorreios" class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
                         </div>
@@ -519,13 +526,11 @@
                         <div class="panel-container" style="background: #1e293b; color: white;">
                             <h3 style="margin-top: 0; color: #38bdf8; font-size: 15px;">📖 Manual da Arquitetura</h3>
                             <div style="font-size:11px; line-height:1.5; color:#cbd5e1; max-height:150px; overflow-y:auto; padding-right:5px; margin-bottom: 10px;">
-                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore (NoSQL).<br>
+                                <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore.<br>
                                 <strong>Custos (Plano Spark):</strong> Limite de 50.000 leituras/dia e 20.000 escritas/dia.<br>
-                                <strong>Segurança:</strong> Firebase Rules bloqueiam usuários não aprovados direto no backend.<br>
                                 <strong>Regra de Duplicidade:</strong> Sistema auto-injeta "/ANO" no registro e bloqueia salvamento de duplicados.<br>
-                                <strong>Automação Correios:</strong> O primeiro acesso após as 08h e 13h dispara um robô invisível em *background* para varrer os status via Proxy Público para contornar CORS e rate-limits. Feedback no Tooltip (mouse-over).<br>
+                                <strong>Workflow de Prazos:</strong> O prazo em "Dias Corridos" é dinâmico e só começa a contar a partir do preenchimento da Data de Recebimento. Cartas AR atualizam a data sozinhas quando a API acusa 'Entregue'.<br>
                                 <strong>Busca Endereço:</strong> O Delta Sync fraciona o endereço em 'logradouro_keywords' para permitir a busca (array-contains) instantânea.<br>
-                                <strong>Cofre IPTU:</strong> A sincronização usa *Client-side Diffing* na memória RAM para comparar o arquivo localmente antes de enviar os deltas.<br>
                             </div>
                             <button class="btn-success" style="width: 100%; font-size: 10px; padding: 5px; margin-bottom: 5px;" onclick="baixarBackupLocal()">📥 Baixar Backup Local JSON</button>
                             <button class="btn-danger" style="width: 100%; font-size: 10px; padding: 5px;" onclick="corrigirEnderecosAntigos()">🛠️ Injetar Cidade/UF nos Imóveis Antigos</button>
@@ -538,7 +543,7 @@
         </main>
     </div>
 
-    <!-- MODAL FOTOS -->
+    <!-- MODAIS FOTOS E ESPELHO (Mantidos iguais) -->
     <div id="photo-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <span class="modal-close" onclick="fecharModalFoto()">&times;</span>
@@ -549,7 +554,6 @@
         </div>
     </div>
 
-    <!-- MODAL ESPELHO CADASTRAL -->
     <div id="modal-espelho-cadastral" class="modal-overlay" style="display: none;">
         <div class="modal-content modal-cadastral">
             <div style="background: #1b365d; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
@@ -564,7 +568,6 @@
         </div>
     </div>
 
-    <!-- MODAL EDIÇÃO DE USUÁRIO (NOVO) -->
     <div id="modal-edicao-usuario" class="modal-overlay" style="display: none;">
         <div class="modal-content modal-cadastral" style="max-width: 400px;">
             <div style="background: #1b365d; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
@@ -609,7 +612,7 @@
                 </td>
             </tr>
             <tr>
-                <td colspan="4"><span class="cell-label">3. DATA</span><div class="cell-value" id="pData"></div></td>
+                <td colspan="4"><span class="cell-label">3. DATA DE EMISSÃO</span><div class="cell-value" id="pData"></div></td>
                 <td colspan="2" style="vertical-align: middle;">
                     <div style="display: flex; justify-content: space-around; font-size: 9.5px; font-weight: bold;">
                         <span id="pTipoPresencial">( ) Notificação Presencial</span><span id="pTipoAR">( ) Notificado por AR</span>
@@ -619,7 +622,7 @@
             <tr><td colspan="6"><span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
             <tr>
                 <td colspan="4" style="width: 65%;"><span class="cell-label">6. CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
-                <td colspan="2" style="width: 35%;"><span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span><div class="cell-value">---</div></td>
+                <td colspan="2" style="width: 35%;"><span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span><div class="cell-value">____________________</div></td>
             </tr>
             <tr>
                 <td colspan="4"><span class="cell-label">8. ENDEREÇO DE CORRESPONDÊNCIA</span><div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div></td>
@@ -672,7 +675,7 @@
                 <td colspan="6" style="padding: 0; border: none;">
                     <div class="signature-container">
                         <div class="sig-box"><br><span class="cell-label">19. Assinatura do Responsável</span></div>
-                        <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;">Recebi o presente em _____/_____/_________</div><span class="cell-label">20. Assinatura do Munícipe</span></div>
+                        <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;" id="pDataRecebimentoPrint">Data de Recebimento: _____/_____/_________</div><span class="cell-label">20. Assinatura do Munícipe</span></div>
                     </div>
                 </td>
             </tr>
