@@ -1327,7 +1327,11 @@ window.imprimirRegistro = function(id) {
     }
 
     if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
-    window.print();
+    
+    // O SEGREDO: Dá 500 milissegundos para o navegador processar a imagem local antes de travar a tela
+    setTimeout(() => {
+        window.print();
+    }, 500);
 }
 
 window.exportarExcel = function() {
