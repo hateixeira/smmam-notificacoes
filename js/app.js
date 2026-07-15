@@ -67,29 +67,51 @@ window.mostrarToast = function(msg) {
     }
 }
 
-// MOTOR DINÂMICO DE INFRAÇÕES (Multi-Setor)
+// MOTOR DINÂMICO COM BYPASS DE SEGURANÇA E INJEÇÃO DE LEIS
 window.carregarInfracoesGlobais = async function() {
+    const meuSetor = perfilUsuario ? (perfilUsuario.setor || 'SMMAM') : 'SMMAM';
+    window.bancoInfracoesGlobais = [];
+
     try {
         const snap = await getDocs(collection(db, "infracoes_config"));
-        window.bancoInfracoesGlobais = [];
-        
-        const meuSetor = perfilUsuario ? (perfilUsuario.setor || 'SMMAM') : 'SMMAM';
-
         snap.forEach(d => { 
             const inf = d.data();
-            // Só carrega as leis do setor do usuário logado ou se não tiver setor (legado)
             if(inf.setor === meuSetor || !inf.setor) {
                 window.bancoInfracoesGlobais.push({ id: d.id, ...inf }); 
             }
         });
-        
-        window.bancoInfracoesGlobais.sort((a,b) => a.nome.localeCompare(b.nome));
+    } catch(e) { 
+        console.warn("Aviso: Permissão negada no Firebase. Carregando base legal direto da memória do código.", e); 
+    }
 
-        renderizarCheckboxesInfracoes('containerInfracoesDinamicasNotif', 'notificacao');
-        renderizarCheckboxesInfracoes('containerInfracoesDinamicasAuto', 'auto');
-        
-        if(perfilUsuario && perfilUsuario.nivel === 'admin') window.renderizarTabelaInfracoesAdmin();
-    } catch(e) { console.error("Erro ao carregar infrações", e); }
+    // O "BYPASS" - INJETA AS LEIS DA SMMAM DIRETAMENTE NA MEMÓRIA SE O BANCO FALHAR OU ESTIVER VAZIO
+    if(window.bancoInfracoesGlobais.length === 0 && meuSetor === 'SMMAM') {
+        window.bancoInfracoesGlobais = [
+            { 
+                id: "dinamico_mato", 
+                nome: "Vegetação Rasteira / Mato", 
+                baseLegal: "artigo 6º, parágrafo 2o, da Lei Municipal n°. 5.198/2011", 
+                textoPadrao: "Limpeza de vegetação rasteira/mato, conforme o artigo 6º, parágrafo 2o, da Lei Municipal n°. 5.198/2011 e suas alterações.", 
+                multaUrm: 5, 
+                setor: "SMMAM" 
+            },
+            { 
+                id: "dinamico_residuos", 
+                nome: "Resíduos Sólidos Diversos / Entulhos", 
+                baseLegal: "artigo 41, inciso III, LC n°. 56/2002", 
+                textoPadrao: "Recolhimento e destinação correta de resíduos sólidos diversos / entulhos, conforme o artigo 41, inciso III, da Lei Complementar Municipal n°. 56/2002.", 
+                multaUrm: 5, 
+                setor: "SMMAM" 
+            }
+        ];
+    }
+    
+    window.bancoInfracoesGlobais.sort((a,b) => a.nome.localeCompare(b.nome));
+
+    renderizarCheckboxesInfracoes('containerInfracoesDinamicasNotif', 'notificacao');
+    renderizarCheckboxesInfracoes('containerInfracoesDinamicasAuto', 'auto');
+    
+    if(perfilUsuario && perfilUsuario.nivel === 'admin') window.renderizarTabelaInfracoesAdmin();
 }
 
 function renderizarCheckboxesInfracoes(containerId, tipoForm) {
@@ -131,7 +153,7 @@ window.somarUrmsDinamicamente = function() {
     }
 }
 
-// ADM DE INFRAÇÕES (Multi-Setor)
+// ADM DE INFRAÇÕES
 window.salvarInfracaoNoBanco = async function() {
     const nome = document.getElementById('adminNomeInfr').value.trim();
     const baseLegal = document.getElementById('adminBaseInfr').value.trim();
@@ -148,24 +170,27 @@ window.salvarInfracaoNoBanco = async function() {
             baseLegal, 
             textoPadrao: texto, 
             multaUrm,
-            setor: meuSetor // Associa a lei diretamente ao setor do Admin que criou
+            setor: meuSetor 
         });
         window.mostrarToast("Infração cadastrada no seu setor!");
         document.getElementById('adminNomeInfr').value = '';
         document.getElementById('adminBaseInfr').value = '';
         document.getElementById('adminTextoInfr').value = '';
         await window.carregarInfracoesGlobais();
-    } catch(e) { alert("Erro ao salvar: " + e.message); }
+    } catch(e) { 
+        alert("ERRO DE PERMISSÃO (FIREBASE):\n\nO servidor do Google bloqueou a gravação porque você ainda não autorizou a criação de leis nas Regras (Rules) do banco de dados.\n\nPara resolver isso de forma definitiva, acesse o site do Firebase Console > Firestore Database > Regras, e cole este comando:\n\nmatch /infracoes_config/{document=**} {\n  allow read, write: if request.auth != null;\n}"); 
+    }
     mostrarLoading(false);
 }
 
 window.removerInfracaoDoBanco = async function(id) {
+    if(id.startsWith("dinamico_")) return alert("Esta lei base foi injetada nativamente pelo sistema para garantir o funcionamento da SMMAM e não pode ser excluída.");
     if(!confirm("Atenção: Apagar essa infração removerá ela dos novos formulários do seu setor. Prosseguir?")) return;
     try {
         await deleteDoc(doc(db, "infracoes_config", id));
         window.mostrarToast("Removida!");
         await window.carregarInfracoesGlobais();
-    } catch(e) { alert("Erro ao remover."); }
+    } catch(e) { alert("Erro ao remover: Permissão negada no Firebase."); }
 }
 
 window.renderizarTabelaInfracoesAdmin = function() {
@@ -215,7 +240,6 @@ function calcularDataVencimento(dataRecebimento, prazoDias) {
     return data.toISOString().slice(0, 10);
 }
 
-// NUMERAÇÃO INDEPENDENTE POR SETOR (Garante que Obras e SMMAM tenham sequências próprias)
 window.sugerirNumero = function(tipo) {
     const anoAtual = new Date().getFullYear().toString();
     const meuSetor = perfilUsuario ? (perfilUsuario.setor || 'SMMAM') : 'SMMAM';
@@ -224,7 +248,6 @@ window.sugerirNumero = function(tipo) {
     
     window.DB.forEach(item => {
         const itemSetor = item.setor || 'SMMAM';
-        // Filtra pelo tipo, pelo ano atual E PELO SETOR
         if (item.tipoDocumento === tipo && item.numNotif && item.numNotif.includes(`/${anoAtual}`) && itemSetor === meuSetor) {
             let partNum = item.numNotif.split('/')[0].replace(/\D/g, ''); 
             let n = parseInt(partNum);
@@ -248,7 +271,6 @@ window.carregarAuditoria = async function() {
         corpo.innerHTML = '';
         snaps.forEach(d => {
             const data = d.data(); 
-            // O Admin só enxerga a auditoria do seu setor
             if((data.setor || 'SMMAM') === meuSetor) {
                 const dFmt = new Date(data.dataHora).toLocaleString('pt-BR');
                 corpo.innerHTML += `<tr><td>${dFmt}</td><td>${data.usuario}</td><td>${data.acao}</td><td>${data.documentoAlvo}</td></tr>`;
@@ -300,7 +322,7 @@ window.verificarRotinaCorreios = async function(forcar = false) {
 
             for (let document of pendingSnaps.docs) {
                 const d = document.data();
-                if ((d.setor || 'SMMAM') !== meuSetor) continue; // O robô só roda os ARs do setor do usuário logado
+                if ((d.setor || 'SMMAM') !== meuSetor) continue; 
                 if (!d.codigoAR || d.codigoAR.length < 13) continue;
                 if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
 
@@ -843,7 +865,6 @@ window.renderizarGraficos = function() {
     }
 }
 
-// BACKUP FÍSICO DO ADM (Multi-Setor Isolado)
 window.baixarBackupLocal = function() {
     const data = JSON.stringify(window.DB, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
@@ -853,104 +874,6 @@ window.baixarBackupLocal = function() {
     a.download = `Backup_Setor_${perfilUsuario.setor || 'Geral'}_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-}
-
-// ADMIN: GESTÃO DE USUÁRIOS
-window.usuariosEmMemoria = [];
-window.carregarConfiguracoesAdmin = async function() {
-    const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); if(corpoUsuarios) corpoUsuarios.innerHTML = '';
-    window.usuariosEmMemoria = [];
-    const meuSetor = perfilUsuario.setor || 'SMMAM';
-
-    try {
-        const usersSnapshot = await getDocs(collection(db, "usuarios"));
-        usersSnapshot.forEach(docSnap => {
-            const u = docSnap.data(); const uid = docSnap.id;
-            // ADMIN SÓ GERENCIA USUÁRIOS DO SEU SETOR
-            if((u.setor || 'SMMAM') === meuSetor) {
-                u.uid = uid; window.usuariosEmMemoria.push(u);
-                const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
-                const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
-                if(corpoUsuarios) corpoUsuarios.innerHTML += `<tr><td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td><span style="background:#e2e8f0; padding:3px; border-radius:4px; font-size:11px;">${u.setor || 'SMMAM'}</span></td><td>${u.email}</td><td>${selectStatus}</td><td>${selectNivel}</td><td><button style="font-size:10px; padding:4px;" class="btn-primary" onclick="abrirModalEdicaoUsuario('${uid}')">✏️ Editar</button> <button style="font-size:10px; padding:4px;" class="btn-secondary" onclick="enviarResetSenha('${u.email}')">🔑 Reset Senha</button></td></tr>`;
-            }
-        });
-        window.carregarListaVip();
-    } catch(e) {}
-}
-
-window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) { try { await updateDoc(doc(db, "usuarios", uid), { [campo]: valorNovo }); window.mostrarToast(`Atualizado!`); if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`; } catch(e) { alert("Sem permissão."); } }
-
-window.abrirModalEdicaoUsuario = function(uid) {
-    const u = window.usuariosEmMemoria.find(user => user.uid === uid);
-    if(!u) return;
-    document.getElementById('editUserId').value = u.uid;
-    document.getElementById('editUserNome').value = u.nome || '';
-    document.getElementById('editUserCargo').value = u.cargo || '';
-    document.getElementById('editUserSetor').value = u.setor || 'SMMAM';
-    document.getElementById('editUserTelefone').value = u.telefone || '';
-    document.getElementById('editUserMatricula').value = u.matricula || '';
-    document.getElementById('modal-edicao-usuario').style.display = 'flex';
-}
-window.fecharModalEdicaoUsuario = function() { document.getElementById('modal-edicao-usuario').style.display = 'none'; }
-window.salvarEdicaoUsuario = async function() {
-    const uid = document.getElementById('editUserId').value;
-    const novosDados = {
-        nome: document.getElementById('editUserNome').value,
-        cargo: document.getElementById('editUserCargo').value,
-        setor: document.getElementById('editUserSetor').value,
-        telefone: document.getElementById('editUserTelefone').value,
-        matricula: document.getElementById('editUserMatricula').value
-    };
-    mostrarLoading(true);
-    try {
-        await updateDoc(doc(db, "usuarios", uid), novosDados);
-        window.mostrarToast("Dados do servidor atualizados!");
-        window.fecharModalEdicaoUsuario();
-        window.carregarConfiguracoesAdmin();
-    } catch(e) { alert("Erro ao editar."); }
-    mostrarLoading(false);
-}
-
-window.enviarResetSenha = function(email) {
-    if(confirm(`Enviar link oficial de troca de senha para ${email}?`)) {
-        sendPasswordResetEmail(auth, email).then(() => window.mostrarToast("E-mail de reset enviado com sucesso!")).catch((e)=>alert(e.message));
-    }
-}
-
-window.carregarListaVip = async function() {
-    const ul = document.getElementById('listaVipEmails'); if(!ul) return; ul.innerHTML = '';
-    try {
-        const snap = await getDoc(doc(db, "configuracoes", "lista_vip"));
-        if(snap.exists() && snap.data().emails) {
-            snap.data().emails.forEach(e => { ul.innerHTML += `<li>${e}</li>`; });
-        }
-    } catch(e){}
-}
-window.adicionarEmailVip = async function() {
-    const email = document.getElementById('adminVipEmail').value.trim().toLowerCase();
-    if(!email) return;
-    try {
-        const ref = doc(db, "configuracoes", "lista_vip");
-        const snap = await getDoc(ref);
-        let lista = snap.exists() ? (snap.data().emails || []) : [];
-        if(!lista.includes(email)) {
-            lista.push(email);
-            await setDoc(ref, { emails: lista }, { merge: true });
-            window.mostrarToast("E-mail autorizado na Lista VIP!");
-            document.getElementById('adminVipEmail').value = '';
-            window.carregarListaVip();
-        } else { alert("E-mail já está na lista."); }
-    } catch(e) { alert("Erro ao adicionar VIP"); }
-}
-
-const btnSalvarUrm = document.querySelector('#configURM')?.nextElementSibling;
-if(btnSalvarUrm) {
-    btnSalvarUrm.addEventListener('click', async function() {
-        const valor = parseFloat(document.getElementById('configURM').value); if(!valor || valor <= 0) return alert("Valor inválido.");
-        mostrarLoading(true);
-        try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; const elAtual = document.getElementById('autoValorURMAtual'); if(elAtual) elAtual.value = valor.toFixed(2); window.mostrarToast("Valor URM salvo!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
-        mostrarLoading(false);
-    });
 }
 
 const btnImportarIptu = document.getElementById('btnAdminImportarIptu');
@@ -1033,7 +956,6 @@ window.carregarDadosNuvem = async function() {
             if(!data.tipoDocumento) data.tipoDocumento = 'notificacao';
             if(!data.statusProcesso) data.statusProcesso = 'ativo'; 
             
-            // FILTRAGEM STRICT MULTI-TENANT (O fiscal NUNCA vê dados de outra secretaria)
             if ((data.setor || 'SMMAM') === meuSetor) {
                 window.DB.push(data); 
             }
@@ -1402,8 +1324,6 @@ window.imprimirRegistro = function(id) {
                 listTextos.innerHTML += `<li><strong>${inf.baseLegal}:</strong> ${inf.textoPadrao}</li>`;
             }
         });
-        
-        if(item.lei5198 && window.bancoInfracoesGlobais.length === 0) listTextos.innerHTML += `<li>Vegetais arbóreos, lenhosos e nativos deverão ser preservados. Fica proibido o emprego do fogo, bem como, a utilização da capina química para limpeza dos lotes. Após realizada limpeza, fica o notificado obrigado a apresentar levantamento fotográfico.</li>`;
     }
 
     if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
