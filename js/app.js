@@ -28,7 +28,7 @@ window.itensFiltradosAtual = [];
 window.fotosTemp = [];
 window.resultadosConsultaAtual = []; 
 window.imovelSelecionadoParaNotificacao = null; 
-window.bancoInfracoesGlobais = []; // O Banco de Infrações Dinâmico
+window.bancoInfracoesGlobais = []; 
 
 window.colunaOrdenacao = '';
 window.ordemCrescente = true;
@@ -67,14 +67,22 @@ window.mostrarToast = function(msg) {
     }
 }
 
-// MOTOR DINÂMICO DE INFRAÇÕES (Lê do Firebase)
+// MOTOR DINÂMICO DE INFRAÇÕES (Multi-Setor)
 window.carregarInfracoesGlobais = async function() {
     try {
         const snap = await getDocs(collection(db, "infracoes_config"));
         window.bancoInfracoesGlobais = [];
-        snap.forEach(d => { window.bancoInfracoesGlobais.push({ id: d.id, ...d.data() }); });
         
-        // Ordenar alfabeticamente
+        const meuSetor = perfilUsuario ? (perfilUsuario.setor || 'SMMAM') : 'SMMAM';
+
+        snap.forEach(d => { 
+            const inf = d.data();
+            // Só carrega as leis do setor do usuário logado ou se não tiver setor (legado)
+            if(inf.setor === meuSetor || !inf.setor) {
+                window.bancoInfracoesGlobais.push({ id: d.id, ...inf }); 
+            }
+        });
+        
         window.bancoInfracoesGlobais.sort((a,b) => a.nome.localeCompare(b.nome));
 
         renderizarCheckboxesInfracoes('containerInfracoesDinamicasNotif', 'notificacao');
@@ -90,7 +98,7 @@ function renderizarCheckboxesInfracoes(containerId, tipoForm) {
     container.innerHTML = '';
     
     if(window.bancoInfracoesGlobais.length === 0) {
-        container.innerHTML = '<span style="color:#64748b; font-size:11px;">⚠️ Nenhuma infração/lei cadastrada. Solicite ao Admin para cadastrar nas Configurações.</span>';
+        container.innerHTML = '<span style="color:#64748b; font-size:11px;">⚠️ Nenhuma infração/lei cadastrada para o seu setor. Solicite ao Admin para cadastrar nas Configurações.</span>';
         return;
     }
 
@@ -99,7 +107,6 @@ function renderizarCheckboxesInfracoes(containerId, tipoForm) {
         div.className = 'checkbox-item';
         div.style.marginBottom = '5px';
         
-        // Se for o Auto, passa a função que soma o dinheiro
         const funcOnChange = tipoForm === 'auto' ? `onchange="somarUrmsDinamicamente()"` : '';
         
         div.innerHTML = `
@@ -113,7 +120,6 @@ function renderizarCheckboxesInfracoes(containerId, tipoForm) {
     });
 }
 
-// Soma URM automática no formulário do Auto
 window.somarUrmsDinamicamente = function() {
     const checkboxes = document.querySelectorAll('.dinamico-chk-auto:checked');
     let totalUrm = 0;
@@ -125,19 +131,26 @@ window.somarUrmsDinamicamente = function() {
     }
 }
 
-// ADM DE INFRAÇÕES
+// ADM DE INFRAÇÕES (Multi-Setor)
 window.salvarInfracaoNoBanco = async function() {
     const nome = document.getElementById('adminNomeInfr').value.trim();
     const baseLegal = document.getElementById('adminBaseInfr').value.trim();
     const texto = document.getElementById('adminTextoInfr').value.trim();
     const multaUrm = parseFloat(document.getElementById('adminUrmInfr').value) || 0;
+    const meuSetor = perfilUsuario.setor || 'SMMAM';
 
     if(!nome || !baseLegal || !texto) return alert("Preencha Nome, Base e Texto.");
 
     mostrarLoading(true, "Salvando Lei/Infração...");
     try {
-        await addDoc(collection(db, "infracoes_config"), { nome, baseLegal, textoPadrao: texto, multaUrm });
-        window.mostrarToast("Infração cadastrada com sucesso!");
+        await addDoc(collection(db, "infracoes_config"), { 
+            nome, 
+            baseLegal, 
+            textoPadrao: texto, 
+            multaUrm,
+            setor: meuSetor // Associa a lei diretamente ao setor do Admin que criou
+        });
+        window.mostrarToast("Infração cadastrada no seu setor!");
         document.getElementById('adminNomeInfr').value = '';
         document.getElementById('adminBaseInfr').value = '';
         document.getElementById('adminTextoInfr').value = '';
@@ -147,7 +160,7 @@ window.salvarInfracaoNoBanco = async function() {
 }
 
 window.removerInfracaoDoBanco = async function(id) {
-    if(!confirm("Atenção: Apagar essa infração removerá ela dos novos formulários. Os documentos antigos não serão alterados. Prosseguir?")) return;
+    if(!confirm("Atenção: Apagar essa infração removerá ela dos novos formulários do seu setor. Prosseguir?")) return;
     try {
         await deleteDoc(doc(db, "infracoes_config", id));
         window.mostrarToast("Removida!");
@@ -195,7 +208,6 @@ window.navegarPara = function(viewId) {
     }
 }
 
-// CÁLCULO DE PRAZOS (Dias Corridos)
 function calcularDataVencimento(dataRecebimento, prazoDias) {
     if (!dataRecebimento || !prazoDias) return null;
     const data = new Date(dataRecebimento + "T12:00:00Z"); 
@@ -203,14 +215,17 @@ function calcularDataVencimento(dataRecebimento, prazoDias) {
     return data.toISOString().slice(0, 10);
 }
 
-// SUGESTÃO DE NUMERO SEQUENCIAL INTELIGENTE
+// NUMERAÇÃO INDEPENDENTE POR SETOR (Garante que Obras e SMMAM tenham sequências próprias)
 window.sugerirNumero = function(tipo) {
     const anoAtual = new Date().getFullYear().toString();
+    const meuSetor = perfilUsuario ? (perfilUsuario.setor || 'SMMAM') : 'SMMAM';
     let maxNum = 0;
     let sufixo = tipo === 'notificacao' ? 'B' : '';
     
     window.DB.forEach(item => {
-        if (item.tipoDocumento === tipo && item.numNotif && item.numNotif.includes(`/${anoAtual}`)) {
+        const itemSetor = item.setor || 'SMMAM';
+        // Filtra pelo tipo, pelo ano atual E PELO SETOR
+        if (item.tipoDocumento === tipo && item.numNotif && item.numNotif.includes(`/${anoAtual}`) && itemSetor === meuSetor) {
             let partNum = item.numNotif.split('/')[0].replace(/\D/g, ''); 
             let n = parseInt(partNum);
             if (n > maxNum) maxNum = n;
@@ -227,12 +242,17 @@ async function registrarLog(acaoRealizada, alvo) {
 
 window.carregarAuditoria = async function() {
     const corpo = document.getElementById('tabelaAuditoriaCorpo'); if(!corpo) return; corpo.innerHTML = '<tr><td colspan="4">Carregando logs...</td></tr>';
+    const meuSetor = perfilUsuario.setor || 'SMMAM';
     try {
         const snaps = await getDocs(query(collection(db, "logs_auditoria"), limit(100)));
         corpo.innerHTML = '';
         snaps.forEach(d => {
-            const data = d.data(); const dFmt = new Date(data.dataHora).toLocaleString('pt-BR');
-            corpo.innerHTML += `<tr><td>${dFmt}</td><td>${data.usuario}</td><td>${data.acao}</td><td>${data.documentoAlvo}</td></tr>`;
+            const data = d.data(); 
+            // O Admin só enxerga a auditoria do seu setor
+            if((data.setor || 'SMMAM') === meuSetor) {
+                const dFmt = new Date(data.dataHora).toLocaleString('pt-BR');
+                corpo.innerHTML += `<tr><td>${dFmt}</td><td>${data.usuario}</td><td>${data.acao}</td><td>${data.documentoAlvo}</td></tr>`;
+            }
         });
     } catch(e) { corpo.innerHTML = '<tr><td colspan="4">Erro ao carregar logs.</td></tr>'; }
 }
@@ -245,7 +265,6 @@ window.toggleAuthMode = function() {
     }
 }
 
-// O ROBÔ DOS CORREIOS (DIRETO BRASILAPI + FREIO DE 3s)
 window.verificarRotinaCorreios = async function(forcar = false) {
     if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; 
     
@@ -267,7 +286,7 @@ window.verificarRotinaCorreios = async function(forcar = false) {
         if (dadosAuto[campoTurno] !== dataHoje || forcar) {
             
             const btnForcar = document.getElementById('btnForcarCorreios');
-            if(forcar && btnForcar) { btnForcar.innerText = "⏳ Consultando Correios de forma segura (Pode levar vários segundos)..."; btnForcar.disabled = true; }
+            if(forcar && btnForcar) { btnForcar.innerText = "⏳ Consultando Correios de forma segura..."; btnForcar.disabled = true; }
 
             if(!forcar) await setDoc(autoRef, { [campoTurno]: dataHoje }, { merge: true });
             
@@ -277,9 +296,11 @@ window.verificarRotinaCorreios = async function(forcar = false) {
             let consultados = 0;
             let atualizados = 0;
             let falhas = 0;
+            const meuSetor = perfilUsuario.setor || 'SMMAM';
 
             for (let document of pendingSnaps.docs) {
                 const d = document.data();
+                if ((d.setor || 'SMMAM') !== meuSetor) continue; // O robô só roda os ARs do setor do usuário logado
                 if (!d.codigoAR || d.codigoAR.length < 13) continue;
                 if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
 
@@ -323,12 +344,11 @@ window.verificarRotinaCorreios = async function(forcar = false) {
                     falhas++; 
                 }
                 
-                // FREIO DE 3 SEGUNDOS PARA NÃO SER BANIDO DA BRASILAPI
                 await new Promise(r => setTimeout(r, 3000));
             }
 
             if (forcar) {
-                alert(`✅ Verificação Concluída!\n\n${consultados} AR(s) processados.\n${atualizados} sofreram alterações de status.\n${falhas} falharam (API bloqueou ou instável).`);
+                alert(`✅ Verificação Concluída!\n\n${consultados} AR(s) processados do seu setor.\n${atualizados} sofreram alterações.\n${falhas} falharam.`);
                 if(btnForcar) { btnForcar.innerText = "🔄 Forçar Sync da API"; btnForcar.disabled = false; }
             } else if (atualizados > 0) {
                 window.mostrarToast(`✅ Correios: ${atualizados} AR(s) atualizados no fundo!`);
@@ -352,8 +372,6 @@ onAuthStateChanged(auth, async (user) => {
             if(campoURM) campoURM.value = window.valorURMGlobal.toFixed(2);
         } catch(e) {}
 
-        await window.carregarInfracoesGlobais(); // LÊ AS LEIS DINÂMICAS
-
         try {
             const userDocRef = doc(db, "usuarios", user.uid);
             const docSnap = await getDoc(userDocRef);
@@ -363,6 +381,8 @@ onAuthStateChanged(auth, async (user) => {
                 if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
                 if(!perfilUsuario.status) perfilUsuario.status = 'aprovado';
                 if(!perfilUsuario.nivel) perfilUsuario.nivel = 'admin'; 
+                
+                await window.carregarInfracoesGlobais(); 
 
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
                     if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
@@ -382,6 +402,7 @@ onAuthStateChanged(auth, async (user) => {
                 const novoPerfil = { nome: "Humberto", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
                 await setDoc(userDocRef, novoPerfil); 
                 perfilUsuario = novoPerfil;
+                await window.carregarInfracoesGlobais();
                 if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
                 if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
                 if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
@@ -422,7 +443,7 @@ window.registrarUsuario = async function() {
     } catch(e) {}
 
     if(!email.endsWith('@bentogoncalves.rs.gov.br') && !isVip) {
-        return alert("Acesso Negado: Apenas e-mails do domínio @bentogoncalves.rs.gov.br são permitidos, exceto se autorizados previamente pelo Administrador.");
+        return alert("Acesso Negado: Apenas e-mails do domínio @bentogoncalves.rs.gov.br são permitidos.");
     }
 
     mostrarLoading(true); 
@@ -431,7 +452,7 @@ window.registrarUsuario = async function() {
         await setDoc(doc(db, "usuarios", userC.user.uid), { nome, cargo, setor, cpf, telefone, matricula, email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() }); 
         sendEmailVerification(userC.user); 
         mostrarLoading(false); 
-        alert("Cadastro enviado para chefia."); 
+        alert("Cadastro enviado para chefia do seu setor."); 
     } catch(e) { mostrarLoading(false); alert(e.message); } 
 }
 
@@ -448,7 +469,7 @@ function aplicarRestricoesDeTela() {
     }
     
     let nivelStr = perfilUsuario.nivel ? String(perfilUsuario.nivel).toUpperCase() : 'LEITOR';
-    if (nivelStr === 'ADMIN') nivelStr = 'ADM';
+    if (nivelStr === 'ADMIN') nivelStr = 'ADM DO SETOR';
 
     const userLogEl = document.getElementById('userLoggedDisplay'); 
     if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
@@ -492,7 +513,6 @@ if(cadLoteInput) {
     });
 }
 
-// AÇÃO MANUAL DA TABELA COM NATIVO SEM PROXY E COM STATUS WORKFLOW
 window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     const span = document.getElementById(spanId); 
     if(!span) return;
@@ -546,7 +566,6 @@ window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     }
 }
 
-// ATUALIZADA: BUSCA POR ENDEREÇO (ARRAY-CONTAINS COM ALERTA INTELIGENTE)
 const limpaString = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^\w\s]/gi, '') : '';
 
 window.buscarConsultaLivre = async function(tipoBusca) {
@@ -645,7 +664,6 @@ window.buscarConsultaLivre = async function(tipoBusca) {
                 alert("A rua foi encontrada, mas o NÚMERO não bateu. Tente buscar só pela rua sem o número.");
             }
         } else { 
-            // O ALERTA INTELIGENTE PARA O CASO DE FALTA DE ÍNDICE
             if(tipoBusca === 'endereco') {
                 alert("Nenhuma rua encontrada.\n\n⚠️ ATENÇÃO: Se o endereço existe, você precisa ir na aba Configurações e rodar o 'INICIAR DELTA SYNC' do IPTU novamente para que o sistema crie as chaves de busca para endereços!");
             } else {
@@ -740,7 +758,8 @@ window.puxarDadosDaNotificacao = function() {
     const numPesquisa = document.getElementById('autoBuscaNotif').value.trim();
     if(!numPesquisa) return alert("Digite o número da notificação para puxar.");
     
-    const notif = window.DB.find(i => i.numNotif === numPesquisa && i.tipoDocumento !== 'auto');
+    const meuSetor = perfilUsuario.setor || 'SMMAM';
+    const notif = window.DB.find(i => i.numNotif === numPesquisa && i.tipoDocumento !== 'auto' && (i.setor || 'SMMAM') === meuSetor);
     if(!notif) return alert("Notificação não encontrada ou ela não pertence ao seu Setor.");
     
     document.getElementById('autoNome').value = notif.nome || ''; 
@@ -824,19 +843,116 @@ window.renderizarGraficos = function() {
     }
 }
 
-// BACKUP FÍSICO DO ADM
+// BACKUP FÍSICO DO ADM (Multi-Setor Isolado)
 window.baixarBackupLocal = function() {
     const data = JSON.stringify(window.DB, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Backup_SMMAM_Notificacoes_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `Backup_Setor_${perfilUsuario.setor || 'Geral'}_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
 }
 
-// DELTA SYNC IPTU
+// ADMIN: GESTÃO DE USUÁRIOS
+window.usuariosEmMemoria = [];
+window.carregarConfiguracoesAdmin = async function() {
+    const corpoUsuarios = document.getElementById('tabelaUsuariosCorpo'); if(corpoUsuarios) corpoUsuarios.innerHTML = '';
+    window.usuariosEmMemoria = [];
+    const meuSetor = perfilUsuario.setor || 'SMMAM';
+
+    try {
+        const usersSnapshot = await getDocs(collection(db, "usuarios"));
+        usersSnapshot.forEach(docSnap => {
+            const u = docSnap.data(); const uid = docSnap.id;
+            // ADMIN SÓ GERENCIA USUÁRIOS DO SEU SETOR
+            if((u.setor || 'SMMAM') === meuSetor) {
+                u.uid = uid; window.usuariosEmMemoria.push(u);
+                const selectStatus = `<select class="select-status status-${u.status}" onchange="alterarConfigUsuario('${uid}', 'status', this.value, this)"><option value="pendente" ${u.status === 'pendente' ? 'selected' : ''}>⏳ Pendente</option><option value="aprovado" ${u.status === 'aprovado' ? 'selected' : ''}>✅ Aprovado</option><option value="bloqueado" ${u.status === 'bloqueado' ? 'selected' : ''}>🚫 Bloqueado</option></select>`;
+                const selectNivel = `<select style="padding: 4px; font-size: 12px; border-radius: 4px;" onchange="alterarConfigUsuario('${uid}', 'nivel', this.value, this)"><option value="leitor" ${u.nivel === 'leitor' ? 'selected' : ''}>👁️ Leitor</option><option value="fiscal" ${u.nivel === 'fiscal' ? 'selected' : ''}>📝 Fiscal</option><option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>⚙️ Administrador</option></select>`;
+                if(corpoUsuarios) corpoUsuarios.innerHTML += `<tr><td><strong>${u.nome}</strong><br><small style="color:#64748b;">${u.cargo}</small></td><td><span style="background:#e2e8f0; padding:3px; border-radius:4px; font-size:11px;">${u.setor || 'SMMAM'}</span></td><td>${u.email}</td><td>${selectStatus}</td><td>${selectNivel}</td><td><button style="font-size:10px; padding:4px;" class="btn-primary" onclick="abrirModalEdicaoUsuario('${uid}')">✏️ Editar</button> <button style="font-size:10px; padding:4px;" class="btn-secondary" onclick="enviarResetSenha('${u.email}')">🔑 Reset Senha</button></td></tr>`;
+            }
+        });
+        window.carregarListaVip();
+    } catch(e) {}
+}
+
+window.alterarConfigUsuario = async function(uid, campo, valorNovo, selectElement) { try { await updateDoc(doc(db, "usuarios", uid), { [campo]: valorNovo }); window.mostrarToast(`Atualizado!`); if(campo === 'status') selectElement.className = `select-status status-${valorNovo}`; } catch(e) { alert("Sem permissão."); } }
+
+window.abrirModalEdicaoUsuario = function(uid) {
+    const u = window.usuariosEmMemoria.find(user => user.uid === uid);
+    if(!u) return;
+    document.getElementById('editUserId').value = u.uid;
+    document.getElementById('editUserNome').value = u.nome || '';
+    document.getElementById('editUserCargo').value = u.cargo || '';
+    document.getElementById('editUserSetor').value = u.setor || 'SMMAM';
+    document.getElementById('editUserTelefone').value = u.telefone || '';
+    document.getElementById('editUserMatricula').value = u.matricula || '';
+    document.getElementById('modal-edicao-usuario').style.display = 'flex';
+}
+window.fecharModalEdicaoUsuario = function() { document.getElementById('modal-edicao-usuario').style.display = 'none'; }
+window.salvarEdicaoUsuario = async function() {
+    const uid = document.getElementById('editUserId').value;
+    const novosDados = {
+        nome: document.getElementById('editUserNome').value,
+        cargo: document.getElementById('editUserCargo').value,
+        setor: document.getElementById('editUserSetor').value,
+        telefone: document.getElementById('editUserTelefone').value,
+        matricula: document.getElementById('editUserMatricula').value
+    };
+    mostrarLoading(true);
+    try {
+        await updateDoc(doc(db, "usuarios", uid), novosDados);
+        window.mostrarToast("Dados do servidor atualizados!");
+        window.fecharModalEdicaoUsuario();
+        window.carregarConfiguracoesAdmin();
+    } catch(e) { alert("Erro ao editar."); }
+    mostrarLoading(false);
+}
+
+window.enviarResetSenha = function(email) {
+    if(confirm(`Enviar link oficial de troca de senha para ${email}?`)) {
+        sendPasswordResetEmail(auth, email).then(() => window.mostrarToast("E-mail de reset enviado com sucesso!")).catch((e)=>alert(e.message));
+    }
+}
+
+window.carregarListaVip = async function() {
+    const ul = document.getElementById('listaVipEmails'); if(!ul) return; ul.innerHTML = '';
+    try {
+        const snap = await getDoc(doc(db, "configuracoes", "lista_vip"));
+        if(snap.exists() && snap.data().emails) {
+            snap.data().emails.forEach(e => { ul.innerHTML += `<li>${e}</li>`; });
+        }
+    } catch(e){}
+}
+window.adicionarEmailVip = async function() {
+    const email = document.getElementById('adminVipEmail').value.trim().toLowerCase();
+    if(!email) return;
+    try {
+        const ref = doc(db, "configuracoes", "lista_vip");
+        const snap = await getDoc(ref);
+        let lista = snap.exists() ? (snap.data().emails || []) : [];
+        if(!lista.includes(email)) {
+            lista.push(email);
+            await setDoc(ref, { emails: lista }, { merge: true });
+            window.mostrarToast("E-mail autorizado na Lista VIP!");
+            document.getElementById('adminVipEmail').value = '';
+            window.carregarListaVip();
+        } else { alert("E-mail já está na lista."); }
+    } catch(e) { alert("Erro ao adicionar VIP"); }
+}
+
+const btnSalvarUrm = document.querySelector('#configURM')?.nextElementSibling;
+if(btnSalvarUrm) {
+    btnSalvarUrm.addEventListener('click', async function() {
+        const valor = parseFloat(document.getElementById('configURM').value); if(!valor || valor <= 0) return alert("Valor inválido.");
+        mostrarLoading(true);
+        try { await setDoc(doc(db, "configuracoes", "sistema"), { valorURM: valor }, { merge: true }); window.valorURMGlobal = valor; const elAtual = document.getElementById('autoValorURMAtual'); if(elAtual) elAtual.value = valor.toFixed(2); window.mostrarToast("Valor URM salvo!"); await registrarLog("Alterou URM", `Novo valor: R$ ${valor}`); } catch(e) { alert("Erro ao salvar URM"); }
+        mostrarLoading(false);
+    });
+}
+
 const btnImportarIptu = document.getElementById('btnAdminImportarIptu');
 if(btnImportarIptu) {
     btnImportarIptu.addEventListener('click', async function() {
@@ -906,45 +1022,26 @@ if(btnImportarIptu) {
     });
 }
 
-// SCRIPT RETROATIVO
-window.corrigirEnderecosAntigos = async function() {
-    if(!confirm("Atenção: Isso varrerá todas as notificações do banco e gravará Cidade = BENTO GONÇALVES e UF = RS onde estiver vazio. Deseja prosseguir?")) return;
-    mostrarLoading(true, "Corrigindo base retroativa...");
-    try {
-        const batch = writeBatch(db);
-        let count = 0;
-        window.DB.forEach(docAtual => {
-            if(!docAtual.cidade || !docAtual.uf) {
-                batch.update(doc(db, "notificacoes", docAtual.firebaseId), { cidade: "BENTO GONÇALVES", uf: "RS" });
-                count++;
-            }
-        });
-        if(count > 0) {
-            await batch.commit();
-            await window.carregarDadosNuvem();
-            alert(`✅ Concluído! ${count} registros antigos foram padronizados com a Cidade e UF.`);
-        } else {
-            alert("A base já está padronizada.");
-        }
-    } catch(e) { alert("Erro ao corrigir: " + e.message); }
-    mostrarLoading(false);
-}
-
 window.carregarDadosNuvem = async function() {
-    mostrarLoading(true, "Baixando demandas...");
+    mostrarLoading(true, "Baixando demandas do seu setor...");
     try {
-        const querySnapshot = await getDocs(notificacoesRef); window.DB = []; const meuSetor = perfilUsuario.setor || 'SMMAM';
+        const querySnapshot = await getDocs(notificacoesRef); window.DB = []; 
+        const meuSetor = perfilUsuario.setor || 'SMMAM';
+        
         querySnapshot.forEach((documento) => { 
             let data = documento.data(); data.firebaseId = documento.id; 
             if(!data.tipoDocumento) data.tipoDocumento = 'notificacao';
             if(!data.statusProcesso) data.statusProcesso = 'ativo'; 
-            if ((data.setor || 'SMMAM') === meuSetor || perfilUsuario.nivel === 'admin') window.DB.push(data); 
+            
+            // FILTRAGEM STRICT MULTI-TENANT (O fiscal NUNCA vê dados de outra secretaria)
+            if ((data.setor || 'SMMAM') === meuSetor) {
+                window.DB.push(data); 
+            }
         });
         window.renderizarPainel();
     } catch (e) {} mostrarLoading(false);
 }
 
-// SALVAR DOCUMENTO COM INFRAÇÕES DINÂMICAS
 window.salvarDocumento = async function(event, tipoDoc) {
     event.preventDefault(); if(perfilUsuario.nivel === 'leitor') return alert("Leitores não salvam.");
     mostrarLoading(true, "Verificando e Salvando...");
@@ -952,8 +1049,8 @@ window.salvarDocumento = async function(event, tipoDoc) {
     let editId = ''; let dados = {}; let btnForm = null; let base64Array = window.fotosTemp || [];
     let numeroOriginal = '';
     const anoAtual = new Date().getFullYear();
+    const meuSetor = perfilUsuario.setor || 'SMMAM';
 
-    // Ler as infrações dinâmicas marcadas
     const infracoesMarcadas = [];
     document.querySelectorAll(`.dinamico-chk-${tipoDoc}:checked`).forEach(chk => { infracoesMarcadas.push(chk.value); });
 
@@ -978,26 +1075,26 @@ window.salvarDocumento = async function(event, tipoDoc) {
             if (dtRecebimento && nomeNotificado && docNotificado) statusVida = 'recebido';
         }
 
-        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, numNotif: numeroOriginal, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: document.getElementById('prazoDias').value, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
+        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, numNotif: numeroOriginal, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: document.getElementById('prazoDias').value, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
     } else {
         btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value;
         numeroOriginal = document.getElementById('autoNum').value.trim();
         if(!numeroOriginal.includes('/')) numeroOriginal += `/${anoAtual}`;
         document.getElementById('autoNum').value = numeroOriginal;
 
-        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', numNotif: numeroOriginal, dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, arrayInfracoes: infracoesMarcadas, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: perfilUsuario.setor || 'SMMAM' };
+        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', numNotif: numeroOriginal, dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, arrayInfracoes: infracoesMarcadas, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
     }
     
     if(btnForm) btnForm.disabled = true;
 
     try {
-        const dupQuery = query(notificacoesRef, where("numNotif", "==", numeroOriginal));
+        const dupQuery = query(notificacoesRef, where("numNotif", "==", numeroOriginal), where("setor", "==", meuSetor));
         const dupSnap = await getDocs(dupQuery);
         let duplicado = false;
         dupSnap.forEach(d => { if(d.id !== editId) duplicado = true; });
         
         if(duplicado) {
-            alert(`⚠️ ALERTA DE DUPLICIDADE: O documento ${numeroOriginal} já existe no banco de dados. Operação cancelada.`);
+            alert(`⚠️ ALERTA DE DUPLICIDADE: O documento ${numeroOriginal} já existe no seu setor. Operação cancelada.`);
             if(btnForm) btnForm.disabled = false;
             mostrarLoading(false);
             return;
@@ -1016,7 +1113,6 @@ window.salvarDocumento = async function(event, tipoDoc) {
     if(btnForm) btnForm.disabled = false; mostrarLoading(false);
 }
 
-// ARQUIVAR DOCUMENTO
 window.arquivarDocumento = async function(id) {
     const motivo = prompt("Digite o motivo do Arquivamento (Ex: Limpeza Realizada, Cancelado, Virou Multa):");
     if(!motivo) return;
@@ -1212,7 +1308,6 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('cadImob')) document.getElementById('cadImob').value = item.cadImob || ''; 
     if(document.getElementById('loteEndereco')) document.getElementById('loteEndereco').value = item.loteEndereco || ''; 
     
-    // Suporte Legado (antigos checkboxes hardcoded) + Novo Dinâmico
     document.querySelectorAll('.dinamico-chk-notificacao').forEach(chk => { chk.checked = (item.arrayInfracoes || []).includes(chk.value); });
     
     if(document.getElementById('ref')) document.getElementById('ref').value = item.ref || ''; 
@@ -1252,10 +1347,9 @@ window.carregarDadosPerfil = function() {
     if(document.getElementById('perfilTelefone')) document.getElementById('perfilTelefone').value = perfilUsuario.telefone || ''; 
 }
 
-// IMPRESSÃO DINÂMICA COM O LAYOUT ANTIGO RESTAURADO E MOTOR DE LEIS NOVO
 window.imprimirRegistro = function(id) {
     const item = window.DB.find(i => i.firebaseId === id); if (!item) return; const s = item.setor || 'SMMAM';
-    if(s === 'MOBILIDADE') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Mobilidade Urbana</strong><br>Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Obras e Posturas"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>Setor de Posturas</strong><br>Rua Mal Deodoro, 70"; } else { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerHTML = "<strong>SMMAM / Fiscalização</strong><br>Rua 10 de Novembro, 190"; }
+    if(s === 'MOBILIDADE') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Obras e Posturas"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "Setor de Posturas"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Rua Mal Deodoro, 70"; } else { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "SMMAM / Fiscalização"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Rua 10 de Novembro, 190<br>Fone/whats: 54 3055-7211"; }
     
     let pzTxt = "Imediato"; 
     if(item.prazoDias) pzTxt = `${item.prazoDias} Dias Corridos (A partir do recebimento)`;
@@ -1287,7 +1381,6 @@ window.imprimirRegistro = function(id) {
     if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Notificação Presencial' : '( ) Notificação Presencial'; 
     if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Notificado por AR' : '( ) Notificado por AR'; 
 
-    // Renderização Dinâmica do Layout Original de Caixinhas
     const boxInfr = document.getElementById('boxInfracoesImpresso');
     const listTextos = document.getElementById('listaTextosLegaisImpresso');
     if(boxInfr && listTextos) {
@@ -1310,7 +1403,6 @@ window.imprimirRegistro = function(id) {
             }
         });
         
-        // Compatibilidade Legado de Texto Padrão caso o banco dinâmico esteja vazio
         if(item.lei5198 && window.bancoInfracoesGlobais.length === 0) listTextos.innerHTML += `<li>Vegetais arbóreos, lenhosos e nativos deverão ser preservados. Fica proibido o emprego do fogo, bem como, a utilização da capina química para limpeza dos lotes. Após realizada limpeza, fica o notificado obrigado a apresentar levantamento fotográfico.</li>`;
     }
 
@@ -1321,5 +1413,5 @@ window.imprimirRegistro = function(id) {
 window.exportarExcel = function() {
     if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data Emissao;Data Recebimento;Prazo Dias;Nome;CPF/CNPJ;Lote Irregular;Bairro;Cidade;Codigo AR;Status Processo;Fiscal\n";
     window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${i.dataRecebimento ? i.dataRecebimento.split('-').reverse().join('/') : 'SUSPENSO'};${i.prazoDias||''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.cidade||''};${i.codigoAR||''};${(i.statusProcesso||'').toUpperCase()};${i.fiscal||''}\n`; });
-    const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `SMMAM_Relatorio_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
+    const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `Relatorio_${perfilUsuario.setor || 'Geral'}_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
 }
