@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=10">
+    <link rel="stylesheet" href="css/style.css?v=11">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -17,6 +17,9 @@
 
     <!-- TELAS DE ACESSO -->
     <div id="auth-container">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Bento_Gon%C3%A7alves_Bras%C3%A3o.png/150px-Bento_Gon%C3%A7alves_Bras%C3%A3o.png" alt="Bento Gonçalves" style="width: 70px;">
+        </div>
         <h2 id="authTitle">Acesso - Fiscalização</h2>
         <div id="login-fields">
             <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
@@ -58,8 +61,9 @@
     <div id="app-layout" style="display: none;">
         
         <aside id="sidebar">
-            <div class="sidebar-header">
-                <h3>Fiscalização</h3>
+            <div class="sidebar-header" style="text-align: center; padding-top: 20px;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Bento_Gon%C3%A7alves_Bras%C3%A3o.png/150px-Bento_Gon%C3%A7alves_Bras%C3%A3o.png" alt="Bento Gonçalves" style="width: 50px; margin-bottom: 10px;">
+                <h3 style="margin-top: 0;">Fiscalização</h3>
                 <span id="sidebar-setor">Carregando...</span>
             </div>
             <nav class="sidebar-nav">
@@ -73,7 +77,7 @@
                 <div id="menu-admin-area" style="display: none;">
                     <div class="nav-section-title">ADMINISTRAÇÃO</div>
                     <a class="nav-item" onclick="navegarPara('auditoria')" id="nav-auditoria">🛡️ Auditoria do Sistema</a>
-                    <a class="nav-item" onclick="navegarPara('configuracoes')" id="nav-configuracoes">⚙️ Configurações</a>
+                    <a class="nav-item" onclick="navegarPara('configuracoes')" id="nav-configuracoes">⚙️ Configurações do Setor</a>
                 </div>
             </nav>
             <div class="sidebar-footer">
@@ -194,7 +198,7 @@
                         <div class="form-group">
                             <label style="color: #991b1b;">Selecione as Infrações Verificadas no Local</label>
                             <div class="checkbox-group" id="containerInfracoesDinamicasNotif">
-                                <i>Carregando base legal...</i>
+                                <i>Carregando base legal do setor...</i>
                             </div>
                         </div>
 
@@ -263,7 +267,7 @@
                         <div class="form-group">
                             <label style="color: #991b1b;">Selecione as Infrações para Aplicar a Multa (Calcula URM Automático)</label>
                             <div class="checkbox-group" id="containerInfracoesDinamicasAuto">
-                                <i>Carregando base legal...</i>
+                                <i>Carregando base legal do setor...</i>
                             </div>
                         </div>
                         
@@ -309,7 +313,6 @@
                     <p style="color: #64748b; margin-bottom: 20px;">Pesquise propriedades na base da prefeitura. Você pode buscar pelo lote físico ou pelos dados do proprietário.</p>
                     
                     <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                        
                         <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">📍 Opção 1: Busca por Lote (Chave)</h3>
                         <div class="form-row" style="align-items: flex-end;">
                             <div class="form-group"><label>Distr.</label><input type="text" id="consDistrito" placeholder="01"></div>
@@ -320,9 +323,7 @@
                                 <button class="btn-primary" onclick="buscarConsultaLivre('lote')" style="height: 35px; width: 100%;">🔍 Lote</button>
                             </div>
                         </div>
-
                         <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 15px 0;">
-
                         <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">👤 Opção 2: Busca por Proprietário</h3>
                         <div class="form-row" style="align-items: flex-end;">
                             <div class="form-group" style="flex: 2;">
@@ -337,9 +338,7 @@
                                 <button class="btn-secondary" onclick="buscarConsultaLivre('pessoa')" style="height: 35px; width: 100%;">🔍 Pessoa</button>
                             </div>
                         </div>
-
                         <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 15px 0;">
-
                         <h3 style="margin-top: 0; font-size: 14px; color: #1b365d;">🏘️ Opção 3: Busca por Endereço Físico</h3>
                         <div class="form-row" style="align-items: flex-end;">
                             <div class="form-group" style="flex: 2;">
@@ -354,7 +353,6 @@
                                 <button class="btn-success" onclick="buscarConsultaLivre('endereco')" style="height: 35px; width: 100%;">🔍 Endereço</button>
                             </div>
                         </div>
-
                     </div>
 
                     <!-- TABELA DE RESULTADOS -->
@@ -381,7 +379,6 @@
             <!-- VIEW 5: RELATÓRIOS E GRÁFICOS -->
             <div id="view-relatorios" class="view-section">
                 <h2>Painel Executivo de Gestão</h2>
-                <!-- Mantido intacto o dashboard do BI -->
                 <div class="panel-container" style="display: flex; flex-direction: column;">
                     <h3 style="margin-top: 0; font-size: 15px; color: #1b365d;">📈 Evolução de Demandas</h3>
                     <div style="position: relative; height: 300px; width: 100%;"><canvas id="chartEvolucao"></canvas></div>
@@ -440,12 +437,12 @@
 
             <!-- VIEW 8: CONFIGURAÇÕES DO SISTEMA (ADMIN) -->
             <div id="view-configuracoes" class="view-section">
-                <h2>Painel do Arquiteto (Configurações Gerais)</h2>
+                <h2>Painel do Arquiteto (Configurações do Setor)</h2>
                 
                 <!-- GESTÃO DINÂMICA DE INFRAÇÕES -->
                 <div class="panel-container" style="margin-bottom: 20px; border: 2px solid #1b365d;">
-                    <h3 style="margin-top: 0; color: #1b365d; font-size: 16px;">📚 Motor de Infrações e Base Legal</h3>
-                    <p style="font-size: 12px; color: #475569; margin-bottom: 15px;">Cadastre aqui os dispositivos legais e infrações. Eles aparecerão automaticamente nos formulários e serão impressos nas notificações. No Auto de Infração, os valores de URM selecionados serão somados.</p>
+                    <h3 style="margin-top: 0; color: #1b365d; font-size: 16px;">📚 Motor de Infrações e Base Legal (Isolado por Setor)</h3>
+                    <p style="font-size: 12px; color: #475569; margin-bottom: 15px;">Cadastre aqui as leis do <strong>seu setor</strong>. Elas ficarão invisíveis para as outras secretarias e aparecerão automaticamente nos seus formulários.</p>
                     
                     <div style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
                         <div class="form-group" style="flex:1; min-width: 150px;"><label>Nome (Ex: Mato)</label><input type="text" id="adminNomeInfr"></div>
@@ -473,7 +470,7 @@
 
                 <div class="dashboard-cards" style="margin-bottom: 20px;">
                     <div class="panel-container" style="flex: 2;">
-                        <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores e Acessos</h3>
+                        <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores (Do Seu Setor)</h3>
                         <div class="table-container" style="max-height: 400px;">
                             <table class="data-table">
                                 <thead>
@@ -511,7 +508,7 @@
                             </div>
                         </div>
 
-                        <!-- MÓDULO CORREIOS (RESTAURADO) -->
+                        <!-- MÓDULO CORREIOS -->
                         <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
                             <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
                             <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API nativa agora.</p>
@@ -533,10 +530,9 @@
                             <h3 style="margin-top: 0; color: #38bdf8; font-size: 15px;">📖 Manual da Arquitetura (SaaS)</h3>
                             <div style="font-size:11px; line-height:1.5; color:#cbd5e1; max-height:150px; overflow-y:auto; padding-right:5px; margin-bottom: 10px;">
                                 <strong>Arquitetura:</strong> SPA em Vanilla JS + Firebase Firestore (NoSQL).<br>
+                                <strong>Multi-Tenant:</strong> Dados visualizados são estritamente separados por Secretaria (SMMAM, OBRAS, MOBILIDADE).<br>
                                 <strong>Regra de Duplicidade:</strong> Sistema auto-injeta "/ANO" no registro e bloqueia salvamento de duplicados.<br>
                                 <strong>Workflow de Prazos:</strong> O prazo em "Dias Corridos" é dinâmico e só começa a contar a partir do preenchimento da Data de Recebimento.<br>
-                                <strong>Busca Endereço:</strong> O Delta Sync fraciona o endereço em 'logradouro_keywords' para permitir a busca (array-contains) instantânea.<br>
-                                <strong>Infrações Dinâmicas:</strong> Formulários e Impressões lêem a base de dados de Leis e calculam as URMs selecionadas no laço de repetição.<br>
                             </div>
                             <button class="btn-success" style="width: 100%; font-size: 10px; padding: 5px; margin-bottom: 5px;" onclick="baixarBackupLocal()">📥 Baixar Backup Local JSON</button>
                         </div>
@@ -601,11 +597,14 @@
         </div>
     </div>
 
-    <!-- ESPELHO IMPRESSÃO (LAYOUT ORIGINAL RESTAURADO + MOTOR DINÂMICO DE INFRAÇÕES) -->
+    <!-- ESPELHO IMPRESSÃO COM BRASÃO OFICIAL DA PREFEITURA -->
     <div id="print-area">
         <table class="main-grid">
             <tr>
-                <td colspan="4" style="width: 65%; padding: 10px;">
+                <td style="width: 15%; text-align: center; vertical-align: middle; padding: 10px;">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Bento_Gon%C3%A7alves_Bras%C3%A3o.png/150px-Bento_Gon%C3%A7alves_Bras%C3%A3o.png" alt="Brasão Bento Gonçalves" style="max-width: 60px;">
+                </td>
+                <td colspan="3" style="width: 50%; padding: 10px; vertical-align: middle;">
                     <div style="font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 0.3px;">Prefeitura de Bento Gonçalves</div>
                     <div id="printSecretaria" style="font-size: 11px; margin-top: 3px; font-weight: bold;">Secretaria de Meio Ambiente</div>
                     <div style="font-size: 11px; margin-top: 2px;">Setor de Fiscalização</div>
@@ -654,9 +653,8 @@
                     <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
                     <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
                     
-                    <!-- ESTRUTURA ORIGINAL DE CAIXAS (AGORA DINÂMICAS) -->
                     <div id="boxInfracoesImpresso" style="margin-top: 10px; display:flex; flex-wrap:wrap; gap:10px;">
-                        <!-- O Javascript vai inserir os ( X ) Mato, ( ) Entulhos aqui igualzinho era antes -->
+                        <!-- O Javascript vai inserir os ( X ) Mato, ( ) Entulhos dinamicamente aqui -->
                     </div>
 
                     <p style="margin: 15px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
@@ -677,7 +675,8 @@
                 <td colspan="2" style="width: 35%;">
                     <span class="cell-label">18. Endereço de Apresentação</span>
                     <div id="pEnderecoSecretaria" class="cell-value" style="font-size: 9.5px; line-height: 1.4;">
-                        <strong>SMMAM / Setor Fiscalização</strong><br>Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211
+                        <strong id="pEnderecoSecretariaNome">SMMAM / Setor Fiscalização</strong><br>
+                        <span id="pEnderecoSecretariaLocal">Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211</span>
                     </div>
                 </td>
             </tr>
