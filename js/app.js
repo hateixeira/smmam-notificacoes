@@ -178,15 +178,7 @@ window.salvarInfracaoNoBanco = async function() {
         document.getElementById('adminTextoInfr').value = '';
         await window.carregarInfracoesGlobais();
     } catch(e) { 
-        alert("ERRO DE PERMISSÃO (FIREBASE):
-
-O servidor do Google bloqueou a gravação porque você ainda não autorizou a criação de leis nas Regras (Rules) do banco de dados.
-
-Para resolver isso de forma definitiva, acesse o site do Firebase Console > Firestore Database > Regras, e cole este comando:
-
-match /infracoes_config/{document=**} {
-  allow read, write: if request.auth != null;
-}"); 
+        alert("ERRO DE PERMISSÃO (FIREBASE):\n\nO servidor do Google bloqueou a gravação porque você ainda não autorizou a criação de leis nas Regras (Rules) do banco de dados.\n\nPara resolver isso de forma definitiva, acesse o site do Firebase Console > Firestore Database > Regras, e cole este comando:\n\nmatch /infracoes_config/{document=**} {\n  allow read, write: if request.auth != null;\n}"); 
     }
     mostrarLoading(false);
 }
@@ -378,11 +370,7 @@ window.verificarRotinaCorreios = async function(forcar = false) {
             }
 
             if (forcar) {
-                alert(`✅ Verificação Concluída!
-
-${consultados} AR(s) processados do seu setor.
-${atualizados} sofreram alterações.
-${falhas} falharam.`);
+                alert(`✅ Verificação Concluída!\n\n${consultados} AR(s) processados do seu setor.\n${atualizados} sofreram alterações.\n${falhas} falharam.`);
                 if(btnForcar) { btnForcar.innerText = "🔄 Forçar Sync da API"; btnForcar.disabled = false; }
             } else if (atualizados > 0) {
                 window.mostrarToast(`✅ Correios: ${atualizados} AR(s) atualizados no fundo!`);
@@ -463,7 +451,6 @@ window.loginVisitante = async function() {
     try {
         await signInWithEmailAndPassword(auth, email, senha);
     } catch (e) {
-        // Se a conta de visitante ainda não existe, cria ela magicamente, aprova e loga direto
         if(e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-login-credentials') {
             try {
                 const userC = await createUserWithEmailAndPassword(auth, email, senha);
@@ -476,10 +463,9 @@ window.loginVisitante = async function() {
                     matricula: "0000",
                     email: email,
                     status: "aprovado",
-                    nivel: "leitor", // Garante que não vai poder alterar regras estruturais
+                    nivel: "leitor",
                     dataCadastro: new Date().toISOString()
                 });
-                // Como createUserWithEmailAndPassword loga automaticamente, o onAuthStateChanged assume o fluxo daqui
             } catch(err) {
                 mostrarLoading(false);
                 alert("Erro ao criar ambiente de visitante: " + err.message);
@@ -507,7 +493,6 @@ window.adicionarEmailVip = async function() {
             window.mostrarToast("E-mail externo autorizado com sucesso!");
             document.getElementById('adminVipEmail').value = '';
             
-            // Renderiza na tela
             const ul = document.getElementById('listaVipEmails');
             if(ul) ul.innerHTML += `<li>${emailVip} (Recém adicionado)</li>`;
         } else {
@@ -596,7 +581,7 @@ if(cadLoteInput) {
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
         mostrarLoading(true, "Buscando Imóvel...");
         try {
-            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + ""), limit(1));
+            const q = query(collection(db, "cadastro_imobiliario"), where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(1));
             const snap = await getDocs(q);
             if(!snap.empty) {
                 const imovel = snap.docs[0].data();
@@ -662,7 +647,7 @@ window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     }
 }
 
-const limpaString = (s) => s ? s.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^\w\s]/gi, '') : '';
+const limpaString = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^\w\s]/gi, '') : '';
 
 window.buscarConsultaLivre = async function(tipoBusca) {
     const boxResult = document.getElementById('resultadoConsulta'); 
@@ -687,7 +672,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
             return alert("Preencha Distrito, Zona, Quadra e Lote para buscar pela chave física.");
         }
         const chaveBusca = `${dist}${zona}${quad}${lote}`;
-        q = query(imoveisRef, where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + ""), limit(50));
+        q = query(imoveisRef, where("chaveinscricao", ">=", chaveBusca), where("chaveinscricao", "<=", chaveBusca + "\uf8ff"), limit(50));
     
     } else if (tipoBusca === 'pessoa') {
         const docForm = document.getElementById('consDoc').value.trim();
@@ -698,7 +683,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
             const docLimpo = docForm.replace(/\D/g, '');
             qAlternativa = query(imoveisRef, where("cnpj_cpf", "==", docLimpo), limit(50));
         } else if (nomeForm) {
-            q = query(imoveisRef, where("proprietario_principal", ">=", nomeForm), where("proprietario_principal", "<=", nomeForm + ""), limit(50));
+            q = query(imoveisRef, where("proprietario_principal", ">=", nomeForm), where("proprietario_principal", "<=", nomeForm + "\uf8ff"), limit(50));
         } else {
             return alert("Preencha o Nome ou o CPF/CNPJ.");
         }
@@ -761,9 +746,7 @@ window.buscarConsultaLivre = async function(tipoBusca) {
             }
         } else { 
             if(tipoBusca === 'endereco') {
-                alert("Nenhuma rua encontrada.
-
-⚠️ ATENÇÃO: Se o endereço existe, você precisa ir na aba Configurações e rodar o 'INICIAR DELTA SYNC' do IPTU novamente para que o sistema crie as chaves de busca para endereços!");
+                alert("Nenhuma rua encontrada.\n\n⚠️ ATENÇÃO: Se o endereço existe, você precisa ir na aba Configurações e rodar o 'INICIAR DELTA SYNC' do IPTU novamente para que o sistema crie as chaves de busca para endereços!");
             } else {
                 alert("Nenhum imóvel localizado com os dados informados.");
             }
