@@ -84,7 +84,6 @@ window.carregarInfracoesGlobais = async function() {
         console.warn("Aviso: Permissão negada no Firebase. Carregando base legal direto da memória do código.", e); 
     }
 
-    // O "BYPASS" - INJETA AS LEIS DA SMMAM DIRETAMENTE NA MEMÓRIA SE O BANCO FALHAR OU ESTIVER VAZIO
     if(window.bancoInfracoesGlobais.length === 0 && meuSetor === 'SMMAM') {
         window.bancoInfracoesGlobais = [
             { 
@@ -178,7 +177,7 @@ window.salvarInfracaoNoBanco = async function() {
         document.getElementById('adminTextoInfr').value = '';
         await window.carregarInfracoesGlobais();
     } catch(e) { 
-        alert("ERRO DE PERMISSÃO (FIREBASE):\n\nO servidor do Google bloqueou a gravação porque você ainda não autorizou a criação de leis nas Regras (Rules) do banco de dados.\n\nPara resolver isso de forma definitiva, acesse o site do Firebase Console > Firestore Database > Regras, e cole este comando:\n\nmatch /infracoes_config/{document=**} {\n  allow read, write: if request.auth != null;\n}"); 
+        alert(`ERRO DE PERMISSÃO (FIREBASE):\n\nO servidor do Google bloqueou a gravação porque você ainda não autorizou a criação de leis nas Regras (Rules) do banco de dados.\n\nPara resolver isso de forma definitiva, acesse o site do Firebase Console > Firestore Database > Regras, e cole este comando:\n\nmatch /infracoes_config/{document=**} {\n  allow read, write: if request.auth != null;\n}`); 
     }
     mostrarLoading(false);
 }
@@ -1387,7 +1386,6 @@ window.imprimirRegistro = function(id) {
 
     if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
     
-    // O SEGREDO: Dá 500 milissegundos para o navegador processar a imagem local antes de travar a tela
     setTimeout(() => {
         window.print();
     }, 500);
@@ -1397,4 +1395,69 @@ window.exportarExcel = function() {
     if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data Emissao;Data Recebimento;Prazo Dias;Nome;CPF/CNPJ;Lote Irregular;Bairro;Cidade;Codigo AR;Status Processo;Fiscal\n";
     window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${i.dataRecebimento ? i.dataRecebimento.split('-').reverse().join('/') : 'SUSPENSO'};${i.prazoDias||''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.cidade||''};${i.codigoAR||''};${(i.statusProcesso||'').toUpperCase()};${i.fiscal||''}\n`; });
     const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `Relatorio_${perfilUsuario.setor || 'Geral'}_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
+}
+
+window.exportarVipp = function() {
+    if(window.itensFiltradosAtual.length === 0) return alert("Nenhum registro filtrado para exportar.");
+    
+    const cabecalho = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO";
+    
+    let csv = cabecalho + "\n";
+    let contagem = 0;
+    
+    window.itensFiltradosAtual.forEach(item => {
+        let nome = (item.nome || 'AOS CUIDADOS DO PROPRIETARIO').toUpperCase().replace(/;/g, '');
+        let enderecoCompleto = (item.endereco || item.loteEndereco || 'NAO INFORMADO').toUpperCase().replace(/;/g, '');
+        let numero = "SN";
+        let complemento = "";
+        
+        let endParts = enderecoCompleto.match(/^(.*?)(?:,\s*(\d+|S\/?N|S\/ N))(.*)?$/);
+        let endereco = enderecoCompleto;
+        if(endParts) {
+            endereco = endParts[1].trim();
+            numero = endParts[2].trim();
+            complemento = (endParts[3] || '').replace(/^[,\-\s]+/, '').trim();
+        }
+        
+        let bairro = (item.bairro || 'NAO INFORMADO').toUpperCase().replace(/;/g, '');
+        let cidade = (item.cidade || 'BENTO GONCALVES').toUpperCase().replace(/;/g, '');
+        let uf = (item.uf || 'RS').toUpperCase();
+        let cep = (item.cep || '').replace(/\D/g, '').padEnd(8, '0');
+        let celular = (item.telefone || '').replace(/\D/g, '');
+        let cpfCnpj = (item.doc || '').replace(/\D/g, '');
+        let adicionais = item.tipoAR ? "AR" : ""; 
+        
+        let nomeRem = "PREFEITURA DE BENTO GONCALVES";
+        let endRem = "RUA 10 DE NOVEMBRO";
+        let numRem = "190";
+        let compRem = "SMMAM";
+        let bairroRem = "CIDADE ALTA";
+        let cidadeRem = "BENTO GONCALVES";
+        let ufRem = "RS";
+        let cepRem = "95700000";
+        
+        let linha = [
+            nome, "", "", endereco, numero, complemento, bairro, cidade, uf, cep, "", celular, "", cpfCnpj, "", "",
+            nomeRem, endRem, numRem, compRem, bairroRem, cidadeRem, ufRem, cepRem, "", "", "", "", "",
+            "", "", "100", "1", "", "", "", adicionais, "", "", "", "", "", "",
+            item.numNotif || '', "", "", "", "1", "1", "", "", "", "",
+            "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+            "Documento Fiscal Oficial|1|100"
+        ];
+        
+        csv += linha.join(";") + "\n";
+        contagem++;
+    });
+
+    if(contagem === 0) return alert("Nenhum item válido para exportação.");
+    
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `VIPP_Correios_${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
