@@ -84,7 +84,6 @@ window.carregarInfracoesGlobais = async function() {
         console.warn("Aviso: Permissão negada no Firebase. Carregando base legal direto da memória do código.", e); 
     }
 
-    // O "BYPASS" - INJETA AS LEIS DA SMMAM DIRETAMENTE NA MEMÓRIA SE O BANCO FALHAR OU ESTIVER VAZIO
     if(window.bancoInfracoesGlobais.length === 0 && meuSetor === 'SMMAM') {
         window.bancoInfracoesGlobais = [
             { 
@@ -463,7 +462,7 @@ window.loginVisitante = async function() {
                     matricula: "0000",
                     email: email,
                     status: "aprovado",
-                    nivel: "leitor", 
+                    nivel: "leitor",
                     dataCadastro: new Date().toISOString()
                 });
             } catch(err) {
@@ -1393,26 +1392,48 @@ window.imprimirRegistro = function(id) {
 }
 
 window.exportarExcel = function() {
-    if(window.itensFiltradosAtual.length === 0) return alert("Vazio."); let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data Emissao;Data Recebimento;Prazo Dias;Nome;CPF/CNPJ;Lote Irregular;Bairro;Cidade;Codigo AR;Status Processo;Fiscal\n";
-    window.itensFiltradosAtual.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${i.dataRecebimento ? i.dataRecebimento.split('-').reverse().join('/') : 'SUSPENSO'};${i.prazoDias||''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.cidade||''};${i.codigoAR||''};${(i.statusProcesso||'').toUpperCase()};${i.fiscal||''}\n`; });
-    const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a"); l.href = URL.createObjectURL(b); l.download = `Relatorio_${perfilUsuario.setor || 'Geral'}_${Date.now()}.csv`; document.body.appendChild(l); l.click(); document.body.removeChild(l);
+    const selecionadosIds = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
+    let itensParaExportar = window.itensFiltradosAtual;
+    
+    if(selecionadosIds.length > 0) {
+        itensParaExportar = window.itensFiltradosAtual.filter(i => selecionadosIds.includes(i.firebaseId));
+    } else {
+        return alert("Por favor, marque a caixinha de pelo menos um registro na tabela para exportar para o Excel.");
+    }
+    
+    if(itensParaExportar.length === 0) return alert("Nenhum registro selecionado válido para exportar."); 
+    
+    let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data Emissao;Data Recebimento;Prazo Dias;Nome;CPF/CNPJ;Lote Irregular;Bairro;Cidade;Codigo AR;Status Processo;Fiscal\n";
+    itensParaExportar.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${i.dataRecebimento ? i.dataRecebimento.split('-').reverse().join('/') : 'SUSPENSO'};${i.prazoDias||''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.cidade||''};${i.codigoAR||''};${(i.statusProcesso||'').toUpperCase()};${i.fiscal||''}\n`; });
+    const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); 
+    const l = document.createElement("a"); 
+    l.href = URL.createObjectURL(b); 
+    l.download = `Relatorio_${perfilUsuario.setor || 'Geral'}_${Date.now()}.csv`; 
+    document.body.appendChild(l); 
+    l.click(); 
+    document.body.removeChild(l);
 }
 
 window.exportarVipp = function() {
-    if(window.itensFiltradosAtual.length === 0) return alert("Nenhum registro filtrado para exportar.");
+    const selecionadosIds = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
     
-    // O cabeçalho deve ser exatamente como exigido pelo layout
+    if(selecionadosIds.length === 0) {
+        return alert("Por favor, marque a caixinha de pelo menos um registro na tabela para exportar para o VIPP.");
+    }
+
+    const itensParaExportar = window.itensFiltradosAtual.filter(item => selecionadosIds.includes(item.firebaseId));
+
+    if(itensParaExportar.length === 0) return alert("Nenhum registro selecionado válido para exportar.");
+    
     const cabecalho = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO";
     
     let csv = cabecalho + "\n";
     let contagem = 0;
     
-    // Cria um identificador único de lote baseado na data e hora (Ex: LOTE_20260804113359)
-    // Isso agrupará todas as postagens dessa exportação num mesmo pacote dentro do VIPP
     let dataAgrupamento = new Date();
     let contaLoteStr = "LOTE_" + dataAgrupamento.toISOString().replace(/\D/g, '').substring(0, 14);
     
-    window.itensFiltradosAtual.forEach(item => {
+    itensParaExportar.forEach(item => {
         let nome = (item.nome || 'AOS CUIDADOS DO PROPRIETARIO').toUpperCase().replace(/;/g, '');
         let enderecoCompleto = (item.endereco || item.loteEndereco || 'NAO INFORMADO').toUpperCase().replace(/;/g, '');
         let numero = "SN";
@@ -1434,30 +1455,27 @@ window.exportarVipp = function() {
         let cpfCnpj = (item.doc || '').replace(/\D/g, '');
         let adicionais = item.tipoAR ? "AR" : ""; 
         
-        // O descritivo formatado que você pediu para sair na etiqueta e servir de busca no VIPP
         let numNotificacao = item.numNotif || 'SEM_NUMERO';
         let textoEtiquetaBusca = `SMMAM - ${numNotificacao} - TB`;
         
         let linha = [
-            nome, "", "", endereco, numero, complemento, bairro, cidade, uf, cep, "", celular, "", cpfCnpj, "", "", // 0-15 (Destinatário)
-            "", "", "", "", "", "", "", "", "", "", "", "", "", // 16-28 (Remetente deixado vazio para puxar automático da Prefeitura)
-            "", "", "100", "1", "", "", "", adicionais, "", "", "", "", "", "", // 29-42 (Dados Financeiros e Dimensões)
-            textoEtiquetaBusca, "", "", "", "1", "1", "", "", contaLoteStr, "", // 43-52 (Observação Formatada e Conta Lote)
-            "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", // 53-67 (Reversa e NF vazias)
-            "Documento Oficial|1|100" // 68 (Declaração de Conteúdo obrigatória)
+            nome, "", "", endereco, numero, complemento, bairro, cidade, uf, cep, "", celular, "", cpfCnpj, "", "", 
+            "", "", "", "", "", "", "", "", "", "", "", "", "", 
+            "", "", "100", "1", "", "", "", adicionais, "", "", "", "", "", "", 
+            textoEtiquetaBusca, "", "", "", "1", "1", "", "", contaLoteStr, "", 
+            "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 
+            "Documento Oficial|1|100" 
         ];
         
         csv += linha.join(";") + "\n";
         contagem++;
     });
 
-    if(contagem === 0) return alert("Nenhum item válido para exportação.");
-    
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `VIPP_Correios_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `VIPP_Correios_Selecionados_${new Date().toISOString().slice(0,10)}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
