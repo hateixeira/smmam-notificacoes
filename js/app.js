@@ -73,7 +73,7 @@ window.carregarInfracoesGlobais = async function() {
     window.bancoInfracoesGlobais = [];
 
     try {
-        const snap = await getDocs(collection(db, "infracoes_config"));
+        const snap = await getDocs(query(collection(db, "infracoes_config"), where("setor", "==", meuSetor)));
         snap.forEach(d => { 
             const inf = d.data();
             if(inf.setor === meuSetor || !inf.setor) {
@@ -177,7 +177,7 @@ window.salvarInfracaoNoBanco = async function() {
         document.getElementById('adminTextoInfr').value = '';
         await window.carregarInfracoesGlobais();
     } catch(e) { 
-        alert(`ERRO DE PERMISSÃO (FIREBASE):\n\nO servidor do Google bloqueou a gravação porque você ainda não autorizou a criação de leis nas Regras (Rules) do banco de dados.\n\nPara resolver isso de forma definitiva, acesse o site do Firebase Console > Firestore Database > Regras, e cole este comando:\n\nmatch /infracoes_config/{document=**} {\n  allow read, write: if request.auth != null;\n}`); 
+        alert('Não foi possível salvar a infração. Verifique se seu perfil possui permissão administrativa para o setor e tente novamente.');
     }
     mostrarLoading(false);
 }
@@ -217,6 +217,22 @@ window.navegarPara = function(viewId) {
     const nav = document.getElementById('nav-' + viewId);
     if(view) view.classList.add('active-view');
     if(nav) nav.classList.add('active');
+
+    const pageMeta = {
+        inicio: ['GESTÃO OPERACIONAL', 'Visão geral', 'Acompanhe as demandas, prazos e atividades do seu setor.'],
+        notificacoes: ['OPERAÇÃO DE CAMPO', 'Nova notificação', 'Registre uma notificação, seus prazos e evidências de forma rastreável.'],
+        autos: ['OPERAÇÃO DE CAMPO', 'Novo auto de infração', 'Vincule infrações, calcule URM e registre o auto com segurança.'],
+        consulta: ['CONSULTA PROTEGIDA', 'Consulta cadastral', 'Localize dados imobiliários para instruir o processo de fiscalização.'],
+        relatorios: ['ANÁLISE OPERACIONAL', 'Relatórios e gráficos', 'Acompanhe volume, situação e produtividade do setor.'],
+        perfil: ['ACESSO INSTITUCIONAL', 'Meu perfil', 'Revise as informações vinculadas ao seu acesso.'],
+        auditoria: ['GOVERNANÇA', 'Auditoria do sistema', 'Consulte o histórico operacional registrado pela aplicação.'],
+        configuracoes: ['ADMINISTRAÇÃO', 'Configurações do setor', 'Gerencie regras, parâmetros e integrações do ambiente institucional.']
+    };
+    const meta = pageMeta[viewId];
+    if(meta) {
+        const eyebrow = document.getElementById('workspace-eyebrow'); const title = document.getElementById('workspace-title'); const subtitle = document.getElementById('workspace-subtitle');
+        if(eyebrow) eyebrow.textContent = meta[0]; if(title) title.textContent = meta[1]; if(subtitle) subtitle.textContent = meta[2];
+    }
 
     if(viewId === 'inicio') window.renderizarPainel();
     if(viewId === 'relatorios') window.renderizarGraficos();
@@ -266,7 +282,7 @@ window.carregarAuditoria = async function() {
     const corpo = document.getElementById('tabelaAuditoriaCorpo'); if(!corpo) return; corpo.innerHTML = '<tr><td colspan="4">Carregando logs...</td></tr>';
     const meuSetor = perfilUsuario.setor || 'SMMAM';
     try {
-        const snaps = await getDocs(query(collection(db, "logs_auditoria"), limit(100)));
+        const snaps = await getDocs(query(collection(db, "logs_auditoria"), where("setor", "==", meuSetor), limit(100)));
         corpo.innerHTML = '';
         snaps.forEach(d => {
             const data = d.data(); 
@@ -311,17 +327,15 @@ window.verificarRotinaCorreios = async function(forcar = false) {
 
             if(!forcar) await setDoc(autoRef, { [campoTurno]: dataHoje }, { merge: true });
             
-            const q = query(collection(db, "notificacoes"), where("codigoAR", "!=", ""));
+            const meuSetor = perfilUsuario.setor || 'SMMAM';
+            const q = query(collection(db, "notificacoes"), where("setor", "==", meuSetor));
             const pendingSnaps = await getDocs(q);
 
             let consultados = 0;
             let atualizados = 0;
             let falhas = 0;
-            const meuSetor = perfilUsuario.setor || 'SMMAM';
-
             for (let document of pendingSnaps.docs) {
                 const d = document.data();
-                if ((d.setor || 'SMMAM') !== meuSetor) continue; 
                 if (!d.codigoAR || d.codigoAR.length < 13) continue;
                 if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
 
@@ -400,8 +414,8 @@ onAuthStateChanged(auth, async (user) => {
             if (docSnap.exists()) {
                 perfilUsuario = docSnap.data(); 
                 if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
-                if(!perfilUsuario.status) perfilUsuario.status = 'aprovado';
-                if(!perfilUsuario.nivel) perfilUsuario.nivel = 'admin'; 
+                if(!perfilUsuario.status) perfilUsuario.status = 'pendente';
+                if(!perfilUsuario.nivel) perfilUsuario.nivel = 'leitor';
                 
                 await window.carregarInfracoesGlobais(); 
 
@@ -420,17 +434,15 @@ onAuthStateChanged(auth, async (user) => {
                     window.verificarRotinaCorreios(); 
                 }
             } else {
-                const novoPerfil = { nome: "Humberto", cargo: "Admin do Sistema", setor: "SMMAM", cpf: "000.000.000-00", telefone: "Não informado", matricula: "0000", email: user.email, status: "aprovado", nivel: "admin", dataCadastro: new Date().toISOString() };
-                await setDoc(userDocRef, novoPerfil); 
-                perfilUsuario = novoPerfil;
-                await window.carregarInfracoesGlobais();
-                if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
-                if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none'; 
-                if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'flex';
-                aplicarRestricoesDeTela(); 
-                await window.carregarDadosNuvem(); 
-                window.navegarPara('inicio');
-                window.verificarRotinaCorreios(); 
+                perfilUsuario = null;
+                if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none';
+                if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none';
+                if(document.getElementById('waiting-room')) {
+                    document.getElementById('waiting-room').style.display = 'block';
+                    const waitingTitle = document.querySelector('#waiting-room h2'); const waitingText = document.querySelector('#waiting-room p');
+                    if(waitingTitle) waitingTitle.textContent = 'Acesso sem perfil autorizado';
+                    if(waitingText) waitingText.innerHTML = 'Sua conta foi autenticada, mas ainda não possui um perfil institucional aprovado.<br>Solicite a liberação ao responsável pelo seu setor antes de utilizar dados de fiscalização.';
+                }
             }
         } catch(e) { console.error(e); alert("Erro na inicialização: " + e.message); }
         mostrarLoading(false);
@@ -443,38 +455,7 @@ onAuthStateChanged(auth, async (user) => {
 
 window.realizarLogin = function() { const email = document.getElementById('authEmail').value; const senha = document.getElementById('authPassword').value; if(!email || !senha) return alert("Preencha tudo."); mostrarLoading(true, "Acessando..."); signInWithEmailAndPassword(auth, email, senha).catch(() => { mostrarLoading(false); alert("Erro ao entrar."); }); }
 
-window.loginVisitante = async function() {
-    const email = "visitante@bentogoncalves.rs.gov.br";
-    const senha = "visitante123";
-    mostrarLoading(true, "Acessando Ambiente de Testes...");
-    try {
-        await signInWithEmailAndPassword(auth, email, senha);
-    } catch (e) {
-        if(e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-login-credentials') {
-            try {
-                const userC = await createUserWithEmailAndPassword(auth, email, senha);
-                await setDoc(doc(db, "usuarios", userC.user.uid), {
-                    nome: "Usuário Visitante",
-                    cargo: "Avaliador / Teste",
-                    setor: "SMMAM",
-                    cpf: "000.000.000-00",
-                    telefone: "N/A",
-                    matricula: "0000",
-                    email: email,
-                    status: "aprovado",
-                    nivel: "leitor",
-                    dataCadastro: new Date().toISOString()
-                });
-            } catch(err) {
-                mostrarLoading(false);
-                alert("Erro ao criar ambiente de visitante: " + err.message);
-            }
-        } else {
-            mostrarLoading(false);
-            alert("Erro no acesso de visitante: " + e.message);
-        }
-    }
-}
+window.loginVisitante = function() { alert('O acesso de demonstração foi desativado para proteger os dados de fiscalização. Solicite um perfil institucional aprovado.'); }
 
 window.adicionarEmailVip = async function() {
     const emailVip = document.getElementById('adminVipEmail').value.toLowerCase().trim();
@@ -990,11 +971,15 @@ if(btnImportarIptu) {
                     if(progressDiv) progressDiv.innerText = `⏳ Progresso: ${enviados} de ${chavesAlteradas.length}...`;
                 }
                 
-                if(progressDiv) progressDiv.innerText = `Salvando cópia do arquivo atual no Storage...`;
+                if(progressDiv) progressDiv.innerText = `Salvando cópia auxiliar da base atual...`;
                 const jsonAtualizadoParaSalvar = JSON.stringify(Object.values(mapNovos));
-                await uploadString(storageRef, jsonAtualizadoParaSalvar, 'raw', { contentType: 'application/json' });
-
-                if(progressDiv) { progressDiv.innerText = `✅ SUCESSO! Base Sincronizada cirurgicamente com Índices.`; progressDiv.style.color = 'green'; }
+                try {
+                    await uploadString(storageRef, jsonAtualizadoParaSalvar, 'raw', { contentType: 'application/json' });
+                    if(progressDiv) { progressDiv.innerText = `✅ SUCESSO! Base sincronizada com índices e cópia auxiliar atualizada.`; progressDiv.style.color = 'green'; }
+                } catch(storageError) {
+                    console.warn('Base sincronizada, mas a cópia auxiliar não pôde ser gravada.', storageError);
+                    if(progressDiv) { progressDiv.innerText = `✅ Base sincronizada com índices. A cópia auxiliar no Storage não está disponível neste projeto.`; progressDiv.style.color = '#a16207'; }
+                }
             }
         } catch(err) { 
             if(progressDiv) progressDiv.innerText = `❌ Erro: ${err.message}`; 
@@ -1006,17 +991,15 @@ if(btnImportarIptu) {
 window.carregarDadosNuvem = async function() {
     mostrarLoading(true, "Baixando demandas do seu setor...");
     try {
-        const querySnapshot = await getDocs(notificacoesRef); window.DB = []; 
         const meuSetor = perfilUsuario.setor || 'SMMAM';
+        const querySnapshot = await getDocs(query(notificacoesRef, where("setor", "==", meuSetor))); window.DB = [];
         
         querySnapshot.forEach((documento) => { 
             let data = documento.data(); data.firebaseId = documento.id; 
             if(!data.tipoDocumento) data.tipoDocumento = 'notificacao';
             if(!data.statusProcesso) data.statusProcesso = 'ativo'; 
             
-            if ((data.setor || 'SMMAM') === meuSetor) {
-                window.DB.push(data); 
-            }
+            window.DB.push(data);
         });
         window.renderizarPainel();
     } catch (e) {} mostrarLoading(false);

@@ -3,31 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plataforma de Fiscalização - SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=11">
+    <title>Fiscalização e Notificações · SMMAM</title>
+    <link rel="stylesheet" href="css/style.css?v=12">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-    <div id="loading-overlay">
-        <div style="font-size: 24px; margin-bottom: 10px;">⏳</div>
-        <div id="loading-msg">Sincronizando Banco de Dados...</div>
-    </div>
+    <div id="loading-overlay"><div class="loading-mark">SMMAM</div><div id="loading-msg">Sincronizando dados protegidos...</div></div>
     <div id="toast">Operação realizada com sucesso!</div>
 
     <!-- TELAS DE ACESSO -->
     <div id="auth-container">
-        <div style="text-align: center; margin-bottom: 20px;">
-            <img src="img/brasao.png" alt="Bento Gonçalves" style="width: 70px;">
+        <div class="auth-brand">
+            <img src="img/brasao.png.webp" alt="Prefeitura de Bento Gonçalves">
+            <div><span>SMMAM · AMBIENTE INTERNO</span><strong>Fiscalização &amp; Notificações</strong></div>
         </div>
-        <h2 id="authTitle">Acesso - Fiscalização</h2>
+        <div class="auth-intro"><p>GESTÃO OPERACIONAL</p><h1 id="authTitle">Acesso protegido à fiscalização.</h1><span>Notificações, autos, cadastro imobiliário, evidências e relatórios para uso institucional.</span></div>
         <div id="login-fields">
             <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
             <input type="password" id="authPassword" placeholder="Senha">
             <button class="btn-primary" onclick="realizarLogin()" style="width: 100%;">Entrar no Sistema</button>
-            
-            <!-- NOVO BOTÃO DE ACESSO RÁPIDO -->
-            <button type="button" class="btn-secondary" onclick="loginVisitante()" style="width: 100%; margin-top: 10px; background-color: #0ea5e9;">👁️ Acesso Rápido (Visitante)</button>
+            <div class="auth-security-note"><strong>Dados restritos.</strong> O acesso é individual, sujeito à aprovação do setor e registrado para fins de auditoria.</div>
         </div>
         <div id="register-fields" style="display:none;">
             <div style="font-size: 11px; background: #e2e8f0; color: #1e293b; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
@@ -52,6 +48,7 @@
             <span id="btnToggleAuth" onclick="toggleAuthMode()">Servidor Novo? Solicite Acesso</span>
             <span onclick="recuperarSenha()">Esqueci a Senha</span>
         </div>
+        <a class="auth-hub-link" href="https://painel-licencas-ambientais.web.app" target="_blank" rel="noreferrer">Voltar ao Hub de Aplicações <span>↗</span></a>
     </div>
 
     <div id="waiting-room" style="display:none;">
@@ -65,11 +62,14 @@
         
         <aside id="sidebar">
             <div class="sidebar-header" style="text-align: center; padding-top: 20px;">
-                <img src="img/brasao.png" alt="Bento Gonçalves" style="width: 50px; margin-bottom: 10px;">
+                <img src="img/brasao.png.webp" alt="Prefeitura de Bento Gonçalves" style="width: 50px; margin-bottom: 10px;">
+                <p class="sidebar-kicker">SMMAM · USO INTERNO</p>
                 <h3 style="margin-top: 0;">Fiscalização</h3>
                 <span id="sidebar-setor">Carregando...</span>
             </div>
             <nav class="sidebar-nav">
+                <a class="hub-return-link" href="https://painel-licencas-ambientais.web.app" target="_blank" rel="noreferrer">← Hub de aplicações <span>↗</span></a>
+                <div class="nav-section-title">OPERAÇÃO</div>
                 <a class="nav-item active" onclick="navegarPara('inicio')" id="nav-inicio">🏠 Tela Inicial</a>
                 <a class="nav-item" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Nova Notificação</a>
                 <a class="nav-item" onclick="navegarPara('autos')" id="nav-autos">🚨 Novo Auto (Multa)</a>
@@ -90,10 +90,11 @@
         </aside>
 
         <main id="main-content">
+            <header class="workspace-header"><div><p id="workspace-eyebrow">GESTÃO OPERACIONAL</p><h1 id="workspace-title">Visão geral</h1><span id="workspace-subtitle">Acompanhe as demandas, prazos e atividades do seu setor.</span></div><div class="workspace-security"><span></span><div><strong>ACESSO RESTRITO</strong><small>Dados protegidos por perfil institucional</small></div></div></header>
             
             <!-- VIEW 1: TELA INICIAL -->
             <div id="view-inicio" class="view-section active-view">
-                <h2>Gestão de Fluxo de Trabalho (Workflow)</h2>
+                <h2>Gestão de fluxo de trabalho</h2>
                 <div class="dashboard-cards">
                     <div class="card card-info"><div class="num" id="dashRascunhos">0</div><div class="label">Rascunhos (Pendentes)</div></div>
                     <div class="card card-total"><div class="num" id="dashAtivos">0</div><div class="label">Processos Ativos</div></div>
