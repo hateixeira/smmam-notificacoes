@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { extrairEventoRastreamento, normalizarCodigoAR } from '../js/correios-provider.js';
 
-const [html, app, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide] = await Promise.all([
+const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../js/app.js', import.meta.url), 'utf8'),
+  readFile(new URL('../workers/ar-sync-worker.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../firestore.rules', import.meta.url), 'utf8'),
   readFile(new URL('../firestore.indexes.json', import.meta.url), 'utf8'),
   readFile(new URL('../storage.rules', import.meta.url), 'utf8'),
@@ -23,11 +24,18 @@ assert.match(firestoreRules, /request\.auth != null/);
 assert.doesNotMatch(firestoreRules, /allow read, write: if true/);
 assert.match(storageRules, /iptu_backup/);
 assert.match(app, /Base sincronizada com índices/);
-assert.match(app, /consultarRastreamentoPacoteVicio/);
+assert.match(app, /AR_SYNC_SERVICE_URL/);
+assert.match(app, /requisitarServicoAR/);
+assert.match(app, /candidatosPendentesAR/);
+assert.match(app, /atualizarStatusConsultaAR/);
+assert.match(worker, /RAPIDAPI_AR_KEY/);
+assert.match(worker, /MAX_PER_WINDOW = 8/);
+assert.match(worker, /ArSyncCoordinator/);
 assert.doesNotMatch(app, /brasilapi\.com\.br\/api\/correios/);
 assert.doesNotMatch(app, /linketrack\.com/);
 assert.match(html, /Pacote Vício/);
-assert.match(html, /CSV de retorno do VIPP/);
+assert.match(html, /CSV VIPP de expedição/);
+assert.match(html, /id="arSyncStatus"/);
 assert.match(html, /Pular para o conteúdo principal/);
 assert.match(html, /politica-privacidade\.html/);
 assert.match(app, /Backup_Restrito_/);

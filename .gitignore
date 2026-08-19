@@ -2,3 +2,7 @@
 firebase-debug.log
 ui-debug.log
 firestore-debug.log
+
+# Arquivos temporários de publicação do Worker; podem conter requisições sensíveis.
+workers/deploy-input.json
+workers/secret-input.json

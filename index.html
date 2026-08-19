@@ -105,6 +105,12 @@
                     <div class="card card-vencida"><div class="num" id="dashVencidas">0</div><div class="label">Prazos Vencidos</div></div>
                 </div>
 
+                <div class="panel-container" style="margin-top:20px; border-left:4px solid #f59e0b;">
+                    <h3 style="margin:0 0 6px; color:#92400e; font-size:15px;">📬 Consulta compartilhada de AR</h3>
+                    <p id="arSyncStatus" role="status" style="margin:0; font-size:12px; color:#475569;">Verificando a última busca compartilhada de AR...</p>
+                    <small style="display:block; margin-top:6px; color:#64748b;">A rotina consulta até 8 ARs pendentes no primeiro acesso útil após 8h e após 13h. O CSV VIPP de expedição permanece inalterado.</small>
+                </div>
+
                 <div class="panel-container" style="margin-top: 20px;">
                     <div class="toolbar">
                         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; justify-content: space-between; width: 100%;">
@@ -527,16 +533,10 @@
                         <!-- MÓDULO CORREIOS -->
                         <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
                             <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
-                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Sincronize os ARs pelo plano gratuito do Pacote Vício ou importe o CSV de retorno do VIPP. Se o provedor estiver indisponível, a consulta oficial dos Correios continuará disponível em cada registro.</p>
-                            <div class="form-group" style="margin-bottom:10px;">
-                                <label for="configChaveRastreamento">Chave gratuita do Pacote Vício</label>
-                                <input type="password" id="configChaveRastreamento" placeholder="Cole a chave criada no plano Basic" autocomplete="off">
-                                <button class="btn-secondary" type="button" onclick="salvarChaveRastreamento()" style="width:100%; margin-top:6px;">Salvar chave neste navegador</button>
-                                <small id="statusChaveRastreamento" style="display:block; margin-top:6px; color:#92400e;">A chave não é enviada ao Firestore. O plano Basic permite até 1.000 consultas/mês e requer atribuição ao provedor.</small>
-                            </div>
+                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">A chave do Pacote Vício está protegida em serviço externo gratuito e não fica no navegador nem no Firestore. A rotina compartilhada ocorre no primeiro acesso útil após 8h e após 13h.</p>
                             <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
                             <button id="btnForcarCorreios" class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Sincronizar ARs agora</button>
-                            <small style="display:block; margin-top:8px; color:#92400e;"><a href="https://pacotevicio.dev/" target="_blank" rel="noopener noreferrer" style="color:inherit;">Dados de rastreamento: Pacote Vício</a> · contingência: retorno VIPP e site oficial dos Correios.</small>
+                            <small style="display:block; margin-top:8px; color:#92400e;"><strong>CSV VIPP:</strong> o fluxo de expedição permanece original e não é usado por esta consulta. <a href="https://pacotevicio.dev/" target="_blank" rel="noopener noreferrer" style="color:inherit;">Dados de rastreamento: Pacote Vício</a> · contingência: site oficial dos Correios.</small>
                         </div>
 
                         <!-- MÓDULO IPTU DELTA SYNC -->
@@ -714,6 +714,6 @@
         </table>
     </div>
 
-    <script type="module" src="js/app.js?v=20260819.2"></script>
+    <script type="module" src="js/app.js?v=20260819.3"></script>
 </body>
 </html>

@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, orderBy, limit, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-import { consultarRastreamentoPacoteVicio } from './correios-provider.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyAP56ee8ituvxypF_aPOVSClu0EfCJBhR8",
@@ -36,11 +35,7 @@ window.colunaOrdenacao = '';
 window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
 
-const CHAVE_RASTREAMENTO_STORAGE = 'smmam.pacotevicio.apiKey';
-
-function obterChaveRastreamento() {
-    return localStorage.getItem(CHAVE_RASTREAMENTO_STORAGE) || '';
-}
+const AR_SYNC_SERVICE_URL = 'https://smmam-ar-sync.eu-ounico.workers.dev';
 
 function linkRastreamentoOficial(codigoAR) {
     const codigo = String(codigoAR || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -70,20 +65,50 @@ function interpretarStatusAR(descricao, confirmadoEntregue = false) {
     return { statusRetornoAR, statusNotificacao, texto };
 }
 
-window.salvarChaveRastreamento = function() {
-    const input = document.getElementById('configChaveRastreamento');
-    const aviso = document.getElementById('statusChaveRastreamento');
-    const chave = String(input?.value || '').trim();
+function candidatosPendentesAR() {
+    return (window.DB || [])
+        .filter(item => item?.firebaseId && item?.codigoAR && !['entregue', 'devolvido'].includes(String(item.statusRetornoAR || '').toLowerCase()))
+        .slice(0, 8)
+        .map(item => ({ id: item.firebaseId }));
+}
 
-    if (!chave) {
-        localStorage.removeItem(CHAVE_RASTREAMENTO_STORAGE);
-        if (aviso) aviso.textContent = 'Chave removida deste navegador. A importação VIPP continua disponível.';
-        return;
+function atualizarIndicadorAR(texto, tipo = 'normal') {
+    const elemento = document.getElementById('arSyncStatus');
+    if (!elemento) return;
+    const cor = tipo === 'erro' ? '#991b1b' : tipo === 'sucesso' ? '#166534' : '#475569';
+    elemento.style.color = cor;
+    elemento.textContent = texto;
+}
+
+async function requisitarServicoAR(caminho, opcoes = {}) {
+    if (!usuarioLogado) throw new Error('Sessão indisponível para consulta de AR.');
+    const token = await usuarioLogado.getIdToken();
+    const resposta = await fetch(`${AR_SYNC_SERVICE_URL}${caminho}`, {
+        ...opcoes,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(opcoes.headers || {}) }
+    });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.error || 'Falha ao consultar o serviço de AR.');
+    return dados;
+}
+
+window.atualizarStatusConsultaAR = async function() {
+    if (!perfilUsuario || perfilUsuario.nivel === 'leitor') return;
+    try {
+        const dados = await requisitarServicoAR('/v1/status');
+        const status = dados.status;
+        if (!status) {
+            atualizarIndicadorAR('Nenhuma busca compartilhada registrada hoje. A próxima ocorrerá no primeiro acesso útil após 8h ou 13h.');
+            return;
+        }
+        if (status.state === 'running') {
+            atualizarIndicadorAR('Consulta compartilhada de AR em andamento para o setor.');
+            return;
+        }
+        atualizarIndicadorAR(`Última busca de AR: ${formatarDataHora(status.requestedAt || status.completedAt)} · ${status.slot === 'manha' ? 'janela da manhã' : status.slot === 'tarde' ? 'janela da tarde' : 'exceção administrativa'} · ${status.consulted || 0} consultado(s), ${status.updated || 0} retorno(s) obtido(s).`, 'sucesso');
+    } catch (erro) {
+        atualizarIndicadorAR('Status da consulta compartilhada indisponível. A consulta oficial dos Correios permanece disponível em cada registro.', 'erro');
     }
-
-    localStorage.setItem(CHAVE_RASTREAMENTO_STORAGE, chave);
-    if (aviso) aviso.textContent = 'Chave salva somente neste navegador administrativo.';
-    window.mostrarToast('Configuração de rastreamento salva neste navegador.');
 };
 window.filtroTipoDocumento = 'Todos'; 
 window.filtroProcessoAtual = 'ativo'; 
@@ -489,92 +514,54 @@ window.toggleAuthMode = function() {
     }
 }
 
-window.verificarRotinaCorreios = async function(forcar = false) {
-    if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; 
-    const chaveRastreamento = obterChaveRastreamento();
-    if (!chaveRastreamento) {
-        if (forcar) alert('Configure a chave gratuita do Pacote Vício nas Configurações ou use a importação CSV do VIPP.');
+window.verificarRotinaCorreios = async function(forcar = false, candidatos = null) {
+    if (!perfilUsuario || perfilUsuario.nivel === 'leitor') return;
+    const btnForcar = document.getElementById('btnForcarCorreios');
+    if (forcar && perfilUsuario.nivel !== 'admin') {
+        alert('A sincronização manual é exclusiva de administradores. A rotina compartilhada continuará no primeiro acesso útil.');
         return;
     }
-    
-    const agora = new Date();
-    const hora = agora.getHours();
-    const dataHoje = agora.toISOString().slice(0, 10); 
-    let turno = null;
-    if (hora >= 8 && hora < 13) turno = 'manha';
-    else if (hora >= 13) turno = 'tarde';
-
-    if (!turno && !forcar) return; 
-
-    const autoRef = doc(db, "configuracoes", "automacao");
+    if (forcar && btnForcar) { btnForcar.textContent = '⏳ Consultando ARs protegidos...'; btnForcar.disabled = true; }
     try {
-        const snap = await getDoc(autoRef);
-        let dadosAuto = snap.exists() ? snap.data() : {};
-        const campoTurno = turno === 'manha' ? 'ultimaSyncManha' : 'ultimaSyncTarde';
-
-        if (dadosAuto[campoTurno] !== dataHoje || forcar) {
-            
-            const btnForcar = document.getElementById('btnForcarCorreios');
-            if(forcar && btnForcar) { btnForcar.innerText = "⏳ Consultando Correios de forma segura..."; btnForcar.disabled = true; }
-
-            if(!forcar) await setDoc(autoRef, { [campoTurno]: dataHoje }, { merge: true });
-            
-            const meuSetor = perfilUsuario.setor || 'SMMAM';
-            const q = query(collection(db, "notificacoes"), where("setor", "==", meuSetor));
-            const pendingSnaps = await getDocs(q);
-
-            let consultados = 0;
-            let atualizados = 0;
-            let falhas = 0;
-            for (let document of pendingSnaps.docs) {
-                const d = document.data();
-                if (!d.codigoAR || d.codigoAR.length < 13) continue;
-                if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
-
-                consultados++;
-                let resultadoRastreamento = null;
-                
-                try {
-                    resultadoRastreamento = await consultarRastreamentoPacoteVicio(d.codigoAR, chaveRastreamento);
-                } catch(e) {
-                    console.warn(`AR ${d.codigoAR}: ${e.message}`);
-                }
-
-                if (resultadoRastreamento) {
-                    const statusInterpretado = interpretarStatusAR(resultadoRastreamento.descricao, resultadoRastreamento.entregue);
-                    let novoStatus = statusInterpretado.statusRetornoAR;
-                    let statusVida = statusInterpretado.statusNotificacao;
-                    let dtRecebimento = d.dataRecebimento || '';
-
-                    if(statusVida === 'recebido' && !dtRecebimento) dtRecebimento = new Date().toISOString().slice(0, 10);
-
-                    if (novoStatus !== d.statusRetornoAR || statusInterpretado.texto.toUpperCase() !== d.statusCorreiosTexto || statusVida !== d.statusNotificacao) {
-                        await updateDoc(document.ref, {
-                            statusRetornoAR: novoStatus,
-                            statusCorreiosTexto: statusInterpretado.texto.toUpperCase(),
-                            statusNotificacao: statusVida,
-                            dataRecebimento: dtRecebimento
-                        });
-                        atualizados++;
-                    }
-                } else {
-                    falhas++; 
-                }
-                
-                await new Promise(r => setTimeout(r, 3000));
-            }
-
-            if (forcar) {
-                alert(`✅ Verificação Concluída!\n\n${consultados} AR(s) processados do seu setor.\n${atualizados} sofreram alterações.\n${falhas} falharam.`);
-                if(btnForcar) { btnForcar.innerText = "🔄 Forçar Sync da API"; btnForcar.disabled = false; }
-            } else if (atualizados > 0) {
-                window.mostrarToast(`✅ Correios: ${atualizados} AR(s) atualizados no fundo!`);
-            }
-            
-            if(atualizados > 0) await window.carregarDadosNuvem(); 
+        const resposta = await requisitarServicoAR('/v1/sync', {
+            method: 'POST',
+            body: JSON.stringify({ manual: forcar, candidates: candidatos || candidatosPendentesAR() })
+        });
+        if (!resposta.executed) {
+            const mensagens = {
+                outside_business_window: 'A rotina ocorre somente em dias úteis após 8h ou 13h.',
+                running: 'Uma consulta compartilhada já está em andamento.',
+                done: 'A janela de consulta deste turno já foi concluída.'
+            };
+            atualizarIndicadorAR(mensagens[resposta.reason] || 'Nenhuma nova consulta foi necessária nesta janela.');
+            return;
         }
-    } catch(e) {
-        console.error("Falha na rotina em background", e);
+        let alterados = 0;
+        for (const item of resposta.results || []) {
+            if (!item.ok) continue;
+            const status = interpretarStatusAR(item.tracking.descricao, item.tracking.entregue);
+            const atual = (window.DB || []).find(registro => registro.firebaseId === item.id) || {};
+            const dados = {
+                statusRetornoAR: status.statusRetornoAR,
+                statusCorreiosTexto: status.texto.toUpperCase(),
+                statusNotificacao: status.statusNotificacao
+            };
+            if (status.statusNotificacao === 'recebido' && !atual.dataRecebimento) dados.dataRecebimento = new Date().toISOString().slice(0, 10);
+            if (dados.statusRetornoAR !== atual.statusRetornoAR || dados.statusCorreiosTexto !== atual.statusCorreiosTexto || dados.statusNotificacao !== atual.statusNotificacao) {
+                await updateDoc(doc(db, 'notificacoes', item.id), dados);
+                alterados++;
+            }
+        }
+        const resumo = resposta.summary || {};
+        atualizarIndicadorAR(`Última busca de AR: ${formatarDataHora(resumo.requestedAt)} · ${resumo.slot === 'manha' ? 'janela da manhã' : 'janela da tarde'} · ${resumo.consulted || 0} consultado(s), ${alterados} atualização(ões) aplicada(s).`, 'sucesso');
+        if (alterados) await window.carregarDadosNuvem();
+        if (forcar) alert(`Consulta compartilhada concluída. ${resumo.consulted || 0} AR(s) consultado(s) e ${alterados} atualização(ões) aplicada(s).`);
+    } catch (erro) {
+        console.error('Falha na sincronização compartilhada de AR', erro);
+        atualizarIndicadorAR('A consulta compartilhada falhou. Use a consulta oficial dos Correios no registro e tente novamente na próxima janela.', 'erro');
+        if (forcar) alert('Não foi possível concluir a consulta. Acesse a consulta oficial dos Correios no registro.');
+    } finally {
+        if (forcar && btnForcar) { btnForcar.textContent = '🔄 Sincronizar ARs agora'; btnForcar.disabled = false; }
     }
 }
 
@@ -613,6 +600,7 @@ onAuthStateChanged(auth, async (user) => {
                     aplicarRestricoesDeTela(); 
                     await window.carregarDadosNuvem(); 
                     window.navegarPara('inicio');
+                    await window.atualizarStatusConsultaAR();
                     window.verificarRotinaCorreios(); 
                 }
             } else {
@@ -758,27 +746,13 @@ if(cadLoteInput) {
 window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     const span = document.getElementById(spanId); 
     if(!span) return;
-    span.innerHTML = `<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 5px; border-radius:4px;">⏳ API...</span>`;
-    
-    try {
-        const resultadoRastreamento = await consultarRastreamentoPacoteVicio(codigoAR, obterChaveRastreamento());
-        const statusInterpretado = interpretarStatusAR(resultadoRastreamento.descricao, resultadoRastreamento.entregue);
-        const novoStatus = statusInterpretado.statusRetornoAR;
-        const statusVida = statusInterpretado.statusNotificacao;
-        let dtReceb = new Date().toISOString().slice(0, 10);
-
-        if(docId) {
-            const dadosAtualizacao = { statusRetornoAR: novoStatus, statusCorreiosTexto: statusInterpretado.texto.toUpperCase(), statusNotificacao: statusVida };
-            if(statusVida === 'recebido') dadosAtualizacao.dataRecebimento = dtReceb; 
-            await updateDoc(doc(db, "notificacoes", docId), dadosAtualizacao);
-        }
-
-        span.innerHTML = `<span style="color:green; font-weight:bold;">✅ Salvo!</span>`;
-        setTimeout(() => { window.carregarDadosNuvem(); }, 800);
-        
-    } catch(e) { 
-        span.innerHTML = `<a href="${linkRastreamentoOficial(codigoAR)}" target="_blank" rel="noopener noreferrer" title="${e.message}" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">↗ Consultar nos Correios</a>`;
+    if (perfilUsuario?.nivel !== 'admin' || !docId) {
+        span.innerHTML = `<a href="${linkRastreamentoOficial(codigoAR)}" target="_blank" rel="noopener noreferrer" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border:1px solid #ef4444;">↗ Consultar nos Correios</a>`;
+        return;
     }
+    span.innerHTML = `<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 5px; border-radius:4px;">⏳ Consulta protegida...</span>`;
+    await window.verificarRotinaCorreios(true, [{ id: docId }]);
+    span.innerHTML = `<span style="color:#166534; font-weight:bold;">✅ Atualizado</span>`;
 }
 
 const limpaString = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^\w\s]/gi, '') : '';
