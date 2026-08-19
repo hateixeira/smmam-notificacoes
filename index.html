@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fiscalização e Notificações · SMMAM</title>
-    <link rel="stylesheet" href="css/style.css?v=12">
+    <link rel="stylesheet" href="css/style.css?v=13">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
     <div id="loading-overlay"><div class="loading-mark">SMMAM</div><div id="loading-msg">Sincronizando dados protegidos...</div></div>
     <div id="toast">Operação realizada com sucesso!</div>
@@ -20,10 +21,10 @@
         </div>
         <div class="auth-intro"><p>GESTÃO OPERACIONAL</p><h1 id="authTitle">Acesso protegido à fiscalização.</h1><span>Notificações, autos, cadastro imobiliário, evidências e relatórios para uso institucional.</span></div>
         <div id="login-fields">
-            <input type="email" id="authEmail" placeholder="E-mail da Prefeitura">
-            <input type="password" id="authPassword" placeholder="Senha">
+            <input type="email" id="authEmail" placeholder="E-mail da Prefeitura" aria-label="E-mail institucional">
+            <input type="password" id="authPassword" placeholder="Senha" aria-label="Senha">
             <button class="btn-primary" onclick="realizarLogin()" style="width: 100%;">Entrar no Sistema</button>
-            <div class="auth-security-note"><strong>Dados restritos.</strong> O acesso é individual, sujeito à aprovação do setor e registrado para fins de auditoria.</div>
+            <div class="auth-security-note"><strong>Dados restritos.</strong> O acesso é individual, sujeito à aprovação do setor e registrado para fins de auditoria. O sistema trata dados de cadastro e fiscalização exclusivamente para atividades institucionais. <a href="politica-privacidade.html" target="_blank" rel="noreferrer">Conheça o aviso de privacidade</a>.</div>
         </div>
         <div id="register-fields" style="display:none;">
             <div style="font-size: 11px; background: #e2e8f0; color: #1e293b; padding: 8px; border-radius: 4px; margin-bottom: 10px;">
@@ -37,8 +38,8 @@
                 <option value="MOBILIDADE">Mobilidade Urbana (Trânsito)</option>
                 <option value="OBRAS">Obras e Posturas</option>
             </select>
-            <input type="text" id="regCpf" placeholder="CPF" maxlength="14">
-            <input type="text" id="regTelefone" placeholder="Telefone Celular" maxlength="15">
+            <input type="text" id="regCpf" placeholder="CPF (opcional)" maxlength="14" aria-label="CPF opcional">
+            <input type="text" id="regTelefone" placeholder="Telefone celular (opcional)" maxlength="15" aria-label="Telefone celular opcional">
             <input type="text" id="regMatricula" placeholder="Nº da Matrícula / RE">
             <input type="email" id="regEmail" placeholder="E-mail Institucional">
             <input type="password" id="regPassword" placeholder="Crie uma Senha (mín. 6 caracteres)">
@@ -67,20 +68,20 @@
                 <h3 style="margin-top: 0;">Fiscalização</h3>
                 <span id="sidebar-setor">Carregando...</span>
             </div>
-            <nav class="sidebar-nav">
+            <nav class="sidebar-nav" aria-label="Navegação principal da fiscalização">
                 <a class="hub-return-link" href="https://painel-licencas-ambientais.web.app" target="_blank" rel="noreferrer">← Hub de aplicações <span>↗</span></a>
                 <div class="nav-section-title">OPERAÇÃO</div>
-                <a class="nav-item active" onclick="navegarPara('inicio')" id="nav-inicio">🏠 Tela Inicial</a>
-                <a class="nav-item" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Nova Notificação</a>
-                <a class="nav-item" onclick="navegarPara('autos')" id="nav-autos">🚨 Novo Auto (Multa)</a>
-                <a class="nav-item" onclick="navegarPara('consulta')" id="nav-consulta">🔍 Consulta Cadastral</a>
-                <a class="nav-item" onclick="navegarPara('relatorios')" id="nav-relatorios">📈 Relatórios e Gráficos</a>
-                <a class="nav-item" onclick="navegarPara('perfil')" id="nav-perfil">👤 Meu Perfil</a>
+                <a class="nav-item active" href="#main-content" onclick="navegarPara('inicio')" id="nav-inicio">🏠 Tela Inicial</a>
+                <a class="nav-item" href="#main-content" onclick="navegarPara('notificacoes')" id="nav-notificacoes">📝 Nova Notificação</a>
+                <a class="nav-item" href="#main-content" onclick="navegarPara('autos')" id="nav-autos">🚨 Novo Auto (Multa)</a>
+                <a class="nav-item" href="#main-content" onclick="navegarPara('consulta')" id="nav-consulta">🔍 Consulta Cadastral</a>
+                <a class="nav-item" href="#main-content" onclick="navegarPara('relatorios')" id="nav-relatorios">📈 Relatórios e Gráficos</a>
+                <a class="nav-item" href="#main-content" onclick="navegarPara('perfil')" id="nav-perfil">👤 Meu Perfil</a>
                 
                 <div id="menu-admin-area" style="display: none;">
                     <div class="nav-section-title">ADMINISTRAÇÃO</div>
-                    <a class="nav-item" onclick="navegarPara('auditoria')" id="nav-auditoria">🛡️ Auditoria do Sistema</a>
-                    <a class="nav-item" onclick="navegarPara('configuracoes')" id="nav-configuracoes">⚙️ Configurações do Setor</a>
+                    <a class="nav-item" href="#main-content" onclick="navegarPara('auditoria')" id="nav-auditoria">🛡️ Auditoria do Sistema</a>
+                    <a class="nav-item" href="#main-content" onclick="navegarPara('configuracoes')" id="nav-configuracoes">⚙️ Configurações do Setor</a>
                 </div>
             </nav>
             <div class="sidebar-footer">
@@ -91,6 +92,7 @@
 
         <main id="main-content">
             <header class="workspace-header"><div><p id="workspace-eyebrow">GESTÃO OPERACIONAL</p><h1 id="workspace-title">Visão geral</h1><span id="workspace-subtitle">Acompanhe as demandas, prazos e atividades do seu setor.</span></div><div class="workspace-security"><span></span><div><strong>ACESSO RESTRITO</strong><small>Dados protegidos por perfil institucional</small></div></div></header>
+            <div class="privacy-banner" role="status"><strong>Uso institucional:</strong> registre somente informações necessárias à fiscalização. Exportações e backups podem conter dados pessoais e devem ser guardados em local institucional controlado.</div>
             
             <!-- VIEW 1: TELA INICIAL -->
             <div id="view-inicio" class="view-section active-view">

@@ -539,7 +539,7 @@ window.registrarUsuario = async function() {
     const email = document.getElementById('regEmail').value.toLowerCase().trim(); 
     const senha = document.getElementById('regPassword').value; 
     
-    if(!nome || !setor || !cpf || !senha) return alert("Preencha os obrigatórios."); 
+    if(!nome || !setor || !email || !senha) return alert("Preencha nome, setor, e-mail institucional e senha.");
 
     let isVip = false;
     try {
@@ -556,7 +556,7 @@ window.registrarUsuario = async function() {
     mostrarLoading(true); 
     try { 
         const userC = await createUserWithEmailAndPassword(auth, email, senha); 
-        await setDoc(doc(db, "usuarios", userC.user.uid), { nome, cargo, setor, cpf, telefone, matricula, email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() }); 
+        await setDoc(doc(db, "usuarios", userC.user.uid), { nome, cargo, setor, cpf: cpf || null, telefone: telefone || null, matricula, email, status: "pendente", nivel: "leitor", dataCadastro: new Date().toISOString() });
         sendEmailVerification(userC.user); 
         mostrarLoading(false); 
         alert("Cadastro enviado para chefia do seu setor."); 
@@ -923,15 +923,32 @@ window.renderizarGraficos = function() {
     }
 }
 
-window.baixarBackupLocal = function() {
-    const data = JSON.stringify(window.DB, null, 2);
+window.baixarBackupLocal = async function() {
+    if(!perfilUsuario || perfilUsuario.nivel !== 'admin') return alert('Somente administradores podem gerar backup setorial.');
+    const setor = perfilUsuario.setor || 'SMMAM';
+    const registrosDoSetor = window.DB.filter(item => (item.setor || 'SMMAM') === setor);
+    const pacote = {
+        metadados: {
+            formato: 'smmam-backup-setorial-v1',
+            classificacao: 'uso interno restrito',
+            setor,
+            geradoEm: new Date().toISOString(),
+            geradoPor: perfilUsuario.email || perfilUsuario.nome || 'administrador',
+            totalRegistros: registrosDoSetor.length,
+            instrucaoRestauracao: 'A restauração deve ser realizada por administrador autorizado, em ambiente de homologação, após validação do arquivo e aprovação da área de TI.'
+        },
+        notificacoes: registrosDoSetor
+    };
+    const data = JSON.stringify(pacote, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Backup_Setor_${perfilUsuario.setor || 'Geral'}_${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `Backup_Restrito_${setor}_${new Date().toISOString().slice(0,10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    await registrarLog('GEROU BACKUP SETORIAL', `${registrosDoSetor.length} registro(s) do setor ${setor}`);
+    window.mostrarToast('Backup setorial gerado. Guarde o arquivo em repositório institucional controlado.');
 }
 
 const btnImportarIptu = document.getElementById('btnAdminImportarIptu');
@@ -1404,6 +1421,7 @@ window.exportarExcel = function() {
     }
     
     if(itensParaExportar.length === 0) return alert("Nenhum registro selecionado válido para exportar."); 
+    if(!confirm('Este arquivo pode conter dados pessoais. Confirme que o destino é institucional e que o compartilhamento é necessário para a atividade de fiscalização.')) return;
     
     let c = "\uFEFFNº Reg;Tipo;Ouvidoria;Data Emissao;Data Recebimento;Prazo Dias;Nome;CPF/CNPJ;Lote Irregular;Bairro;Cidade;Codigo AR;Status Processo;Fiscal\n";
     itensParaExportar.forEach(i => { c += `${i.numNotif || ''};${(i.tipoDocumento||'').toUpperCase()};${i.procOuvidoria || ''};${i.dataNotif ? i.dataNotif.split('-').reverse().join('/') : ''};${i.dataRecebimento ? i.dataRecebimento.split('-').reverse().join('/') : 'SUSPENSO'};${i.prazoDias||''};${(i.nome||'').toUpperCase().replace(/;/g,',')};${i.doc||''};${(i.loteEndereco||'').replace(/;/g,',')};${i.bairro||''};${i.cidade||''};${i.codigoAR||''};${(i.statusProcesso||'').toUpperCase()};${i.fiscal||''}\n`; });
@@ -1426,6 +1444,7 @@ window.exportarVipp = function() {
     const itensParaExportar = window.itensFiltradosAtual.filter(item => selecionadosIds.includes(item.firebaseId));
 
     if(itensParaExportar.length === 0) return alert("Nenhum registro selecionado válido para exportar.");
+    if(!confirm('O arquivo VIPP contém dados pessoais de destinatários. Confirme que a exportação é necessária para a postagem institucional.')) return;
     
     const cabecalho = "NOME;AOS_CUIDADOS;ENTREGA_NO_VIZINHO;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;PAIS;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;NOME;ENDERECO;NUMERO;COMPLEMENTO;BAIRRO;CIDADE;UF;CEP;TELEFONE_CELULAR;E_MAIL;CPF_CNPJ;IE_RG;FILLER;FINANCEIRO;REGISTRO;PESO;FORMATO;ALTURA;LARGURA;COMPRIMENTO;ADICIONAIS;VALOR_DECLARADO;VALOR_A_COBRAR;CONTRATO;CARTAO;RFID_SSCC;FILLER;OBSERVACAO;OBSERVACAO_3;OBSERVACAO_4;OBSERVACAO_5;ID_DO_VOLUME;QTD_DE_VOLUMES;COD_CLIENTE_VISUAL;CHAVE_ROTEAMENTO;CONTA_LOTE;FILLER;TIPO_REVERSA;PRAZO;EMBALAGEM;DATA_COLETA;FILLER;CHAVE_ACESSO;SERIE_NOTA;NUMERO_NOTA;VALOR_DA_NOTA;DATA_NOTA;PROTOCOLO_NOTA;OBSERVACAO_NOTA;FILLER;FILLER_1;FILLER_2;DECLARACAO_CONTEUDO";
     
