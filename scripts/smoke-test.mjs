@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { extrairEventoRastreamento, normalizarCodigoAR } from '../js/correios-provider.js';
 
 const [html, app, firestoreRules, storageRules] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
@@ -19,5 +20,15 @@ assert.match(firestoreRules, /request\.auth != null/);
 assert.doesNotMatch(firestoreRules, /allow read, write: if true/);
 assert.match(storageRules, /iptu_backup/);
 assert.match(app, /Base sincronizada com índices/);
+assert.match(app, /consultarRastreamentoPacoteVicio/);
+assert.doesNotMatch(app, /brasilapi\.com\.br\/api\/correios/);
+assert.doesNotMatch(app, /linketrack\.com/);
+assert.match(html, /Pacote Vício/);
+assert.match(html, /CSV de retorno do VIPP/);
+assert.equal(normalizarCodigoAR('am101510575br'), 'AM101510575BR');
+assert.deepEqual(extrairEventoRastreamento({
+  temEventoEntrega: true,
+  eventos: [{ descricao: 'Objeto entregue ao destinatário', finalizador: 'S' }],
+}), { descricao: 'Objeto entregue ao destinatário', entregue: true, dataEvento: null });
 
 console.log('Smoke test aprovado: navegação, fluxos críticos e regras preparadas.');

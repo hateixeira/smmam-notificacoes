@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { consultarRastreamentoPacoteVicio } from './correios-provider.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyAP56ee8ituvxypF_aPOVSClu0EfCJBhR8",
@@ -33,6 +34,56 @@ window.bancoInfracoesGlobais = [];
 window.colunaOrdenacao = '';
 window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
+
+const CHAVE_RASTREAMENTO_STORAGE = 'smmam.pacotevicio.apiKey';
+
+function obterChaveRastreamento() {
+    return localStorage.getItem(CHAVE_RASTREAMENTO_STORAGE) || '';
+}
+
+function linkRastreamentoOficial(codigoAR) {
+    const codigo = String(codigoAR || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return `https://rastreamento.correios.com.br/app/index.php?objetos=${encodeURIComponent(codigo)}`;
+}
+
+function interpretarStatusAR(descricao, confirmadoEntregue = false) {
+    const texto = String(descricao || '').toLowerCase();
+    let statusRetornoAR = 'aguardando';
+    let statusNotificacao = 'enviado_ar';
+
+    if (confirmadoEntregue || texto.includes('entregue')) {
+        statusRetornoAR = 'entregue';
+        statusNotificacao = 'recebido';
+    } else if (texto.includes('devolvido') || texto.includes('incorreto') || texto.includes('recusado') || texto.includes('não procurado') || (texto.includes('ausente') && texto.includes('devolvido'))) {
+        statusRetornoAR = 'devolvido';
+    } else if (texto.includes('saiu para entrega')) {
+        statusRetornoAR = 'saiu_entrega';
+    } else if (texto.includes('ausente') || texto.includes('não atendido') || texto.includes('tentativa')) {
+        statusRetornoAR = 'tentativa';
+    } else if (texto.includes('aguardando retirada')) {
+        statusRetornoAR = 'retirada';
+    } else if (texto.includes('postado') || texto.includes('trânsito') || texto.includes('transito') || texto.includes('encaminhado')) {
+        statusRetornoAR = 'transito';
+    }
+
+    return { statusRetornoAR, statusNotificacao, texto };
+}
+
+window.salvarChaveRastreamento = function() {
+    const input = document.getElementById('configChaveRastreamento');
+    const aviso = document.getElementById('statusChaveRastreamento');
+    const chave = String(input?.value || '').trim();
+
+    if (!chave) {
+        localStorage.removeItem(CHAVE_RASTREAMENTO_STORAGE);
+        if (aviso) aviso.textContent = 'Chave removida deste navegador. A importação VIPP continua disponível.';
+        return;
+    }
+
+    localStorage.setItem(CHAVE_RASTREAMENTO_STORAGE, chave);
+    if (aviso) aviso.textContent = 'Chave salva somente neste navegador administrativo.';
+    window.mostrarToast('Configuração de rastreamento salva neste navegador.');
+};
 window.filtroTipoDocumento = 'Todos'; 
 window.filtroProcessoAtual = 'ativo'; 
 window.valorURMGlobal = 0; 
@@ -304,6 +355,11 @@ window.toggleAuthMode = function() {
 
 window.verificarRotinaCorreios = async function(forcar = false) {
     if(!perfilUsuario || perfilUsuario.nivel === 'leitor') return; 
+    const chaveRastreamento = obterChaveRastreamento();
+    if (!chaveRastreamento) {
+        if (forcar) alert('Configure a chave gratuita do Pacote Vício nas Configurações ou use a importação CSV do VIPP.');
+        return;
+    }
     
     const agora = new Date();
     const hora = agora.getHours();
@@ -340,36 +396,26 @@ window.verificarRotinaCorreios = async function(forcar = false) {
                 if (d.statusRetornoAR === 'entregue' || d.statusRetornoAR === 'devolvido') continue; 
 
                 consultados++;
-                let desc = "";
+                let resultadoRastreamento = null;
                 
                 try {
-                    const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${d.codigoAR}`);
-                    if (res.ok) {
-                        const apiData = await res.json();
-                        if (apiData.eventos && apiData.eventos.length > 0) desc = apiData.eventos[0].descricao.toLowerCase();
-                    }
-                } catch(e) {}
+                    resultadoRastreamento = await consultarRastreamentoPacoteVicio(d.codigoAR, chaveRastreamento);
+                } catch(e) {
+                    console.warn(`AR ${d.codigoAR}: ${e.message}`);
+                }
 
-                if (desc) {
-                    let novoStatus = d.statusRetornoAR || 'aguardando';
-                    let statusVida = d.statusNotificacao || 'enviado_ar';
+                if (resultadoRastreamento) {
+                    const statusInterpretado = interpretarStatusAR(resultadoRastreamento.descricao, resultadoRastreamento.entregue);
+                    let novoStatus = statusInterpretado.statusRetornoAR;
+                    let statusVida = statusInterpretado.statusNotificacao;
                     let dtRecebimento = d.dataRecebimento || '';
 
-                    if (desc.includes('entregue')) {
-                        novoStatus = 'entregue';
-                        statusVida = 'recebido';
-                        if(!dtRecebimento) dtRecebimento = new Date().toISOString().slice(0, 10); 
-                    }
-                    else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
-                    else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
-                    else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
-                    else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
-                    else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
+                    if(statusVida === 'recebido' && !dtRecebimento) dtRecebimento = new Date().toISOString().slice(0, 10);
 
-                    if (novoStatus !== d.statusRetornoAR || desc.toUpperCase() !== d.statusCorreiosTexto || statusVida !== d.statusNotificacao) {
+                    if (novoStatus !== d.statusRetornoAR || statusInterpretado.texto.toUpperCase() !== d.statusCorreiosTexto || statusVida !== d.statusNotificacao) {
                         await updateDoc(document.ref, {
                             statusRetornoAR: novoStatus,
-                            statusCorreiosTexto: desc.toUpperCase(),
+                            statusCorreiosTexto: statusInterpretado.texto.toUpperCase(),
                             statusNotificacao: statusVida,
                             dataRecebimento: dtRecebimento
                         });
@@ -580,41 +626,14 @@ window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     span.innerHTML = `<span style="background:#e2e8f0; color:#64748b; font-size:10px; padding:2px 5px; border-radius:4px;">⏳ API...</span>`;
     
     try {
-        let desc = "";
-        const res = await fetch(`https://brasilapi.com.br/api/correios/v1/${codigoAR}`);
-        
-        if (res.status === 404) {
-            span.innerHTML = `<span style="background:#fef3c7; color:#b45309; border: 1px solid #f59e0b; font-size:10px; padding:2px 5px; border-radius:4px;">🟡 Aguardando</span>`;
-            return;
-        }
-        if (res.ok) {
-            const data = await res.json();
-            if (data.eventos && data.eventos.length > 0) desc = data.eventos[0].descricao.toLowerCase();
-        } else {
-            throw new Error('Rate Limit');
-        }
-
-        if (!desc) {
-            span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ API Ocupada (Ver)</a>`; 
-            return;
-        }
-
-        let novoStatus = 'aguardando';
-        let statusVida = 'enviado_ar';
+        const resultadoRastreamento = await consultarRastreamentoPacoteVicio(codigoAR, obterChaveRastreamento());
+        const statusInterpretado = interpretarStatusAR(resultadoRastreamento.descricao, resultadoRastreamento.entregue);
+        const novoStatus = statusInterpretado.statusRetornoAR;
+        const statusVida = statusInterpretado.statusNotificacao;
         let dtReceb = new Date().toISOString().slice(0, 10);
 
-        if (desc.includes('entregue')) {
-            novoStatus = 'entregue';
-            statusVida = 'recebido';
-        }
-        else if (desc.includes('devolvido') || desc.includes('incorreto') || desc.includes('recusado') || desc.includes('não procurado') || (desc.includes('ausente') && desc.includes('devolvido'))) novoStatus = 'devolvido';
-        else if (desc.includes('saiu para entrega')) novoStatus = 'saiu_entrega';
-        else if (desc.includes('ausente') || desc.includes('não atendido') || desc.includes('tentativa')) novoStatus = 'tentativa';
-        else if (desc.includes('aguardando retirada')) novoStatus = 'retirada';
-        else if (desc.includes('postado') || desc.includes('trânsito') || desc.includes('encaminhado')) novoStatus = 'transito';
-
         if(docId) {
-            const dadosAtualizacao = { statusRetornoAR: novoStatus, statusCorreiosTexto: desc.toUpperCase(), statusNotificacao: statusVida };
+            const dadosAtualizacao = { statusRetornoAR: novoStatus, statusCorreiosTexto: statusInterpretado.texto.toUpperCase(), statusNotificacao: statusVida };
             if(statusVida === 'recebido') dadosAtualizacao.dataRecebimento = dtReceb; 
             await updateDoc(doc(db, "notificacoes", docId), dadosAtualizacao);
         }
@@ -623,7 +642,7 @@ window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
         setTimeout(() => { window.carregarDadosNuvem(); }, 800);
         
     } catch(e) { 
-        span.innerHTML = `<a href="https://linketrack.com/track?codigo=${codigoAR}" target="_blank" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">❌ Limite API (Ver)</a>`; 
+        span.innerHTML = `<a href="${linkRastreamentoOficial(codigoAR)}" target="_blank" rel="noopener noreferrer" title="${e.message}" style="background:#fee2e2; color:#991b1b; font-size:10px; padding:2px 5px; border-radius:4px; text-decoration:none; border: 1px solid #ef4444;">↗ Consultar nos Correios</a>`;
     }
 }
 

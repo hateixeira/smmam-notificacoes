@@ -515,9 +515,16 @@
                         <!-- MÓDULO CORREIOS -->
                         <div class="panel-container" style="border: 2px dashed #f59e0b; background: #fef3c7;">
                             <h3 style="margin-top: 0; color: #b45309; font-size: 15px;">📬 Integração Correios</h3>
-                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Suba o arquivo CSV do VIPP para preencher os Rastreios automaticamente, ou force a sincronização com a API nativa agora.</p>
+                            <p style="font-size: 11px; color: #92400e; line-height: 1.4; margin-bottom: 10px;">Sincronize os ARs pelo plano gratuito do Pacote Vício ou importe o CSV de retorno do VIPP. Se o provedor estiver indisponível, a consulta oficial dos Correios continuará disponível em cada registro.</p>
+                            <div class="form-group" style="margin-bottom:10px;">
+                                <label for="configChaveRastreamento">Chave gratuita do Pacote Vício</label>
+                                <input type="password" id="configChaveRastreamento" placeholder="Cole a chave criada no plano Basic" autocomplete="off">
+                                <button class="btn-secondary" type="button" onclick="salvarChaveRastreamento()" style="width:100%; margin-top:6px;">Salvar chave neste navegador</button>
+                                <small id="statusChaveRastreamento" style="display:block; margin-top:6px; color:#92400e;">A chave não é enviada ao Firestore. O plano Basic permite até 1.000 consultas/mês e requer atribuição ao provedor.</small>
+                            </div>
                             <input type="file" id="fileRetorno" accept=".csv" onchange="importarRetornoCorreios(this.files[0])" style="width: 100%; margin-bottom:10px;">
-                            <button id="btnForcarCorreios" class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Forçar Sync da API</button>
+                            <button id="btnForcarCorreios" class="btn-primary btn-outline" style="width: 100%; border-color:#d97706; color:#d97706;" onclick="verificarRotinaCorreios(true)">🔄 Sincronizar ARs agora</button>
+                            <small style="display:block; margin-top:8px; color:#92400e;"><a href="https://pacotevicio.dev/" target="_blank" rel="noopener noreferrer" style="color:inherit;">Dados de rastreamento: Pacote Vício</a> · contingência: retorno VIPP e site oficial dos Correios.</small>
                         </div>
 
                         <!-- MÓDULO IPTU DELTA SYNC -->
