@@ -11,7 +11,7 @@ service cloud.firestore {
     match /usuarios/{userId} {
       allow create: if signedIn() && request.auth.uid == userId && request.resource.data.status == 'pendente' && request.resource.data.nivel == 'leitor';
       allow read: if signedIn() && (request.auth.uid == userId || (admin() && sameSector(resource.data)));
-      allow update: if signedIn() && ((request.auth.uid == userId && request.resource.data.setor == resource.data.setor && request.resource.data.nivel == resource.data.nivel && request.resource.data.status == resource.data.status) || (admin() && sameSector(resource.data) && sameSector(request.resource.data)));
+      allow update: if signedIn() && ((request.auth.uid == userId && request.resource.data.setor == resource.data.setor && request.resource.data.nivel == resource.data.nivel && request.resource.data.status == resource.data.status) || (admin() && request.auth.uid != userId && sameSector(resource.data) && sameSector(request.resource.data)));
       allow delete: if admin() && sameSector(resource.data);
     }
 

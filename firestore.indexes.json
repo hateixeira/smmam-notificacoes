@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "logs_auditoria",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "setor", "order": "ASCENDING" },
+        { "fieldPath": "dataHora", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

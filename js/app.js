@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, limit, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, orderBy, limit, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { consultarRastreamentoPacoteVicio } from './correios-provider.js';
@@ -30,6 +30,7 @@ window.fotosTemp = [];
 window.resultadosConsultaAtual = []; 
 window.imovelSelecionadoParaNotificacao = null; 
 window.bancoInfracoesGlobais = []; 
+window.usuariosDoSetor = [];
 
 window.colunaOrdenacao = '';
 window.ordemCrescente = true;
@@ -91,6 +92,23 @@ window.lastCheckedCheckbox = null;
 
 let usuarioLogado = null;
 let perfilUsuario = null;
+
+function escaparHtml(valor) {
+    return String(valor ?? '—').replace(/[&<>'"]/g, caractere => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    }[caractere]));
+}
+
+function obterHorario(valor) {
+    if (valor && typeof valor.toDate === 'function') return valor.toDate().getTime();
+    const horario = new Date(valor).getTime();
+    return Number.isNaN(horario) ? 0 : horario;
+}
+
+function formatarDataHora(valor) {
+    const horario = obterHorario(valor);
+    return horario ? new Date(horario).toLocaleString('pt-BR') : 'Data não informada';
+}
 
 window.handleShiftClick = function(e, checkbox) {
     if (e.shiftKey && window.lastCheckedCheckbox) {
@@ -332,18 +350,136 @@ async function registrarLog(acaoRealizada, alvo) {
 window.carregarAuditoria = async function() {
     const corpo = document.getElementById('tabelaAuditoriaCorpo'); if(!corpo) return; corpo.innerHTML = '<tr><td colspan="4">Carregando logs...</td></tr>';
     const meuSetor = perfilUsuario.setor || 'SMMAM';
+    const ordem = document.getElementById('ordemAuditoria')?.value === 'asc' ? 'asc' : 'desc';
     try {
-        const snaps = await getDocs(query(collection(db, "logs_auditoria"), where("setor", "==", meuSetor), limit(100)));
+        let snaps;
+        try {
+            snaps = await getDocs(query(collection(db, "logs_auditoria"), where("setor", "==", meuSetor), orderBy("dataHora", "desc"), limit(250)));
+        } catch (erroDeIndice) {
+            console.warn('Índice de auditoria ainda não disponível; usando ordenação local.', erroDeIndice);
+            snaps = await getDocs(query(collection(db, "logs_auditoria"), where("setor", "==", meuSetor), limit(250)));
+        }
+        const registros = snaps.docs.map(d => ({ id: d.id, ...d.data() }))
+            .filter(data => (data.setor || 'SMMAM') === meuSetor)
+            .sort((a, b) => ordem === 'asc' ? obterHorario(a.dataHora) - obterHorario(b.dataHora) : obterHorario(b.dataHora) - obterHorario(a.dataHora));
         corpo.innerHTML = '';
-        snaps.forEach(d => {
-            const data = d.data(); 
-            if((data.setor || 'SMMAM') === meuSetor) {
-                const dFmt = new Date(data.dataHora).toLocaleString('pt-BR');
-                corpo.innerHTML += `<tr><td>${dFmt}</td><td>${data.usuario}</td><td>${data.acao}</td><td>${data.documentoAlvo}</td></tr>`;
-            }
+        if (!registros.length) {
+            corpo.innerHTML = '<tr><td colspan="4">Nenhum evento de auditoria foi registrado para este setor.</td></tr>';
+            return;
+        }
+        registros.forEach(data => {
+            corpo.innerHTML += `<tr><td>${formatarDataHora(data.dataHora)}</td><td>${escaparHtml(data.usuario)}</td><td>${escaparHtml(data.acao)}</td><td>${escaparHtml(data.documentoAlvo)}</td></tr>`;
         });
     } catch(e) { corpo.innerHTML = '<tr><td colspan="4">Erro ao carregar logs.</td></tr>'; }
 }
+
+function rotuloStatus(status) {
+    const statusNormalizado = status || 'pendente';
+    const estilos = {
+        aprovado: 'background:#dcfce7;color:#166534;',
+        pendente: 'background:#fef3c7;color:#92400e;',
+        bloqueado: 'background:#fee2e2;color:#991b1b;'
+    };
+    return `<span style="${estilos[statusNormalizado] || estilos.pendente} padding:3px 6px; border-radius:999px; font-size:10px; font-weight:700; text-transform:uppercase;">${escaparHtml(statusNormalizado)}</span>`;
+}
+
+window.carregarUsuariosDoSetor = async function() {
+    const corpo = document.getElementById('tabelaUsuariosCorpo');
+    if (!corpo || !perfilUsuario || perfilUsuario.nivel !== 'admin') return;
+    corpo.innerHTML = '<tr><td colspan="6">Carregando perfis do setor...</td></tr>';
+    const meuSetor = perfilUsuario.setor || 'SMMAM';
+    try {
+        const snaps = await getDocs(query(collection(db, 'usuarios'), where('setor', '==', meuSetor), limit(100)));
+        window.usuariosDoSetor = snaps.docs.map(documento => ({ id: documento.id, ...documento.data() }))
+            .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+        if (!window.usuariosDoSetor.length) {
+            corpo.innerHTML = '<tr><td colspan="6">Nenhum perfil foi encontrado para este setor.</td></tr>';
+            return;
+        }
+        corpo.innerHTML = window.usuariosDoSetor.map(usuario => {
+            const eContaAtual = usuario.id === usuarioLogado?.uid;
+            const acoesStatus = eContaAtual
+                ? '<span style="font-size:10px; color:#64748b;">Conta em uso</span>'
+                : `<button class="btn-secondary" style="padding:4px 7px; font-size:10px;" onclick="alterarStatusUsuario('${usuario.id}', '${usuario.status === 'aprovado' ? 'bloqueado' : 'aprovado'}')">${usuario.status === 'aprovado' ? 'Bloquear' : 'Aprovar'}</button>`;
+            const opcoesNivel = ['leitor', 'operador', 'admin'].map(nivel => `<option value="${nivel}" ${usuario.nivel === nivel ? 'selected' : ''}>${nivel === 'admin' ? 'Administrador' : nivel.charAt(0).toUpperCase() + nivel.slice(1)}</option>`).join('');
+            const controleNivel = eContaAtual
+                ? `<span style="font-size:10px; color:#64748b;">${escaparHtml(usuario.nivel || 'leitor')}</span>`
+                : `<select aria-label="Nível de ${escaparHtml(usuario.nome || usuario.email)}" onchange="alterarNivelUsuario('${usuario.id}', this.value)" style="font-size:11px; padding:4px; min-width:106px;">${opcoesNivel}</select>`;
+            return `<tr><td><strong>${escaparHtml(usuario.nome)}</strong><br><span style="font-size:10px; color:#64748b;">${escaparHtml(usuario.cargo || 'Cargo não informado')}</span></td><td>${escaparHtml(usuario.setor || 'SMMAM')}</td><td style="word-break:break-word; font-size:11px;">${escaparHtml(usuario.email)}</td><td>${rotuloStatus(usuario.status)}</td><td>${controleNivel}</td><td>${acoesStatus}</td></tr>`;
+        }).join('');
+    } catch (erro) {
+        console.error('Erro ao carregar usuários do setor:', erro);
+        corpo.innerHTML = '<tr><td colspan="6">Não foi possível carregar os perfis do setor. Verifique as permissões administrativas.</td></tr>';
+    }
+};
+
+window.alterarStatusUsuario = async function(usuarioId, novoStatus) {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin' || usuarioId === usuarioLogado?.uid) return;
+    if (!['aprovado', 'bloqueado'].includes(novoStatus)) return;
+    const usuario = window.usuariosDoSetor.find(item => item.id === usuarioId);
+    if (!usuario) return;
+    const acao = novoStatus === 'aprovado' ? 'aprovou o perfil' : 'bloqueou o perfil';
+    try {
+        await updateDoc(doc(db, 'usuarios', usuarioId), { status: novoStatus });
+        await registrarLog(acao, usuario.email || usuario.nome || usuarioId);
+        window.mostrarToast(novoStatus === 'aprovado' ? 'Perfil aprovado para uso do setor.' : 'Perfil bloqueado. O acesso operacional foi revogado.');
+        await window.carregarUsuariosDoSetor();
+    } catch (erro) {
+        console.error('Erro ao atualizar status de usuário:', erro);
+        alert('Não foi possível alterar o status do perfil. Verifique as permissões administrativas.');
+    }
+};
+
+window.alterarNivelUsuario = async function(usuarioId, novoNivel) {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin' || usuarioId === usuarioLogado?.uid) return;
+    if (!['leitor', 'operador', 'admin'].includes(novoNivel)) return;
+    const usuario = window.usuariosDoSetor.find(item => item.id === usuarioId);
+    if (!usuario || usuario.nivel === novoNivel) return;
+    try {
+        await updateDoc(doc(db, 'usuarios', usuarioId), { nivel: novoNivel });
+        await registrarLog('alterou o nível do perfil para ' + novoNivel, usuario.email || usuario.nome || usuarioId);
+        window.mostrarToast('Nível do perfil atualizado.');
+        await window.carregarUsuariosDoSetor();
+    } catch (erro) {
+        console.error('Erro ao atualizar nível de usuário:', erro);
+        alert('Não foi possível alterar o nível do perfil. Verifique as permissões administrativas.');
+    }
+};
+
+window.carregarListaVip = async function() {
+    const lista = document.getElementById('listaVipEmails');
+    if (!lista || !perfilUsuario || perfilUsuario.nivel !== 'admin') return;
+    try {
+        const snap = await getDoc(doc(db, 'configuracoes', 'lista_vip'));
+        const emails = snap.exists() && Array.isArray(snap.data().emails) ? [...snap.data().emails].sort() : [];
+        lista.innerHTML = emails.length ? emails.map(email => `<li style="display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:4px;"><span>${escaparHtml(email)}</span><button class="btn-danger" style="padding:2px 5px; font-size:10px;" onclick="removerEmailVip(decodeURIComponent('${encodeURIComponent(email)}'))">Revogar</button></li>`).join('') : '<li>Nenhuma exceção de domínio cadastrada.</li>';
+    } catch (erro) {
+        lista.innerHTML = '<li>Não foi possível carregar as exceções de domínio.</li>';
+    }
+};
+
+window.removerEmailVip = async function(email) {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return;
+    if (!confirm(`Revogar a autorização de ${email}? Isso não bloqueia contas já aprovadas.`)) return;
+    try {
+        const vipRef = doc(db, 'configuracoes', 'lista_vip');
+        const snap = await getDoc(vipRef);
+        const emails = snap.exists() && Array.isArray(snap.data().emails) ? snap.data().emails.filter(item => item !== email) : [];
+        await setDoc(vipRef, { emails }, { merge: true });
+        await registrarLog('revogou uma exceção de domínio', email);
+        window.mostrarToast('Exceção de domínio revogada.');
+        await window.carregarListaVip();
+    } catch (erro) {
+        console.error('Erro ao revogar exceção de domínio:', erro);
+        alert('Não foi possível revogar a exceção de domínio.');
+    }
+};
+
+window.carregarConfiguracoesAdmin = async function() {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return;
+    window.renderizarTabelaInfracoesAdmin();
+    await Promise.all([window.carregarUsuariosDoSetor(), window.carregarListaVip()]);
+};
 
 window.toggleAuthMode = function() {
     const l = document.getElementById('login-fields'); const r = document.getElementById('register-fields'); const t = document.getElementById('authTitle'); const b = document.getElementById('btnToggleAuth');
@@ -518,9 +654,8 @@ window.adicionarEmailVip = async function() {
             await setDoc(vipRef, { emails: lista }, { merge: true });
             window.mostrarToast("E-mail externo autorizado com sucesso!");
             document.getElementById('adminVipEmail').value = '';
-            
-            const ul = document.getElementById('listaVipEmails');
-            if(ul) ul.innerHTML += `<li>${emailVip} (Recém adicionado)</li>`;
+            await registrarLog('autorizou uma exceção de domínio', emailVip);
+            await window.carregarListaVip();
         } else {
             alert("Este e-mail já possui autorização VIP.");
         }

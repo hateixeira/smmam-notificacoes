@@ -2,10 +2,11 @@ import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { extrairEventoRastreamento, normalizarCodigoAR } from '../js/correios-provider.js';
 
-const [html, app, firestoreRules, storageRules, privacyNotice, continuityGuide] = await Promise.all([
+const [html, app, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../js/app.js', import.meta.url), 'utf8'),
   readFile(new URL('../firestore.rules', import.meta.url), 'utf8'),
+  readFile(new URL('../firestore.indexes.json', import.meta.url), 'utf8'),
   readFile(new URL('../storage.rules', import.meta.url), 'utf8'),
   readFile(new URL('../politica-privacidade.html', import.meta.url), 'utf8'),
   readFile(new URL('../CONTINUIDADE_E_RESTAURACAO.md', import.meta.url), 'utf8'),
@@ -32,6 +33,16 @@ assert.match(html, /politica-privacidade\.html/);
 assert.match(app, /Backup_Restrito_/);
 assert.match(app, /GEROU BACKUP SETORIAL/);
 assert.match(html, /CPF \(opcional\)/);
+assert.match(html, /id="ordemAuditoria"/);
+assert.match(app, /orderBy\("dataHora", "desc"\)/);
+assert.match(app, /window\.carregarUsuariosDoSetor/);
+assert.match(app, /window\.alterarStatusUsuario/);
+assert.match(app, /window\.alterarNivelUsuario/);
+assert.match(app, /window\.carregarConfiguracoesAdmin/);
+assert.match(html, /Gestão de Servidores \(Do Seu Setor\)/);
+assert.match(firestoreRules, /request\.auth\.uid != userId/);
+assert.match(firestoreIndexes, /"collectionGroup": "logs_auditoria"/);
+assert.match(firestoreIndexes, /"fieldPath": "dataHora"/);
 assert.match(privacyNotice, /Aviso de privacidade e uso interno/);
 assert.match(continuityGuide, /Teste de restauração em homologação/);
 assert.equal(normalizarCodigoAR('am101510575br'), 'AM101510575BR');

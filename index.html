@@ -429,7 +429,16 @@
             <div id="view-auditoria" class="view-section">
                 <h2>Caixa Preta (Logs de Auditoria)</h2>
                 <div class="panel-container">
-                    <p style="color: #64748b;">Tabela imutável de rastreamento de ações do sistema.</p>
+                    <div style="display:flex; justify-content:space-between; align-items:end; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+                        <p style="color: #64748b; margin:0;">Tabela imutável de rastreamento de ações do sistema. São exibidos os 250 eventos mais recentes do seu setor.</p>
+                        <div class="form-group" style="margin:0; min-width:210px;">
+                            <label for="ordemAuditoria">Ordem da data</label>
+                            <select id="ordemAuditoria" onchange="carregarAuditoria()" aria-label="Escolher ordem cronológica da auditoria">
+                                <option value="desc">Mais recentes primeiro</option>
+                                <option value="asc">Mais antigas primeiro</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="table-container" style="max-height: 500px;">
                         <table class="data-table">
                             <thead>
@@ -477,6 +486,7 @@
                 <div class="dashboard-cards" style="margin-bottom: 20px;">
                     <div class="panel-container" style="flex: 2;">
                         <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Gestão de Servidores (Do Seu Setor)</h3>
+                        <p style="font-size:11px; color:#64748b; margin:0 0 12px;">Aqui aparecem os perfis que solicitaram ou já possuem acesso ao seu setor. Aprovar libera o uso; bloquear revoga o acesso ao sistema sem apagar os registros nem a conta de autenticação.</p>
                         <div class="table-container" style="max-height: 400px;">
                             <table class="data-table">
                                 <thead>
@@ -494,8 +504,8 @@
                         </div>
 
                         <!-- LISTA VIP DE E-MAILS -->
-                        <h3 style="margin-top: 20px; color: #1b365d; font-size: 15px; border-top: 1px dashed #ccc; padding-top: 15px;">Lista VIP (Liberar E-mails Externos)</h3>
-                        <p style="font-size:11px; color:#64748b;">E-mails diferentes de @bentogoncalves.rs.gov.br precisam ser adicionados aqui ANTES do cadastro.</p>
+                        <h3 style="margin-top: 20px; color: #1b365d; font-size: 15px; border-top: 1px dashed #ccc; padding-top: 15px;">Exceções de domínio (e-mails externos)</h3>
+                        <p style="font-size:11px; color:#64748b;">E-mails diferentes de @bentogoncalves.rs.gov.br precisam ser autorizados antes do cadastro. Use somente em exceções institucionais justificadas; a autorização não aprova o perfil nem concede acesso automaticamente.</p>
                         <div style="display: flex; gap: 10px;">
                             <input type="email" id="adminVipEmail" placeholder="estagiario@gmail.com" style="flex:1;">
                             <button class="btn-secondary" onclick="adicionarEmailVip()">➕ Autorizar</button>
@@ -704,6 +714,6 @@
         </table>
     </div>
 
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="js/app.js?v=20260819.2"></script>
 </body>
 </html>
