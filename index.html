@@ -129,6 +129,7 @@
                             <div>
                                 <button class="btn-primary btn-outline" onclick="exportarVipp()" style="padding: 6px 12px; font-size: 12px;">📦 Exportar VIPP</button>
                                 <button class="btn-success" onclick="exportarExcel()" style="padding: 6px 12px; font-size: 12px;" title="Baixar Excel">📊 Excel</button>
+                                <button class="btn-secondary" onclick="exportarRelatorioGerencial()" style="padding: 6px 12px; font-size: 12px;" title="Baixar relatório gerencial">📋 Relatório gerencial</button>
                             </div>
                         </div>
                         <div class="btn-actions" id="areaBotoesAdminExcluir" style="display:none; margin-top:5px;">
@@ -150,6 +151,9 @@
                             </thead>
                             <tbody id="tabelaCorpo"></tbody>
                         </table>
+                    </div>
+                    <div style="display:flex; justify-content:center; margin-top:14px;">
+                        <button id="btnCarregarMais" class="btn-secondary" onclick="carregarMaisDocumentos()" style="display:none;">Carregar mais documentos</button>
                     </div>
                 </div>
             </div>
@@ -228,6 +232,10 @@
                             <div class="form-group"><label>Prazo p/ Regularizar (Dias)</label><input type="number" id="prazoDias" value="15" style="font-weight: bold; color: #1b365d;"></div>
                             <input type="hidden" id="statusRetornoAR" value="aguardando">
                         </div>
+                        <div class="form-row">
+                            <div class="form-group"><label for="statusTramitacaoNotif">Etapa de tramitação</label><select id="statusTramitacaoNotif"><option value="recebido">Recebido</option><option value="triagem">Triagem</option><option value="analise_tecnica">Análise técnica</option><option value="vistoria">Vistoria</option><option value="aguardando_complementacao">Aguardando complementação</option><option value="parecer">Parecer</option><option value="decisao">Decisão</option></select></div>
+                            <div class="form-group"><label>Equipe territorial</label><input id="territorioEquipeNotif" type="text" disabled value="Será identificada pelo bairro"></div>
+                        </div>
 
                         <div class="form-group">
                             <label>Evidências Fotográficas <span id="indicadorFotosNotif" class="foto-loading" style="display:none;">Carregando...</span></label>
@@ -302,6 +310,9 @@
                                 <label style="color: #991b1b;">Total da Multa em Reais (R$)</label>
                                 <input type="text" id="autoMultaReais" disabled style="background:#fee2e2; color:#991b1b; font-size: 16px; font-weight:bold;">
                             </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label for="statusTramitacaoAuto">Etapa de tramitação</label><select id="statusTramitacaoAuto"><option value="recebido">Recebido</option><option value="triagem">Triagem</option><option value="analise_tecnica">Análise técnica</option><option value="vistoria">Vistoria</option><option value="parecer">Parecer</option><option value="decisao">Decisão</option></select></div>
                         </div>
 
                         <div class="form-group">
@@ -413,6 +424,16 @@
                     <div class="panel-container" style="flex: 1; background: #f8fafc; border: 2px dashed #cbd5e1; display:flex; flex-direction:column; justify-content:center; align-items:center;">
                         <h3 style="margin-top: 0; font-size: 14px; color: #64748b;">💰 Projeção de Arrecadação (Multas)</h3>
                         <div style="font-size: 40px; font-weight: bold; color: #991b1b; margin: 15px 0;" id="painelFinanceiroValor">R$ 0,00</div>
+                    </div>
+                </div>
+                <div class="form-row" style="gap: 15px; margin-top: 20px;">
+                    <div class="panel-container" style="flex: 1; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">🧭 Fila por etapa de tramitação</h3>
+                        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartEtapas"></canvas></div>
+                    </div>
+                    <div class="panel-container" style="flex: 1; margin-bottom: 0;">
+                        <h3 style="margin-top: 0; font-size: 14px; text-align: center;">🗺️ Demanda por equipe territorial</h3>
+                        <div style="position: relative; height: 250px; width: 100%;"><canvas id="chartEquipes"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -542,10 +563,17 @@
                         <!-- MÓDULO IPTU DELTA SYNC -->
                         <div class="panel-container" style="border: 2px dashed #38bdf8; background: #f0f9ff;">
                             <h3 style="margin-top: 0; color: #0369a1; font-size: 15px;">Importar IPTU Inteligente (JSON)</h3>
-                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">O sistema comparará o arquivo novo com o do mês anterior e atualizará apenas as alterações para poupar o banco de dados. <strong>Gera os índices de busca por Endereço automaticamente.</strong></p>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">O arquivo é enviado para uma fila administrativa protegida. O job valida o JSON, gera índices de busca e registra o resultado sem gravar a base no navegador.</p>
                             <input type="file" id="adminFileJson" accept=".json" style="margin-bottom: 10px; width: 100%;">
                             <button class="btn-success" id="btnAdminImportarIptu" style="width: 100%; margin-top: 5px;">🚀 INICIAR DELTA SYNC</button>
                             <div id="adminProgressoIptu" style="margin-top: 10px; font-size: 11px; font-weight: bold; color: #d97706;"></div>
+                        </div>
+
+                        <div class="panel-container" style="border: 2px dashed #8b5cf6; background: #f5f3ff;">
+                            <h3 style="margin-top: 0; color: #6d28d9; font-size: 15px;">Migração de evidências legadas</h3>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.4; margin-bottom: 10px;">Move fotos antigas armazenadas no banco para o Storage. Execute em lotes pequenos, após backup e somente em homologação antes da produção.</p>
+                            <button id="btnMigrarEvidencias" class="btn-secondary" style="width: 100%; margin-top: 5px; border-color:#7c3aed; color:#6d28d9;" onclick="migrarEvidenciasLegadas()">Migrar próximo lote de 20 evidências</button>
+                            <div id="adminProgressoEvidencias" style="margin-top: 10px; font-size: 11px; font-weight: bold; color: #6d28d9;"></div>
                         </div>
 
                         <!-- DOCUMENTAÇÃO DO SISTEMA -->
@@ -714,6 +742,6 @@
         </table>
     </div>
 
-    <script type="module" src="js/app.js?v=20260819.3"></script>
+    <script type="module" src="js/app.js?v=20260826.1"></script>
 </body>
 </html>

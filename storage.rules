@@ -5,6 +5,26 @@ service firebase.storage {
     function profile() { return firestore.get(/databases/(default)/documents/usuarios/$(request.auth.uid)); }
     function admin() { return signedIn() && profile().data.status == 'aprovado' && profile().data.nivel == 'admin'; }
 
+    function operadorDoSetor(setor) {
+      return signedIn() && profile().data.status == 'aprovado'
+        && profile().data.setor == setor
+        && profile().data.nivel != 'leitor';
+    }
+
+    match /evidencias/{setor}/{documentId}/{fileName} {
+      allow read: if signedIn() && profile().data.status == 'aprovado' && profile().data.setor == setor;
+      allow write: if operadorDoSetor(setor)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /iptu_imports/{setor}/{fileName} {
+      allow read: if admin() && profile().data.setor == setor;
+      allow write: if admin() && profile().data.setor == setor
+        && request.resource.size < 50 * 1024 * 1024
+        && request.resource.contentType.matches('application/json.*');
+    }
+
     match /iptu_backup/{fileName} {
       allow read, write: if admin() && fileName == 'base_anterior.json';
     }

@@ -7,6 +7,23 @@
         { "fieldPath": "setor", "order": "ASCENDING" },
         { "fieldPath": "dataHora", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "notificacoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "setor", "order": "ASCENDING" },
+        { "fieldPath": "dataUltimaEdicao", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notificacoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "setor", "order": "ASCENDING" },
+        { "fieldPath": "statusProcesso", "order": "ASCENDING" },
+        { "fieldPath": "prazoSlaEm", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

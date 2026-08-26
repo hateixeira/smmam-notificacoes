@@ -3,6 +3,9 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "functions": {
+    "source": "functions"
+  },
   "hosting": {
     "public": ".",
     "ignore": [
@@ -14,6 +17,7 @@
       ".github/**",
       "scripts/**",
       "workers/**",
+      "functions/**",
       "README.md"
     ],
     "cleanUrls": true,

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { extrairEventoRastreamento, normalizarCodigoAR } from '../js/correios-provider.js';
 
-const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide] = await Promise.all([
+const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide, functionsSource, workflow, territory, evidence] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../js/app.js', import.meta.url), 'utf8'),
   readFile(new URL('../workers/ar-sync-worker.mjs', import.meta.url), 'utf8'),
@@ -11,6 +11,10 @@ const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privac
   readFile(new URL('../storage.rules', import.meta.url), 'utf8'),
   readFile(new URL('../politica-privacidade.html', import.meta.url), 'utf8'),
   readFile(new URL('../CONTINUIDADE_E_RESTAURACAO.md', import.meta.url), 'utf8'),
+  readFile(new URL('../functions/index.js', import.meta.url), 'utf8'),
+  readFile(new URL('../js/core/workflow.js', import.meta.url), 'utf8'),
+  readFile(new URL('../js/core/territory.js', import.meta.url), 'utf8'),
+  readFile(new URL('../js/services/evidence.js', import.meta.url), 'utf8'),
 ]);
 
 assert.match(html, /Hub de aplicações/);
@@ -23,7 +27,7 @@ assert.match(app, /acesso de demonstração foi desativado/i);
 assert.match(firestoreRules, /request\.auth != null/);
 assert.doesNotMatch(firestoreRules, /allow read, write: if true/);
 assert.match(storageRules, /iptu_backup/);
-assert.match(app, /Base sincronizada com índices/);
+assert.match(app, /fila administrativa protegida/);
 assert.match(app, /AR_SYNC_SERVICE_URL/);
 assert.match(app, /requisitarServicoAR/);
 assert.match(app, /candidatosPendentesAR/);
@@ -53,6 +57,25 @@ assert.match(firestoreIndexes, /"collectionGroup": "logs_auditoria"/);
 assert.match(firestoreIndexes, /"fieldPath": "dataHora"/);
 assert.match(privacyNotice, /Aviso de privacidade e uso interno/);
 assert.match(continuityGuide, /Teste de restauração em homologação/);
+assert.match(html, /statusTramitacaoNotif/);
+assert.match(html, /btnCarregarMais/);
+assert.match(html, /Relatório gerencial/);
+assert.match(app, /createDocument/);
+assert.match(app, /uploadEvidence/);
+assert.match(app, /moverEtapaTramitacao/);
+assert.match(app, /exportarRelatorioGerencial/);
+assert.match(app, /migrarEvidenciasLegadas/);
+assert.match(html, /btnMigrarEvidencias/);
+assert.match(firestoreRules, /allow create: if false/);
+assert.match(storageRules, /match \/evidencias/);
+assert.match(firestoreIndexes, /"collectionGroup": "notificacoes"/);
+assert.match(functionsSource, /reserveDocumentNumber/);
+assert.match(functionsSource, /createDocument/);
+assert.match(functionsSource, /migrateLegacyEvidenceBatch/);
+assert.match(functionsSource, /refreshSlaStatus/);
+assert.match(workflow, /WORKFLOW_STAGES/);
+assert.match(territory, /TEAM_1/);
+assert.match(evidence, /uploadEvidence/);
 assert.equal(normalizarCodigoAR('am101510575br'), 'AM101510575BR');
 assert.deepEqual(extrairEventoRastreamento({
   temEventoEntrega: true,

@@ -17,13 +17,20 @@ service cloud.firestore {
 
     match /notificacoes/{documentId} {
       allow read: if approved() && sameSector(resource.data);
-      allow create: if approved() && request.resource.data.setor == sector() && profile().data.nivel != 'leitor';
-      allow update: if approved() && sameSector(resource.data) && request.resource.data.setor == sector() && profile().data.nivel != 'leitor';
+      // A criação inicial passa por função de backend para reservar numeração atômica.
+      allow create: if false;
+      allow update: if approved() && sameSector(resource.data) && request.resource.data.setor == sector() && profile().data.nivel != 'leitor'
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['setor', 'numNotif', 'statusProcesso', 'statusTramitacao', 'prazoSlaEm', 'slaStatus', 'criadoPor', 'criadoPorId', 'dataCriacao']);
       allow delete: if admin() && sameSector(resource.data);
 
       match /evidencias/{evidenceId} {
         allow read: if approved() && sameSector(get(/databases/$(database)/documents/notificacoes/$(documentId)).data);
-        allow create, update: if approved() && profile().data.nivel != 'leitor' && sameSector(get(/databases/$(database)/documents/notificacoes/$(documentId)).data);
+        allow create: if approved() && profile().data.nivel != 'leitor'
+          && sameSector(get(/databases/$(database)/documents/notificacoes/$(documentId)).data)
+          && request.resource.data.setor == sector()
+          && request.resource.data.storagePath is string
+          && !('imagemBinaria' in request.resource.data);
+        allow update: if false;
         allow delete: if admin() && sameSector(get(/databases/$(database)/documents/notificacoes/$(documentId)).data);
       }
     }
@@ -36,18 +43,33 @@ service cloud.firestore {
 
     match /logs_auditoria/{documentId} {
       allow read: if admin() && sameSector(resource.data);
-      allow create: if approved() && request.resource.data.setor == sector();
+      // Eventos imutáveis são gravados somente por backend confiável.
+      allow create: if false;
       allow update, delete: if false;
     }
 
     match /cadastro_imobiliario/{documentId} {
+      allow read: if approved() && (profile().data.nivel == 'operador' || profile().data.nivel == 'admin');
+      allow create, update, delete: if false;
+    }
+
+    match /configuracoes/sistema {
       allow read: if approved();
-      allow create, update, delete: if admin();
+      allow write: if admin();
     }
 
     match /configuracoes/{documentId} {
-      allow read: if approved();
-      allow write: if admin();
+      allow read, write: if admin();
+    }
+
+    match /iptu_import_jobs/{jobId} {
+      allow read: if admin() && sameSector(resource.data);
+      allow create: if admin() && request.resource.data.setor == sector() && request.resource.data.status == 'pendente';
+      allow update, delete: if false;
+    }
+
+    match /sequencias/{sequenceId} {
+      allow read, write: if false;
     }
   }
 }

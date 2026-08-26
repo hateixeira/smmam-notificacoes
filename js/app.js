@@ -1,7 +1,14 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, orderBy, limit, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, orderBy, limit, startAfter, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { escapeHtml, normalizeText } from "./core/sanitize.js";
+import { WORKFLOW_STAGES, calculateSlaDueDate, workflowLabel, slaClassification } from "./core/workflow.js";
+import { resolveTerritory } from "./core/territory.js";
+import { uploadEvidence, deleteEvidence } from "./services/evidence.js";
+import { exportManagementReport } from "./services/reporting.js";
+import { renderDocumentRows } from "./services/document-table.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAP56ee8ituvxypF_aPOVSClu0EfCJBhR8",
@@ -16,7 +23,11 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
+const functions = getFunctions(app, "southamerica-east1");
 const notificacoesRef = collection(db, "notificacoes");
+const PAGE_SIZE = 50;
+let lastDocumentCursor = null;
+let hasMoreDocuments = true;
 
 enableIndexedDbPersistence(db).catch((err) => {
     if (err.code == 'failed-precondition') console.log('Persistência: Múltiplas abas abertas.');
@@ -118,10 +129,12 @@ window.lastCheckedCheckbox = null;
 let usuarioLogado = null;
 let perfilUsuario = null;
 
-function escaparHtml(valor) {
-    return String(valor ?? '—').replace(/[&<>'"]/g, caractere => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-    }[caractere]));
+const escaparHtml = escapeHtml;
+
+async function chamarFuncaoSegura(nome, dados) {
+    const callable = httpsCallable(functions, nome);
+    const resposta = await callable(dados);
+    return resposta.data;
 }
 
 function obterHorario(valor) {
@@ -210,10 +223,10 @@ window.carregarInfracoesGlobais = async function() {
 function renderizarCheckboxesInfracoes(containerId, tipoForm) {
     const container = document.getElementById(containerId);
     if(!container) return;
-    container.innerHTML = '';
+    container.replaceChildren();
     
     if(window.bancoInfracoesGlobais.length === 0) {
-        container.innerHTML = '<span style="color:#64748b; font-size:11px;">⚠️ Nenhuma infração/lei cadastrada para o seu setor. Solicite ao Admin para cadastrar nas Configurações.</span>';
+        const aviso = document.createElement('span'); aviso.style.cssText = 'color:#64748b; font-size:11px;'; aviso.textContent = '⚠️ Nenhuma infração/lei cadastrada para o seu setor. Solicite ao Admin para cadastrar nas Configurações.'; container.appendChild(aviso);
         return;
     }
 
@@ -222,15 +235,11 @@ function renderizarCheckboxesInfracoes(containerId, tipoForm) {
         div.className = 'checkbox-item';
         div.style.marginBottom = '5px';
         
-        const funcOnChange = tipoForm === 'auto' ? `onchange="somarUrmsDinamicamente()"` : '';
-        
-        div.innerHTML = `
-            <input type="checkbox" id="infr_${tipoForm}_${inf.id}" value="${inf.id}" class="dinamico-chk-${tipoForm}" data-urm="${inf.multaUrm}" ${funcOnChange}>
-            <label for="infr_${tipoForm}_${inf.id}" style="display:inline-block; font-size:12px;">
-                <strong>${inf.nome}</strong> 
-                <span style="color:#64748b; font-size:10px; margin-left:5px;">(${inf.baseLegal}) - ${inf.multaUrm} URM</span>
-            </label>
-        `;
+        const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.id = `infr_${tipoForm}_${crypto.randomUUID()}`; checkbox.value = String(inf.id || ''); checkbox.className = `dinamico-chk-${tipoForm}`; checkbox.dataset.urm = String(inf.multaUrm || 0); if (tipoForm === 'auto') checkbox.addEventListener('change', window.somarUrmsDinamicamente);
+        const label = document.createElement('label'); label.htmlFor = checkbox.id; label.style.cssText = 'display:inline-block; font-size:12px;';
+        const nome = document.createElement('strong'); nome.textContent = String(inf.nome || 'Infração');
+        const detalhes = document.createElement('span'); detalhes.style.cssText = 'color:#64748b; font-size:10px; margin-left:5px;'; detalhes.textContent = `(${inf.baseLegal || 'Base não informada'}) - ${inf.multaUrm || 0} URM`;
+        label.append(nome, document.createTextNode(' '), detalhes); div.append(checkbox, label);
         container.appendChild(div);
     });
 }
@@ -293,10 +302,10 @@ window.renderizarTabelaInfracoesAdmin = function() {
     window.bancoInfracoesGlobais.forEach(inf => {
         tbody.innerHTML += `
             <tr>
-                <td><strong>${inf.nome}</strong></td>
-                <td><span style="background:#e2e8f0; padding:3px 6px; font-size:11px; border-radius:4px;">${inf.baseLegal}</span></td>
-                <td style="font-size:11px; color:#475569;">${inf.textoPadrao}</td>
-                <td><strong>${inf.multaUrm}</strong></td>
+                <td><strong>${escaparHtml(inf.nome)}</strong></td>
+                <td><span style="background:#e2e8f0; padding:3px 6px; font-size:11px; border-radius:4px;">${escaparHtml(inf.baseLegal)}</span></td>
+                <td style="font-size:11px; color:#475569;">${escaparHtml(inf.textoPadrao)}</td>
+                <td><strong>${escaparHtml(inf.multaUrm)}</strong></td>
                 <td><button class="btn-danger" style="padding:4px; font-size:10px;" onclick="removerInfracaoDoBanco('${inf.id}')">Excluir</button></td>
             </tr>
         `;
@@ -335,10 +344,10 @@ window.navegarPara = function(viewId) {
     if(viewId === 'auditoria' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarAuditoria();
     
     if(viewId === 'notificacoes' && !document.getElementById('editFirebaseIdNotif').value) {
-        document.getElementById('numNotif').value = window.sugerirNumero('notificacao');
+        document.getElementById('numNotif').value = 'Gerado ao salvar';
     }
     if(viewId === 'autos' && !document.getElementById('editFirebaseIdAuto').value) {
-        document.getElementById('autoNum').value = window.sugerirNumero('auto');
+        document.getElementById('autoNum').value = 'Gerado ao salvar';
     }
 }
 
@@ -350,26 +359,12 @@ function calcularDataVencimento(dataRecebimento, prazoDias) {
 }
 
 window.sugerirNumero = function(tipo) {
-    const anoAtual = new Date().getFullYear().toString();
-    const meuSetor = perfilUsuario ? (perfilUsuario.setor || 'SMMAM') : 'SMMAM';
-    let maxNum = 0;
-    let sufixo = tipo === 'notificacao' ? 'B' : '';
-    
-    window.DB.forEach(item => {
-        const itemSetor = item.setor || 'SMMAM';
-        if (item.tipoDocumento === tipo && item.numNotif && item.numNotif.includes(`/${anoAtual}`) && itemSetor === meuSetor) {
-            let partNum = item.numNotif.split('/')[0].replace(/\D/g, ''); 
-            let n = parseInt(partNum);
-            if (n > maxNum) maxNum = n;
-        }
-    });
-    const proximo = (maxNum + 1).toString().padStart(4, '0');
-    return `${proximo}${sufixo}/${anoAtual}`;
+    return 'Gerado ao salvar';
 }
 
 async function registrarLog(acaoRealizada, alvo) {
     if(!perfilUsuario) return;
-    try { await addDoc(collection(db, "logs_auditoria"), { dataHora: new Date().toISOString(), usuario: perfilUsuario.nome || 'Desconhecido', matricula: perfilUsuario.matricula || '0000', setor: perfilUsuario.setor || 'SMMAM', nivel: perfilUsuario.nivel || 'leitor', acao: acaoRealizada, documentoAlvo: alvo }); } catch(e) {}
+    try { await chamarFuncaoSegura('recordAuditEvent', { action: acaoRealizada, documentId: alvo }); } catch(e) { console.warn('Auditoria central indisponível.', e); }
 }
 
 window.carregarAuditoria = async function() {
@@ -702,7 +697,7 @@ function aplicarRestricoesDeTela() {
     if (nivelStr === 'ADMIN') nivelStr = 'ADM DO SETOR';
 
     const userLogEl = document.getElementById('userLoggedDisplay'); 
-    if(userLogEl) userLogEl.innerHTML = `👤 <strong>${perfilUsuario.nome}</strong><br><span style="color:#94a3b8">${nivelStr}</span>`;
+    if(userLogEl) { userLogEl.replaceChildren(); const nome = document.createElement('strong'); nome.textContent = `👤 ${perfilUsuario.nome || 'Servidor'}`; const nivel = document.createElement('span'); nivel.style.color = '#94a3b8'; nivel.textContent = nivelStr; userLogEl.append(nome, document.createElement('br'), nivel); }
     
     const fiscalEl = document.getElementById('fiscal'); if(fiscalEl) fiscalEl.value = perfilUsuario.nome || ''; 
     const matEl = document.getElementById('matricula'); if(matEl) matEl.value = perfilUsuario.matricula || '';
@@ -755,7 +750,7 @@ window.buscarStatusCorreios = async function(codigoAR, spanId, docId) {
     span.innerHTML = `<span style="color:#166534; font-weight:bold;">✅ Atualizado</span>`;
 }
 
-const limpaString = (s) => s ? s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^\w\s]/gi, '') : '';
+const limpaString = normalizeText;
 
 window.buscarConsultaLivre = async function(tipoBusca) {
     const boxResult = document.getElementById('resultadoConsulta'); 
@@ -870,34 +865,34 @@ window.abrirEspelhoCadastral = function(index) {
     if(!im) return;
     window.imovelSelecionadoParaNotificacao = im; 
 
-    let endLote = im.logradouro || ''; 
-    if(im.numero && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${im.numero}`; 
-    if(im.complemento) endLote += ` - ${im.complemento}`;
+    let endLote = escaparHtml(im.logradouro || '');
+    if(im.numero && im.numero !== '0' && im.numero !== '0' && im.numero !== 'S/N' && im.numero !== 'SN') endLote += `, ${escaparHtml(im.numero)}`;
+    if(im.complemento) endLote += ` - ${escaparHtml(im.complemento)}`;
 
     const html = `
         <div class="espelho-grid">
             <div class="espelho-box">
                 <h4>👤 Dados do Proprietário</h4>
-                <p><strong>Nome:</strong> ${im.proprietario_principal || '---'}</p>
-                <p><strong>CPF/CNPJ:</strong> ${im.cnpj_cpf || '---'}</p>
+                <p><strong>Nome:</strong> ${escaparHtml(im.proprietario_principal || '---')}</p>
+                <p><strong>CPF/CNPJ:</strong> ${escaparHtml(im.cnpj_cpf || '---')}</p>
             </div>
             <div class="espelho-box">
                 <h4>🏷️ Identificação do Imóvel</h4>
-                <p><strong>Cadastro (Cad):</strong> ${im.cadastroimobiliario || '---'}</p>
-                <p><strong>Inscrição (Chave):</strong> ${im.chaveinscricao || '---'}</p>
+                <p><strong>Cadastro (Cad):</strong> ${escaparHtml(im.cadastroimobiliario || '---')}</p>
+                <p><strong>Inscrição (Chave):</strong> ${escaparHtml(im.chaveinscricao || '---')}</p>
             </div>
             <div class="espelho-box" style="grid-column: span 2;">
                 <h4>📍 Localização do Imóvel</h4>
                 <p><strong>Logradouro:</strong> ${endLote}</p>
-                <p><strong>Bairro:</strong> ${im.bairro || '---'}</p>
-                <p><strong>Loteamento:</strong> ${im.loteamento || '---'}</p>
+                <p><strong>Bairro:</strong> ${escaparHtml(im.bairro || '---')}</p>
+                <p><strong>Loteamento:</strong> ${escaparHtml(im.loteamento || '---')}</p>
             </div>
             <div class="espelho-box" style="grid-column: span 2;">
                 <h4>📐 Dados Físicos do Lote</h4>
                 <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                    <p><strong>Área do Terreno:</strong> ${im.areaterreno || '---'} m²</p>
-                    <p><strong>Testada:</strong> ${im.testada || '---'} m</p>
-                    <p><strong>Fração Ideal:</strong> ${im.fracaoideal || '---'} %</p>
+                    <p><strong>Área do Terreno:</strong> ${escaparHtml(im.areaterreno || '---')} m²</p>
+                    <p><strong>Testada:</strong> ${escaparHtml(im.testada || '---')} m</p>
+                    <p><strong>Fração Ideal:</strong> ${escaparHtml(im.fracaoideal || '---')} %</p>
                 </div>
             </div>
         </div>
@@ -966,12 +961,12 @@ window.calcularMultaReais = function() {
     elReais.value = "R$ " + emReais.toFixed(2).replace('.', ',');
 }
 
-let chartBairrosInstance = null; let chartStatusInstance = null; let chartEvolucaoInstance = null; let chartTiposInstance = null; let chartFiscaisInstance = null;
+let chartBairrosInstance = null; let chartStatusInstance = null; let chartEvolucaoInstance = null; let chartTiposInstance = null; let chartFiscaisInstance = null; let chartEtapasInstance = null; let chartEquipesInstance = null;
 
 window.renderizarGraficos = function() {
     if(window.DB.length === 0) return;
 
-    let countBairros = {}; let countMeses = {}; let countFiscais = {}; let countTipos = { 'Mato/Vegetação': 0, 'Resíduos/Entulhos': 0, 'Obra/Posturas': 0, 'Outros': 0 };
+    let countBairros = {}; let countMeses = {}; let countFiscais = {}; let countEtapas = {}; let countEquipes = { 'Equipe 1': 0, 'Equipe 2': 0, 'Não identificada': 0 }; let countTipos = { 'Mato/Vegetação': 0, 'Resíduos/Entulhos': 0, 'Obra/Posturas': 0, 'Outros': 0 };
     const hoje = new Date(); hoje.setHours(0,0,0,0);
     let stNoPrazo = 0; let stVencido = 0; let stAutos = 0; let totalMultasReais = 0;
 
@@ -979,6 +974,8 @@ window.renderizarGraficos = function() {
         if(doc.statusProcesso === 'arquivado') return; 
         let b = (doc.bairro && doc.bairro.trim() !== '') ? doc.bairro.toUpperCase() : 'NÃO INFORMADO'; countBairros[b] = (countBairros[b] || 0) + 1;
         let f = (doc.fiscal && doc.fiscal.trim() !== '') ? doc.fiscal.toUpperCase() : 'NÃO IDENTIFICADO'; countFiscais[f] = (countFiscais[f] || 0) + 1;
+        const etapa = workflowLabel(doc.statusTramitacao); countEtapas[etapa] = (countEtapas[etapa] || 0) + 1;
+        const equipe = doc.territorioEquipe ? `Equipe ${doc.territorioEquipe}` : 'Não identificada'; countEquipes[equipe] = (countEquipes[equipe] || 0) + 1;
 
         if(doc.tipoDocumento === 'auto') {
             stAutos++;
@@ -1030,6 +1027,17 @@ window.renderizarGraficos = function() {
         const labelsFiscais = fiscaisOrdenados.map(item => item[0]); const dadosFiscais = fiscaisOrdenados.map(item => item[1]);
         chartFiscaisInstance = new Chart(ctxFiscais, { type: 'bar', data: { labels: labelsFiscais, datasets: [{ label: 'Documentos Emitidos', data: dadosFiscais, backgroundColor: '#0ea5e9', borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
     }
+
+    const ctxEtapas = document.getElementById('chartEtapas');
+    if(ctxEtapas) {
+        if(chartEtapasInstance) chartEtapasInstance.destroy();
+        chartEtapasInstance = new Chart(ctxEtapas, { type: 'bar', data: { labels: Object.keys(countEtapas), datasets: [{ label: 'Processos', data: Object.values(countEtapas), backgroundColor: '#7c3aed', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+    }
+    const ctxEquipes = document.getElementById('chartEquipes');
+    if(ctxEquipes) {
+        if(chartEquipesInstance) chartEquipesInstance.destroy();
+        chartEquipesInstance = new Chart(ctxEquipes, { type: 'doughnut', data: { labels: Object.keys(countEquipes), datasets: [{ data: Object.values(countEquipes), backgroundColor: ['#2563eb', '#15803d', '#94a3b8'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } } });
+    }
 }
 
 window.baixarBackupLocal = async function() {
@@ -1065,79 +1073,36 @@ if(btnImportarIptu) {
     btnImportarIptu.addEventListener('click', async function() {
         const file = document.getElementById('adminFileJson').files[0]; if(!file) return alert("Selecione o arquivo JSON.");
         const progressDiv = document.getElementById('adminProgressoIptu');
-        document.getElementById('btnAdminImportarIptu').disabled = true;
-        
+        if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return alert('Somente administradores podem iniciar a importação.');
+        if (file.size > 50 * 1024 * 1024) return alert('O arquivo excede o limite de 50 MB. Divida a importação em lotes menores.');
+        btnImportarIptu.disabled = true;
         try {
-            if(progressDiv) progressDiv.innerText = `1/4 Lendo arquivo e gerando Índice de Busca...`;
-            const textNew = await file.text();
-            const dadosNovosArray = JSON.parse(textNew);
-            if(!Array.isArray(dadosNovosArray)) throw new Error("JSON inválido.");
-            
-            const mapNovos = {};
-            dadosNovosArray.forEach(im => { 
-                if(im.chaveinscricao) {
-                    im.logradouro_keywords = limpaString(im.logradouro).split(' ').filter(w => w.length > 0);
-                    mapNovos[String(im.chaveinscricao).trim()] = im; 
-                }
-            });
-
-            if(progressDiv) progressDiv.innerText = `2/4 Baixando base anterior do Storage...`;
-            let mapAntigos = {};
-            const storageRef = ref(storage, 'iptu_backup/base_anterior.json');
-            try {
-                const urlAntiga = await getDownloadURL(storageRef);
-                const resAntiga = await fetch(urlAntiga);
-                const dadosAntigosArray = await resAntiga.json();
-                dadosAntigosArray.forEach(im => { if(im.chaveinscricao) mapAntigos[String(im.chaveinscricao).trim()] = im; });
-            } catch(e) {
-                console.log("Sem base anterior no Storage. Subindo base completa.");
-            }
-
-            if(progressDiv) progressDiv.innerText = `3/4 Calculando Diferenças (Delta Sync)...`;
-            const chavesAlteradas = [];
-            for (let chave in mapNovos) {
-                const imovelNovo = mapNovos[chave];
-                const imovelAntigo = mapAntigos[chave];
-                if (!imovelAntigo || JSON.stringify(imovelNovo) !== JSON.stringify(imovelAntigo)) {
-                    chavesAlteradas.push(imovelNovo);
-                }
-            }
-
-            if(chavesAlteradas.length === 0) {
-                if(progressDiv) { progressDiv.innerText = `✅ Nenhum imóvel sofreu alteração. Banco 100% atualizado.`; progressDiv.style.color = 'green'; }
-            } else {
-                if(progressDiv) progressDiv.innerText = `4/4 Enviando ${chavesAlteradas.length} imóveis alterados...`;
-                const TAMANHO_LOTE = 400; let enviados = 0;
-                for (let i = 0; i < chavesAlteradas.length; i += TAMANHO_LOTE) {
-                    const loteAtual = chavesAlteradas.slice(i, i + TAMANHO_LOTE);
-                    const batch = writeBatch(db);
-                    loteAtual.forEach(imovel => { batch.set(doc(db, "cadastro_imobiliario", String(imovel.chaveinscricao).trim()), imovel); });
-                    await batch.commit(); enviados += loteAtual.length;
-                    if(progressDiv) progressDiv.innerText = `⏳ Progresso: ${enviados} de ${chavesAlteradas.length}...`;
-                }
-                
-                if(progressDiv) progressDiv.innerText = `Salvando cópia auxiliar da base atual...`;
-                const jsonAtualizadoParaSalvar = JSON.stringify(Object.values(mapNovos));
-                try {
-                    await uploadString(storageRef, jsonAtualizadoParaSalvar, 'raw', { contentType: 'application/json' });
-                    if(progressDiv) { progressDiv.innerText = `✅ SUCESSO! Base sincronizada com índices e cópia auxiliar atualizada.`; progressDiv.style.color = 'green'; }
-                } catch(storageError) {
-                    console.warn('Base sincronizada, mas a cópia auxiliar não pôde ser gravada.', storageError);
-                    if(progressDiv) { progressDiv.innerText = `✅ Base sincronizada com índices. A cópia auxiliar no Storage não está disponível neste projeto.`; progressDiv.style.color = '#a16207'; }
-                }
-            }
-        } catch(err) { 
-            if(progressDiv) progressDiv.innerText = `❌ Erro: ${err.message}`; 
-        }
-        document.getElementById('btnAdminImportarIptu').disabled = false;
+            if(progressDiv) progressDiv.textContent = 'Validando arquivo JSON...';
+            const parsed = JSON.parse(await file.text());
+            if (!Array.isArray(parsed)) throw new Error('O arquivo precisa conter uma lista JSON.');
+            const setor = perfilUsuario.setor || 'SMMAM';
+            const jobId = crypto.randomUUID();
+            const sourcePath = `iptu_imports/${setor}/${jobId}.json`;
+            if(progressDiv) progressDiv.textContent = 'Enviando arquivo à fila administrativa protegida...';
+            await uploadBytes(ref(storage, sourcePath), file, { contentType: 'application/json', customMetadata: { setor, enviadoPor: usuarioLogado.uid } });
+            await setDoc(doc(db, 'iptu_import_jobs', jobId), { setor, sourcePath, nomeArquivo: file.name, totalDeclarado: parsed.length, status: 'pendente', solicitadoPor: usuarioLogado.uid, solicitadoPorNome: perfilUsuario.nome || 'Administrador', criadoEm: new Date().toISOString() });
+            await registrarLog('solicitou importação administrativa de IPTU', `${file.name} · ${parsed.length} registro(s)`);
+            if(progressDiv) { progressDiv.textContent = '✅ Arquivo enfileirado. O resultado será registrado pelo job administrativo.'; progressDiv.style.color = 'green'; }
+            document.getElementById('adminFileJson').value = '';
+        } catch(err) { if(progressDiv) progressDiv.textContent = `❌ Erro: ${err.message}`; }
+        btnImportarIptu.disabled = false;
     });
 }
 
-window.carregarDadosNuvem = async function() {
+window.carregarDadosNuvem = async function({ reset = true } = {}) {
     mostrarLoading(true, "Baixando demandas do seu setor...");
     try {
         const meuSetor = perfilUsuario.setor || 'SMMAM';
-        const querySnapshot = await getDocs(query(notificacoesRef, where("setor", "==", meuSetor))); window.DB = [];
+        if (reset) { window.DB = []; lastDocumentCursor = null; hasMoreDocuments = true; }
+        if (!hasMoreDocuments) return;
+        const constraints = [where("setor", "==", meuSetor), limit(PAGE_SIZE)];
+        if (lastDocumentCursor) constraints.push(startAfter(lastDocumentCursor));
+        const querySnapshot = await getDocs(query(notificacoesRef, ...constraints));
         
         querySnapshot.forEach((documento) => { 
             let data = documento.data(); data.firebaseId = documento.id; 
@@ -1146,15 +1111,23 @@ window.carregarDadosNuvem = async function() {
             
             window.DB.push(data);
         });
+        lastDocumentCursor = querySnapshot.docs.at(-1) || lastDocumentCursor;
+        hasMoreDocuments = querySnapshot.size === PAGE_SIZE;
+        const loadMore = document.getElementById('btnCarregarMais');
+        if (loadMore) loadMore.style.display = hasMoreDocuments ? 'inline-flex' : 'none';
         window.renderizarPainel();
     } catch (e) {} mostrarLoading(false);
+}
+
+window.carregarMaisDocumentos = async function() {
+    await window.carregarDadosNuvem({ reset: false });
 }
 
 window.salvarDocumento = async function(event, tipoDoc) {
     event.preventDefault(); if(perfilUsuario.nivel === 'leitor') return alert("Leitores não salvam.");
     mostrarLoading(true, "Verificando e Salvando...");
     
-    let editId = ''; let dados = {}; let btnForm = null; let base64Array = window.fotosTemp || [];
+    let editId = ''; let dados = {}; let btnForm = null; let fotos = window.fotosTemp || [];
     let numeroOriginal = '';
     const anoAtual = new Date().getFullYear();
     const meuSetor = perfilUsuario.setor || 'SMMAM';
@@ -1165,8 +1138,6 @@ window.salvarDocumento = async function(event, tipoDoc) {
     if(tipoDoc === 'notificacao') {
         btnForm = document.getElementById('btnSalvarNotif'); editId = document.getElementById('editFirebaseIdNotif').value;
         numeroOriginal = document.getElementById('numNotif').value.trim();
-        if(!numeroOriginal.includes('/')) numeroOriginal += `/${anoAtual}`;
-        document.getElementById('numNotif').value = numeroOriginal; 
 
         let dtRecebimento = document.getElementById('dataRecebimento').value;
         let tipoAR = document.getElementById('tipoAR').checked;
@@ -1183,38 +1154,49 @@ window.salvarDocumento = async function(event, tipoDoc) {
             if (dtRecebimento && nomeNotificado && docNotificado) statusVida = 'recebido';
         }
 
-        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, numNotif: numeroOriginal, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: document.getElementById('prazoDias').value, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
+        const territorio = resolveTerritory(document.getElementById('bairro').value);
+        const etapa = document.getElementById('statusTramitacaoNotif')?.value || 'recebido';
+        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: document.getElementById('prazoDias').value, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, territorioNome: territorio.nome, territorioEquipe: territorio.equipe, territorioTipo: territorio.tipo, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
     } else {
         btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value;
         numeroOriginal = document.getElementById('autoNum').value.trim();
-        if(!numeroOriginal.includes('/')) numeroOriginal += `/${anoAtual}`;
-        document.getElementById('autoNum').value = numeroOriginal;
 
-        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', numNotif: numeroOriginal, dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, arrayInfracoes: infracoesMarcadas, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: base64Array.length, editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
+        const etapa = document.getElementById('statusTramitacaoAuto')?.value || 'recebido';
+        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', dataNotif: document.getElementById('autoData').value, nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, arrayInfracoes: infracoesMarcadas, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
     }
     
     if(btnForm) btnForm.disabled = true;
 
     try {
-        const dupQuery = query(notificacoesRef, where("numNotif", "==", numeroOriginal), where("setor", "==", meuSetor));
-        const dupSnap = await getDocs(dupQuery);
-        let duplicado = false;
-        dupSnap.forEach(d => { if(d.id !== editId) duplicado = true; });
-        
-        if(duplicado) {
-            alert(`⚠️ ALERTA DE DUPLICIDADE: O documento ${numeroOriginal} já existe no seu setor. Operação cancelada.`);
-            if(btnForm) btnForm.disabled = false;
-            mostrarLoading(false);
-            return;
-        }
-
         let idDoDoc = editId;
-        if (editId) { await updateDoc(doc(db, "notificacoes", editId), dados); } 
-        else { dados.criadoPor = perfilUsuario.nome; dados.dataCriacao = new Date().toISOString(); const novoDoc = await addDoc(notificacoesRef, dados); idDoDoc = novoDoc.id; }
+        const etapaSelecionada = dados.statusTramitacao || 'recebido';
+        if (editId) {
+            const existente = window.DB.find(item => item.firebaseId === editId);
+            const etapaAnterior = existente?.statusTramitacao || 'recebido';
+            delete dados.statusTramitacao; delete dados.prazoSlaEm;
+            await updateDoc(doc(db, "notificacoes", editId), dados);
+            if (etapaSelecionada !== etapaAnterior) await chamarFuncaoSegura('moveProcessStage', { documentId: editId, stage: etapaSelecionada, reason: 'Atualização do documento pelo formulário institucional.' });
+        }
+        else {
+            const criado = await chamarFuncaoSegura('createDocument', { type: tipoDoc, document: dados });
+            idDoDoc = criado.id;
+            numeroOriginal = criado.number;
+            if (tipoDoc === 'notificacao') document.getElementById('numNotif').value = numeroOriginal;
+            else document.getElementById('autoNum').value = numeroOriginal;
+        }
         
         const fotosSubRef = collection(db, "notificacoes", idDoDoc, "evidencias");
-        if (editId) { const fotosAntigas = await getDocs(fotosSubRef); for (let f of fotosAntigas.docs) { await deleteDoc(f.ref); } }
-        for (let base64 of base64Array) { await addDoc(fotosSubRef, { imagemBinaria: base64 }); }
+        const fotosAntigas = await getDocs(fotosSubRef);
+        const mantidas = new Set(fotos.filter(foto => foto.persistedId).map(foto => foto.persistedId));
+        for (const antiga of fotosAntigas.docs) {
+            if (mantidas.has(antiga.id)) continue;
+            await deleteEvidence(storage, antiga.data().storagePath).catch(() => {});
+            await deleteDoc(antiga.ref);
+        }
+        for (const foto of fotos.filter(foto => !foto.persistedId)) {
+            const metadados = await uploadEvidence(storage, { sector: meuSetor, documentId: idDoDoc, localEvidence: foto });
+            await addDoc(fotosSubRef, { ...metadados, setor: meuSetor, criadoEm: new Date().toISOString(), criadoPor: perfilUsuario.nome || 'Servidor' });
+        }
         
         await window.carregarDadosNuvem(); window.limparFormularios(); window.mostrarToast("Salvo na Nuvem!"); await registrarLog(editId ? `Editou ${tipoDoc}` : `Criou ${tipoDoc}`, dados.numNotif); window.navegarPara('inicio');
     } catch (e) { alert("Erro ao salvar."); }
@@ -1226,7 +1208,7 @@ window.arquivarDocumento = async function(id) {
     if(!motivo) return;
     mostrarLoading(true, "Arquivando...");
     try {
-        await updateDoc(doc(db, "notificacoes", id), { statusProcesso: 'arquivado', motivoArquivamento: motivo, dataArquivamento: new Date().toISOString() });
+        await chamarFuncaoSegura('moveProcessStage', { documentId: id, stage: 'arquivado', reason: motivo });
         await window.carregarDadosNuvem(); window.mostrarToast("Processo Arquivado!"); await registrarLog("Arquivou Processo", `ID: ${id}`);
     } catch(e) { alert("Erro ao arquivar."); }
     mostrarLoading(false);
@@ -1237,18 +1219,18 @@ window.excluirSelecionadas = async function() {
     if(confirm(`Apagar ${m.length} registro(s) PARA SEMPRE?`)) {
         mostrarLoading(true, "Excluindo...");
         try {
-            for (let id of m) { const snaps = await getDocs(collection(db, "notificacoes", id, "evidencias")); for (let f of snaps.docs) { await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); }
+            for (let id of m) { const snaps = await getDocs(collection(db, "notificacoes", id, "evidencias")); for (let f of snaps.docs) { await deleteEvidence(storage, f.data().storagePath).catch(() => {}); await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); }
             await window.carregarDadosNuvem(); window.mostrarToast("Excluído!"); await registrarLog("Excluiu Lote", m.join(", "));
         } catch(e) { alert("Erro"); } mostrarLoading(false);
     }
 }
 
 window.fotoModalAtual = null;
-window.abrirModalFoto = function(i) { window.fotoModalAtual = window.fotosTemp[i]; document.getElementById('modal-image').src = window.fotoModalAtual; document.getElementById('photo-modal').style.display = 'flex'; }
+window.abrirModalFoto = function(i) { const foto = window.fotosTemp[i]; if (!foto) return; window.fotoModalAtual = foto.previewUrl; document.getElementById('modal-image').src = foto.previewUrl; document.getElementById('photo-modal').style.display = 'flex'; }
 window.fecharModalFoto = function() { document.getElementById('photo-modal').style.display = 'none'; }
 window.baixarFotoAtual = function() { const a = document.createElement("a"); a.href = window.fotoModalAtual; a.download = `Evidencia_${Date.now()}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-window.processarFotos = function(e, containerId) { const files = e.target.files; if(!files) return; for(let file of files) { const r = new FileReader(); r.onload = function(ev) { const img = new Image(); img.onload = function() { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const MAX = 700; let w = img.width; let h = img.height; if (w > MAX) { h *= MAX / w; w = MAX; } canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h); window.fotosTemp.push(canvas.toDataURL('image/jpeg', 0.45)); window.renderizarPreviewFotos(containerId); }; img.src = ev.target.result; }; r.readAsDataURL(file); } e.target.value = ''; }
-window.renderizarPreviewFotos = function(containerId) { const container = document.getElementById(containerId); if(!container) return; container.innerHTML = ''; window.fotosTemp.forEach((f, i) => { const div = document.createElement('div'); div.style.position = 'relative'; div.innerHTML = `<img src="${f}" style="width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;cursor:pointer;" onclick="abrirModalFoto(${i})"><button type="button" onclick="removerFoto(${i}, '${containerId}')" style="position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;">X</button>`; container.appendChild(div); }); }
+window.processarFotos = function(e, containerId) { const files = e.target.files; if(!files) return; for(let file of files) { const r = new FileReader(); r.onload = function(ev) { const img = new Image(); img.onload = function() { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const MAX = 700; let w = img.width; let h = img.height; if (w > MAX) { h *= MAX / w; w = MAX; } canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h); window.fotosTemp.push({ previewUrl: canvas.toDataURL('image/jpeg', 0.72), name: file.name || 'evidencia.jpg' }); window.renderizarPreviewFotos(containerId); }; img.src = ev.target.result; }; r.readAsDataURL(file); } e.target.value = ''; }
+window.renderizarPreviewFotos = function(containerId) { const container = document.getElementById(''+containerId); if(!container) return; container.replaceChildren(); window.fotosTemp.forEach((foto, i) => { const div = document.createElement('div'); div.style.position = 'relative'; const image = document.createElement('img'); image.src = foto.previewUrl; image.alt = `Evidência ${i + 1}`; image.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:4px;border:1px solid #ccc;cursor:pointer;'; image.addEventListener('click', () => window.abrirModalFoto(i)); const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'X'; remove.setAttribute('aria-label', `Remover evidência ${i + 1}`); remove.style.cssText = 'position:absolute;top:-5px;right:-5px;background:red;color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;cursor:pointer;'; remove.addEventListener('click', () => window.removerFoto(i, containerId)); div.append(image, remove); container.appendChild(div); }); }
 window.removerFoto = function(i, cid) { window.fotosTemp.splice(i, 1); window.renderizarPreviewFotos(cid); }
 
 window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
@@ -1256,6 +1238,52 @@ window.aplicarFiltroTipo = function(tipo, btnElement) { window.filtroTipoDocumen
 window.aplicarFiltroProcesso = function(status, btnElement) { window.filtroProcessoAtual = status; document.querySelectorAll('#view-inicio .filter-group:first-child .filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
 window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
 window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => { cb.checked = master.checked; }); }
+
+window.exportarRelatorioGerencial = function() {
+    if (!perfilUsuario) return;
+    exportManagementReport(window.itensFiltradosAtual || [], perfilUsuario.setor || 'SMMAM');
+    registrarLog('exportou relatório gerencial', `${(window.itensFiltradosAtual || []).length} registro(s)`);
+}
+
+window.migrarEvidenciasLegadas = async function() {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return alert('Somente administradores podem iniciar a migração.');
+    if (!confirm('A migração enviará evidências antigas ao Storage em um lote controlado. Confirme que existe backup validado e aprovação para esta execução.')) return;
+    const status = document.getElementById('adminProgressoEvidencias');
+    const button = document.getElementById('btnMigrarEvidencias');
+    try {
+        if (button) button.disabled = true;
+        if (status) status.textContent = 'Migrando lote protegido...';
+        const result = await chamarFuncaoSegura('migrateLegacyEvidenceBatch', { limit: 20 });
+        if (status) status.textContent = `✅ ${result.migrated || 0} evidência(s) migrada(s). Confira uma amostra antes de iniciar novo lote.`;
+        await registrarLog('executou lote de migração de evidências', `${result.migrated || 0} evidência(s)`);
+    } catch (error) {
+        if (status) status.textContent = `❌ Falha na migração: ${error.message}`;
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+window.atualizarTerritorioPeloBairro = function() {
+    const bairro = document.getElementById('bairro')?.value || '';
+    const territorio = resolveTerritory(bairro);
+    const campo = document.getElementById('territorioEquipeNotif');
+    if (campo) campo.value = territorio.equipe ? `Equipe ${territorio.equipe} · ${territorio.tipo}` : 'Bairro sem equipe territorial mapeada';
+}
+
+window.moverEtapaTramitacao = async function(id) {
+    const item = window.DB.find(registro => registro.firebaseId === id);
+    if (!item || perfilUsuario?.nivel === 'leitor') return;
+    const opcoes = WORKFLOW_STAGES.map(etapa => `${etapa.id} — ${etapa.label}`).join('\n');
+    const etapa = prompt(`Informe o código da nova etapa:\n${opcoes}`, item.statusTramitacao || 'recebido');
+    if (!etapa) return;
+    const motivo = prompt('Informe a justificativa da movimentação:');
+    if (!motivo) return alert('A justificativa é obrigatória para registrar a movimentação.');
+    try {
+        await chamarFuncaoSegura('moveProcessStage', { documentId: id, stage: etapa.trim(), reason: motivo });
+        window.mostrarToast('Etapa atualizada e registrada no histórico.');
+        await window.carregarDadosNuvem();
+    } catch (error) { alert(`Não foi possível movimentar a etapa: ${error.message}`); }
+}
 
 window.atualizarDashboardGraficos = function() {
     const hoje = new Date(); hoje.setHours(0,0,0,0); 
@@ -1315,14 +1343,30 @@ window.renderizarPainel = function() {
     if (window.colunaOrdenacao) { filtrados.sort((a, b) => { let valA = (a[window.colunaOrdenacao] || '').toLowerCase(); let valB = (b[window.colunaOrdenacao] || '').toLowerCase(); if (valA < valB) return window.ordemCrescente ? -1 : 1; if (valA > valB) return window.ordemCrescente ? 1 : -1; return 0; }); }
     window.itensFiltradosAtual = filtrados; 
     
+    renderDocumentRows(corpo, filtrados, {
+        onSelect: window.handleShiftClick,
+        onEdit: window.carregarParaEditar,
+        onPrint: window.imprimirRegistro,
+        onArchive: window.arquivarDocumento,
+        onMoveStage: window.moverEtapaTramitacao,
+        onAutuar: () => window.navegarPara('autos'),
+        onAr: (item) => window.buscarStatusCorreios(item.codigoAR, `ar-${item.firebaseId}`, item.firebaseId),
+        deadline: (item) => item.dataRecebimento && item.prazoDias ? calcularDataVencimento(item.dataRecebimento, item.prazoDias) : null,
+    });
+    /* Legacy renderer kept below temporarily for rollback reference.
     filtrados.forEach(item => {
         const iconeFoto = (item.qtdFotosSalvas && item.qtdFotosSalvas > 0) ? ` 📷(${item.qtdFotosSalvas})` : '';
+        const numeroSeguro = escaparHtml(item.numNotif || 'SEM NÚMERO');
+        const nomeSeguro = escaparHtml((item.nome || 'DADOS PENDENTES').toUpperCase());
+        const loteSeguro = escaparHtml(item.loteEndereco || 'Endereço não informado');
+        const etapaSegura = escaparHtml(workflowLabel(item.statusTramitacao));
+        const slaAtual = slaClassification(item);
         let statusHtml = ''; let botaoAutuar = ''; let botaoArquivar = `<a onclick="arquivarDocumento('${item.firebaseId}')" style="color:#d97706;">Arquivar</a>`;
         const badgeTipo = item.tipoDocumento === 'auto' ? `<span class="badge-tipo-auto">MULTA / AUTO</span>` : `<span class="badge-tipo-notif">NOTIFICAÇÃO</span>`;
         
         if (item.statusProcesso === 'arquivado') {
             botaoArquivar = '';
-            statusHtml += `<div style="background:#f1f5f9; padding:6px; border-radius:4px; text-align:center; color:#475569; font-weight:bold; font-size:11px;">📂 ARQUIVADO<br><small style="font-weight:normal;">${item.motivoArquivamento || ''}</small></div>`;
+            statusHtml += `<div style="background:#f1f5f9; padding:6px; border-radius:4px; text-align:center; color:#475569; font-weight:bold; font-size:11px;">📂 ARQUIVADO<br><small style="font-weight:normal;">${escaparHtml(item.motivoArquivamento || '')}</small></div>`;
         } else {
             if(item.statusNotificacao === 'rascunho') {
                 statusHtml += `<div style="background:#fef3c7; color:#b45309; padding:4px; text-align:center; font-size:11px; font-weight:bold; border-radius:4px; border:1px solid #fde68a;">📝 RASCUNHO</div>`;
@@ -1333,11 +1377,11 @@ window.renderizarPainel = function() {
             }
 
             if(item.codigoAR) { 
-                let tituloTooltip = item.statusCorreiosTexto ? `Status Completo: ${item.statusCorreiosTexto}` : `Aguardando atualização.`;
+                let tituloTooltip = item.statusCorreiosTexto ? `Status Completo: ${escaparHtml(item.statusCorreiosTexto)}` : `Aguardando atualização.`;
                 statusHtml += `
                 <div title="${tituloTooltip}" style="margin-top:5px; background:#f8fafc; color:#475569; padding:4px; border-radius:4px; border:1px solid #cbd5e1; text-align:center; min-width: 140px; cursor:help;">
                     <div style="font-size:10px; font-weight:bold;">
-                        AR: ${item.codigoAR} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:inherit;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;margin-left:5px;" onclick="buscarStatusCorreios('${item.codigoAR}', 'ar-${item.firebaseId}', '${item.firebaseId}')">API</button></span>
+                        AR: ${escaparHtml(item.codigoAR)} <span id="ar-${item.firebaseId}"><button style="background:none;border:none;color:inherit;font-size:10px;cursor:pointer;padding:0;text-decoration:underline;margin-left:5px;" onclick="buscarStatusCorreios('${escaparHtml(item.codigoAR)}', 'ar-${item.firebaseId}', '${item.firebaseId}')">API</button></span>
                     </div>
                 </div>`; 
             }
@@ -1357,12 +1401,15 @@ window.renderizarPainel = function() {
                     statusHtml += `<div style="margin-top:5px;"><span style="background:#e2e8f0; color:#475569; padding:3px 6px; font-size:10px; border-radius:4px;">⏳ Prazo Suspenso</span></div>`; 
                 }
             }
+            const slaLabel = slaAtual === 'vencido' ? 'SLA vencido' : slaAtual === 'proximo' ? 'SLA próximo' : slaAtual === 'no_prazo' ? 'SLA no prazo' : 'SLA suspenso';
+            statusHtml += `<div style="margin-top:5px; font-size:10px; color:#334155;">Fluxo: <strong>${etapaSegura}</strong> · ${slaLabel}</div>`;
+            statusHtml += `<a onclick="moverEtapaTramitacao('${item.firebaseId}')" style="display:inline-block;margin-top:5px;font-size:11px;">Tramitar</a>`;
         }
 
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}" onclick="handleShiftClick(event, this)"></td><td>${badgeTipo}</td><td><strong>${item.numNotif}</strong></td><td><div style="font-weight:bold; color:#1b365d;">${(item.nome || 'DADOS PENDENTES').toUpperCase()} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${item.loteEndereco}</div></td><td>${statusHtml}</td><td class="action-links"><a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a><a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoArquivar}${botaoAutuar}</td>`;
+        tr.innerHTML = `<td><input type="checkbox" class="select-item" value="${item.firebaseId}" onclick="handleShiftClick(event, this)"></td><td>${badgeTipo}</td><td><strong>${numeroSeguro}</strong></td><td><div style="font-weight:bold; color:#1b365d;">${nomeSeguro} ${iconeFoto}</div><div style="font-size:11px; color:#64748b; margin-top:2px;">${loteSeguro}</div></td><td>${statusHtml}</td><td class="action-links"><a onclick="carregarParaEditar('${item.firebaseId}')">Editar</a><a onclick="imprimirRegistro('${item.firebaseId}')">Imprimir</a>${botaoArquivar}${botaoAutuar}</td>`;
         corpo.appendChild(tr);
-    });
+    }); */
 }
 
 window.carregarParaEditar = async function(id) {
@@ -1378,6 +1425,7 @@ window.carregarParaEditar = async function(id) {
         if(document.getElementById('autoEndOcorrencia')) document.getElementById('autoEndOcorrencia').value = item.loteEndereco || ''; 
         if(document.getElementById('autoDescricaoLei')) document.getElementById('autoDescricaoLei').value = item.autoDescricaoLei || ''; 
         if(document.getElementById('autoMultaURM')) document.getElementById('autoMultaURM').value = item.autoMultaURM || ''; 
+        if(document.getElementById('statusTramitacaoAuto')) document.getElementById('statusTramitacaoAuto').value = item.statusTramitacao || 'recebido';
         
         document.querySelectorAll('.dinamico-chk-auto').forEach(chk => { chk.checked = (item.arrayInfracoes || []).includes(chk.value); });
         
@@ -1385,7 +1433,7 @@ window.carregarParaEditar = async function(id) {
         
         window.fotosTemp = []; 
         if(document.getElementById('indicadorFotosAuto')) document.getElementById('indicadorFotosAuto').style.display = 'inline-block'; 
-        try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {} 
+        try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { const evidence = d.data(); const previewUrl = evidence.downloadUrl || evidence.imagemBinaria; if (previewUrl) window.fotosTemp.push({ previewUrl, persistedId: d.id, storagePath: evidence.storagePath || null, name: evidence.nomeArquivo || 'evidencia.jpg' }); }); } catch(e) {}
         if(document.getElementById('indicadorFotosAuto')) document.getElementById('indicadorFotosAuto').style.display = 'none'; 
         window.renderizarPreviewFotos('previewFotosAuto');
         return;
@@ -1398,6 +1446,7 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('codigoAR')) document.getElementById('codigoAR').value = item.codigoAR || ''; 
     if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = item.statusRetornoAR || 'aguardando';
     if(document.getElementById('prazoDias')) document.getElementById('prazoDias').value = item.prazoDias || '15'; 
+    if(document.getElementById('statusTramitacaoNotif')) document.getElementById('statusTramitacaoNotif').value = item.statusTramitacao || 'recebido';
     if(document.getElementById('dataRecebimento')) document.getElementById('dataRecebimento').value = item.dataRecebimento || ''; 
     
     if(document.getElementById('dataNotif')) document.getElementById('dataNotif').value = item.dataNotif || ''; 
@@ -1408,6 +1457,7 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('endereco')) document.getElementById('endereco').value = item.endereco || ''; 
     if(document.getElementById('telefone')) document.getElementById('telefone').value = item.telefone || ''; 
     if(document.getElementById('bairro')) document.getElementById('bairro').value = item.bairro || ''; 
+    window.atualizarTerritorioPeloBairro();
     if(document.getElementById('cep')) document.getElementById('cep').value = item.cep || ''; 
     if(document.getElementById('cadDistrito')) document.getElementById('cadDistrito').value = item.cadDistrito || ''; 
     if(document.getElementById('cadZona')) document.getElementById('cadZona').value = item.cadZona || ''; 
@@ -1423,7 +1473,7 @@ window.carregarParaEditar = async function(id) {
     
     window.fotosTemp = []; 
     if(document.getElementById('indicadorFotosNotif')) document.getElementById('indicadorFotosNotif').style.display = 'inline-block';
-    try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { window.fotosTemp.push(d.data().imagemBinaria); }); } catch(e) {}
+    try { const snaps = await getDocs(collection(db, "notificacoes", item.firebaseId, "evidencias")); snaps.forEach(d => { const evidence = d.data(); const previewUrl = evidence.downloadUrl || evidence.imagemBinaria; if (previewUrl) window.fotosTemp.push({ previewUrl, persistedId: d.id, storagePath: evidence.storagePath || null, name: evidence.nomeArquivo || 'evidencia.jpg' }); }); } catch(e) {}
     if(document.getElementById('indicadorFotosNotif')) document.getElementById('indicadorFotosNotif').style.display = 'none'; 
     window.renderizarPreviewFotos('previewFotosNotif');
 }
@@ -1434,6 +1484,9 @@ window.limparFormularios = function() {
     if(document.getElementById('editFirebaseIdNotif')) document.getElementById('editFirebaseIdNotif').value = ''; 
     if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = ''; 
     if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = 'aguardando'; 
+    if(document.getElementById('statusTramitacaoNotif')) document.getElementById('statusTramitacaoNotif').value = 'recebido';
+    if(document.getElementById('statusTramitacaoAuto')) document.getElementById('statusTramitacaoAuto').value = 'recebido';
+    if(document.getElementById('territorioEquipeNotif')) document.getElementById('territorioEquipeNotif').value = 'Será identificada pelo bairro';
     if(document.getElementById('dataNotif')) document.getElementById('dataNotif').valueAsDate = new Date(); 
     if(document.getElementById('autoData')) document.getElementById('autoData').valueAsDate = new Date(); 
     if(document.getElementById('prazoDias')) document.getElementById('prazoDias').value = '15'; 
@@ -1454,6 +1507,8 @@ window.carregarDadosPerfil = function() {
     if(document.getElementById('perfilSetorNivel')) document.getElementById('perfilSetorNivel').value = `${perfilUsuario.setor || 'SMMAM'} - ${(perfilUsuario.nivel || 'LEITOR').toUpperCase()}`; 
     if(document.getElementById('perfilTelefone')) document.getElementById('perfilTelefone').value = perfilUsuario.telefone || ''; 
 }
+
+document.getElementById('bairro')?.addEventListener('input', window.atualizarTerritorioPeloBairro);
 
 window.imprimirRegistro = function(id) {
     const item = window.DB.find(i => i.firebaseId === id); if (!item) return; const s = item.setor || 'SMMAM';
@@ -1504,10 +1559,10 @@ window.imprimirRegistro = function(id) {
         window.bancoInfracoesGlobais.forEach(inf => {
             const isChecked = (item.arrayInfracoes && item.arrayInfracoes.includes(inf.id)) || marcadasLegado.includes(inf.nome);
             const marcaX = isChecked ? '( X )' : '(   )';
-            boxInfr.innerHTML += `<div style="font-weight:bold; font-size:11px; margin-right:15px;">${marcaX} ${inf.nome}</div>`;
+            boxInfr.innerHTML += `<div style="font-weight:bold; font-size:11px; margin-right:15px;">${marcaX} ${escaparHtml(inf.nome)}</div>`;
             
             if(isChecked) {
-                listTextos.innerHTML += `<li><strong>${inf.baseLegal}:</strong> ${inf.textoPadrao}</li>`;
+                listTextos.innerHTML += `<li><strong>${escaparHtml(inf.baseLegal)}:</strong> ${escaparHtml(inf.textoPadrao)}</li>`;
             }
         });
     }
