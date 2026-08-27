@@ -9,6 +9,7 @@ const REGION = "southamerica-east1";
 const validTypes = new Set(["notificacao", "auto"]);
 const validStages = new Set(["recebido", "triagem", "analise_tecnica", "vistoria", "aguardando_complementacao", "parecer", "decisao", "deferido", "indeferido", "arquivado"]);
 const stageSlaDays = { recebido: 2, triagem: 5, analise_tecnica: 10, vistoria: 10, aguardando_complementacao: 0, parecer: 7, decisao: 5, deferido: 0, indeferido: 0, arquivado: 0 };
+const LEGAL_DEADLINES = { notificationRegularization: 60, autoDefense: 8 };
 
 async function institutionalProfile(request) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Autenticação institucional obrigatória.");
@@ -31,6 +32,23 @@ function dueDateFor(stage) {
   return admin.firestore.Timestamp.fromDate(due);
 }
 
+function legalDueDate(dateString, days) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateString || ""))) return null;
+  const [year, month, day] = dateString.split("-").map(Number);
+  const due = new Date(year, month - 1, day, 12, 0, 0, 0);
+  due.setDate(due.getDate() + days);
+  return admin.firestore.Timestamp.fromDate(due);
+}
+
+function legalDeadlineFields(payload, type) {
+  if (type === "auto") {
+    const due = legalDueDate(payload.dataCienciaAuto, LEGAL_DEADLINES.autoDefense);
+    return { dataCienciaAuto: payload.dataCienciaAuto, prazoDefesaDias: LEGAL_DEADLINES.autoDefense, prazoDefesaEm: due, statusDefesa: due ? "no_prazo" : "sem_ciencia", baseLegalPrazo: "Art. 28, LC Municipal nº 6/1996" };
+  }
+  const due = legalDueDate(payload.dataRecebimento, LEGAL_DEADLINES.notificationRegularization);
+  return { prazoDias: LEGAL_DEADLINES.notificationRegularization, prazoRegularizacaoDias: LEGAL_DEADLINES.notificationRegularization, prazoRegularizacaoEm: due, statusRegularizacao: due ? "no_prazo" : "sem_ciencia", baseLegalPrazo: "Art. 25, LC Municipal nº 6/1996 (redação da LC nº 245/2023)" };
+}
+
 function safeStringArray(value, maxItems = 30, maxLength = 100) {
   return Array.isArray(value) ? value.slice(0, maxItems).map((item) => sanitizeText(item, maxLength)).filter(Boolean) : [];
 }
@@ -51,7 +69,7 @@ function safeDocumentPayload(payload, type) {
     territorioTipo: sanitizeText(payload.territorioTipo, 30),
     territorioNome: sanitizeText(payload.territorioNome, 100),
   };
-  if (type === "auto") return { ...shared, autoDescricaoLei: sanitizeText(payload.autoDescricaoLei, 800), autoMultaURM: Number(payload.autoMultaURM) || 0 };
+  if (type === "auto") return { ...shared, dataCienciaAuto: sanitizeText(payload.dataCienciaAuto, 20), autoDescricaoLei: sanitizeText(payload.autoDescricaoLei, 800), autoMultaURM: Number(payload.autoMultaURM) || 0 };
   return {
     ...shared,
     statusNotificacao: ["rascunho", "enviado_ar", "recebido"].includes(payload.statusNotificacao) ? payload.statusNotificacao : "rascunho",
@@ -95,10 +113,12 @@ exports.createDocument = onCall({ region: REGION }, async (request) => {
   const sector = profile.setor || "SMMAM";
   const safePayload = safeDocumentPayload(payload, type);
   const stage = safePayload.statusTramitacao;
+  const legalFields = legalDeadlineFields(safePayload, type);
   const number = await nextDocumentNumber({ sector, type, year: new Date().getFullYear(), uid: request.auth.uid });
   const documentRef = db.collection("notificacoes").doc();
   const documentData = {
     ...safePayload,
+    ...legalFields,
     tipoDocumento: type,
     numNotif: number,
     setor: sector,
@@ -118,6 +138,29 @@ exports.createDocument = onCall({ region: REGION }, async (request) => {
     transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `criou ${type}`, documentoAlvo: number, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   });
   return { id: documentRef.id, number };
+});
+
+exports.updateDocument = onCall({ region: REGION }, async (request) => {
+  const profile = await institutionalProfile(request);
+  if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de edição.");
+  const documentId = sanitizeText(request.data?.documentId, 150);
+  const type = sanitizeText(request.data?.type, 20);
+  const payload = request.data?.document;
+  if (!documentId || !validTypes.has(type) || !payload || typeof payload !== "object") throw new HttpsError("invalid-argument", "Dados de atualização inválidos.");
+  const documentRef = db.doc(`notificacoes/${documentId}`);
+  await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(documentRef);
+    if (!current.exists) throw new HttpsError("not-found", "Documento não localizado.");
+    const currentData = current.data();
+    const sector = profile.setor || "SMMAM";
+    if (currentData.setor !== sector || currentData.tipoDocumento !== type) throw new HttpsError("permission-denied", "Documento de outro setor ou tipo incompatível.");
+    const safePayload = safeDocumentPayload(payload, type);
+    delete safePayload.statusTramitacao;
+    const legalFields = legalDeadlineFields(safePayload, type);
+    transaction.update(documentRef, { ...safePayload, ...legalFields, dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
+    transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `atualizou ${type} e prazos legais`, documentoAlvo: currentData.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+  });
+  return { ok: true };
 });
 
 exports.recordAuditEvent = onCall({ region: REGION }, async (request) => {
@@ -211,12 +254,29 @@ exports.refreshSlaStatus = onSchedule({ region: REGION, schedule: "every day 06:
   today.setHours(0, 0, 0, 0);
   const writer = db.bulkWriter();
   active.forEach((document) => {
-    const due = document.data().prazoSlaEm?.toDate?.();
-    if (!due) return;
-    due.setHours(0, 0, 0, 0);
-    const near = new Date(today); near.setDate(near.getDate() + 2);
-    const slaStatus = due < today ? "vencido" : due <= near ? "proximo" : "no_prazo";
-    writer.update(document.ref, { slaStatus, slaAtualizadoEm: admin.firestore.FieldValue.serverTimestamp() });
+    const data = document.data();
+    const due = data.prazoSlaEm?.toDate?.();
+    let slaStatus = "sem_prazo";
+    if (due) {
+      due.setHours(0, 0, 0, 0);
+      const near = new Date(today); near.setDate(near.getDate() + 2);
+      slaStatus = due < today ? "vencido" : due <= near ? "proximo" : "no_prazo";
+    }
+    const isAuto = data.tipoDocumento === "auto";
+    const legalStart = isAuto ? data.dataCienciaAuto : data.dataRecebimento;
+    const legalDays = isAuto ? LEGAL_DEADLINES.autoDefense : LEGAL_DEADLINES.notificationRegularization;
+    const calculatedLegalDeadline = legalDueDate(legalStart, legalDays);
+    const legalDeadline = (isAuto ? data.prazoDefesaEm : data.prazoRegularizacaoEm)?.toDate?.() || calculatedLegalDeadline?.toDate?.();
+    let legalStatus = "sem_ciencia";
+    if (legalDeadline) {
+      legalDeadline.setHours(0, 0, 0, 0);
+      const warning = new Date(today); warning.setDate(warning.getDate() + 5);
+      legalStatus = legalDeadline < today ? "vencido" : legalDeadline <= warning ? "proximo" : "no_prazo";
+    }
+    const legalFields = isAuto
+      ? { prazoDefesaDias: legalDays, prazoDefesaEm: calculatedLegalDeadline || null, statusDefesa: legalStatus, baseLegalPrazo: "Art. 28, LC Municipal nº 6/1996" }
+      : { prazoDias: legalDays, prazoRegularizacaoDias: legalDays, prazoRegularizacaoEm: calculatedLegalDeadline || null, statusRegularizacao: legalStatus, baseLegalPrazo: "Art. 25, LC Municipal nº 6/1996 (redação da LC nº 245/2023)" };
+    writer.update(document.ref, { slaStatus, slaAtualizadoEm: admin.firestore.FieldValue.serverTimestamp(), ...legalFields });
   });
   await writer.close();
 });

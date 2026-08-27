@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { escapeHtml, normalizeText } from "../js/core/sanitize.js";
 import { allowedTransition, calculateSlaDueDate, slaClassification, workflowLabel } from "../js/core/workflow.js";
 import { resolveTerritory } from "../js/core/territory.js";
+import { LEGAL_DEADLINES, addCalendarDays, legalDeadlineClassification, legalDeadlineForRecord } from "../js/core/legal-deadlines.js";
 
 assert.equal(escapeHtml('<img src=x onerror="alert(1)">'), '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;');
 assert.equal(normalizeText('São Vendelino'), 'SAO VENDELINO');
@@ -14,5 +15,14 @@ assert.equal(allowedTransition('arquivado', 'triagem'), false);
 assert.match(calculateSlaDueDate('triagem'), /^\d{4}-\d{2}-\d{2}$/);
 assert.equal(slaClassification({ prazoSlaEm: '2000-01-01' }), 'vencido');
 assert.equal(slaClassification({}), 'sem_prazo');
+assert.equal(LEGAL_DEADLINES.notificationRegularization.days, 60);
+assert.equal(LEGAL_DEADLINES.autoDefense.days, 8);
+assert.equal(addCalendarDays('2026-08-01', 60), '2026-09-30');
+assert.equal(addCalendarDays('2026-02-24', 8), '2026-03-04');
+assert.equal(legalDeadlineForRecord({ tipoDocumento: 'notificacao', dataRecebimento: '2026-08-01' }).due, '2026-09-30');
+assert.equal(legalDeadlineForRecord({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24' }).due, '2026-03-04');
+assert.equal(legalDeadlineClassification({ tipoDocumento: 'auto' }, new Date('2026-03-01')), 'sem_ciencia');
+assert.equal(legalDeadlineClassification({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24' }, new Date('2026-03-01')), 'proximo');
+assert.equal(legalDeadlineClassification({ tipoDocumento: 'notificacao', dataRecebimento: '2026-01-01' }, new Date('2026-08-01')), 'vencido');
 
-console.log('Domain test aprovado: sanitização, workflow, SLA e território.');
+console.log('Domain test aprovado: sanitização, workflow, SLA, território e prazos legais.');

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { extrairEventoRastreamento, normalizarCodigoAR } from '../js/correios-provider.js';
 
-const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide, functionsSource, workflow, territory, evidence] = await Promise.all([
+const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide, functionsSource, workflow, territory, evidence, legalDeadlines, legalBasis] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../js/app.js', import.meta.url), 'utf8'),
   readFile(new URL('../workers/ar-sync-worker.mjs', import.meta.url), 'utf8'),
@@ -15,6 +15,8 @@ const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privac
   readFile(new URL('../js/core/workflow.js', import.meta.url), 'utf8'),
   readFile(new URL('../js/core/territory.js', import.meta.url), 'utf8'),
   readFile(new URL('../js/services/evidence.js', import.meta.url), 'utf8'),
+  readFile(new URL('../js/core/legal-deadlines.js', import.meta.url), 'utf8'),
+  readFile(new URL('../BASE_LEGAL_PRAZOS_DEFESA.md', import.meta.url), 'utf8'),
 ]);
 
 assert.match(html, /Hub de aplicações/);
@@ -76,6 +78,15 @@ assert.match(functionsSource, /refreshSlaStatus/);
 assert.match(workflow, /WORKFLOW_STAGES/);
 assert.match(territory, /TEAM_1/);
 assert.match(evidence, /uploadEvidence/);
+assert.match(html, /60 dias corridos para regularização/);
+assert.match(html, /8 dias corridos, a partir da ciência, para apresentar defesa escrita/);
+assert.match(app, /updateDocument/);
+assert.match(functionsSource, /prazoRegularizacaoDias/);
+assert.match(functionsSource, /prazoDefesaDias/);
+assert.match(firestoreRules, /prazoDefesaEm/);
+assert.match(legalDeadlines, /notificationRegularization/);
+assert.match(legalBasis, /Art\. 25/);
+assert.match(legalBasis, /Art\. 28/);
 assert.equal(normalizarCodigoAR('am101510575br'), 'AM101510575BR');
 assert.deepEqual(extrairEventoRastreamento({
   temEventoEntrega: true,

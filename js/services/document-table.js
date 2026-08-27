@@ -1,5 +1,6 @@
 import { safeText } from "../core/sanitize.js";
 import { slaClassification, workflowLabel } from "../core/workflow.js";
+import { formatDeadline, legalDeadlineClassification, legalDeadlineForRecord } from "../core/legal-deadlines.js";
 
 function cell(row, className = "") {
   const element = document.createElement("td");
@@ -57,15 +58,19 @@ export function renderDocumentRows(body, records, callbacks) {
     } else {
       if (record.statusNotificacao === "rascunho") statusCell.appendChild(statusBox("📝 RASCUNHO", { background: "#fef3c7", border: "#fde68a", color: "#b45309" }));
       if (record.statusNotificacao === "enviado_ar") statusCell.appendChild(statusBox("📬 ENVIADO POR AR", { background: "#e0f2fe", border: "#bae6fd", color: "#0369a1" }));
-      if (record.statusNotificacao === "recebido" || record.tipoDocumento === "auto") statusCell.appendChild(statusBox("✅ CIÊNCIA DADA", { background: "#dcfce7", border: "#bbf7d0", color: "#166534" }));
+      if ((record.statusNotificacao === "recebido" && record.dataRecebimento) || (record.tipoDocumento === "auto" && record.dataCienciaAuto)) statusCell.appendChild(statusBox("✅ CIÊNCIA DADA", { background: "#dcfce7", border: "#bbf7d0", color: "#166534" }));
+      if (record.tipoDocumento !== "auto" && record.statusNotificacao === "recebido" && !record.dataRecebimento) statusCell.appendChild(statusBox("AR ENTREGUE · CONFIRMAR DATA", { background: "#fef3c7", border: "#fde68a", color: "#b45309" }));
+      if (record.tipoDocumento === "auto" && !record.dataCienciaAuto) statusCell.appendChild(statusBox("CIÊNCIA PENDENTE", { background: "#fef3c7", border: "#fde68a", color: "#b45309" }));
       if (record.codigoAR) {
         const ar = document.createElement("div"); ar.style.cssText = "margin-top:5px;background:#f8fafc;color:#475569;padding:4px;border-radius:4px;border:1px solid #cbd5e1;text-align:center;font-size:10px;font-weight:bold;"; ar.textContent = `AR: ${record.codigoAR} `;
         ar.appendChild(action("Consultar", () => callbacks.onAr(record), "ar-action")); statusCell.appendChild(ar);
       }
-      if (record.tipoDocumento !== "auto") {
-        const due = callbacks.deadline(record);
-        if (due) { const dueDate = new Date(`${due}T00:00:00`); const isLate = dueDate < today; const tag = document.createElement("div"); tag.style.marginTop = "5px"; tag.textContent = `${isLate ? "Vencido" : "Vence em"}: ${due.split("-").reverse().join("/")}`; tag.className = isLate ? "badge-vencido" : "badge-prazo"; statusCell.appendChild(tag); if (isLate) statusCell.appendChild(action("Autuar", callbacks.onAutuar, "btn-autuar")); }
-      }
+      const legal = legalDeadlineForRecord(record);
+      const legalStatus = legalDeadlineClassification(record, today);
+      const legalTag = document.createElement("div"); legalTag.style.marginTop = "5px";
+      legalTag.textContent = legal.due ? `${legal.label}: ${formatDeadline(legal.due)}${legalStatus === "vencido" ? " · vencido" : legalStatus === "proximo" ? " · próximo" : ""}` : `${legal.label}: aguarda ciência`;
+      legalTag.className = legalStatus === "vencido" ? "badge-vencido" : "badge-prazo"; statusCell.appendChild(legalTag);
+      if (record.tipoDocumento !== "auto" && legalStatus === "vencido") statusCell.appendChild(action("Autuar", callbacks.onAutuar, "btn-autuar"));
       const workflow = document.createElement("div"); workflow.style.cssText = "margin-top:5px;font-size:10px;color:#334155;"; const sla = slaClassification(record); workflow.textContent = `Fluxo: ${workflowLabel(record.statusTramitacao)} · ${sla === "vencido" ? "SLA vencido" : sla === "proximo" ? "SLA próximo" : sla === "no_prazo" ? "SLA no prazo" : "SLA suspenso"}`; statusCell.append(workflow, action("Tramitar", () => callbacks.onMoveStage(record.firebaseId)));
     }
 

@@ -29,6 +29,15 @@ Este documento registra as mudanças entregues no código e as ações necessár
 | Território | O bairro é associado à Equipe 1, Equipe 2 ou distrito pela referência territorial vigente. | Publicar a configuração territorial validada quando houver mudança de divisão. |
 | Relatórios | Exportação CSV de relatório gerencial por etapa, SLA, bairro, equipe, fiscal e situação. | Validar modelo institucional de relatório e política de exportação de dados pessoais. |
 
+## Complemento legal — LC Municipal nº 6/1996
+
+| Fluxo | Implementação incluída | Homologação institucional obrigatória |
+|---|---|---|
+| Notificação | O campo de prazo manual foi substituído por **regularização em 60 dias corridos** a partir da data de recebimento; a data-limite e a situação são calculadas no backend. | Confirmar a redação vigente do Art. 25, a prova válida de recebimento e a regra aplicável a cada modalidade de ciência. |
+| Auto de Infração | O Auto passou a registrar a **data de ciência** e a calcular **defesa escrita em 8 dias corridos**, com alerta em formulário, listagem, impressão e relatórios. | Confirmar o marco de ciência, inclusive em intimação postal, recusa, edital ou certidão, conforme o procedimento municipal. |
+
+A fonte consultada é a compilação vigente da LC Municipal nº 6/1996 no SAPL da Câmara Municipal de Bento Gonçalves. A regra implantada conta dias corridos a partir do dia seguinte à data de recebimento ou ciência informada. O Art. 29, §1º, que trata de pagamento após ciência de decisão que mantém a penalidade, está registrado em `BASE_LEGAL_PRAZOS_DEFESA.md`, mas não foi automatizado nesta entrega, pois exige modelagem própria da fase decisória e confirmação jurídica. [1]
+
 ## Sequência segura de publicação
 
 1. Criar projeto Firebase de homologação e configurar contas de teste aprovadas para pelo menos dois setores.
@@ -37,8 +46,9 @@ Este documento registra as mudanças entregues no código e as ações necessár
 4. Testar criação concorrente de pelo menos cem documentos e confirmar números únicos.
 5. Testar upload, edição, remoção e leitura de evidências por leitor, operador, admin e outro setor.
 6. Rodar migração de evidências em lote pequeno, comparar metadados e validar recuperação de imagem.
-7. Testar tramitação, justificativa, histórico, SLA e exportação de relatório.
-8. Executar backup recuperável, anexar os relatórios de teste e solicitar aprovação institucional para produção.
+7. Testar tramitação, justificativa, histórico, SLA, prazo de regularização, defesa escrita e exportação de relatório.
+8. Validar, com jurídico e chefia, ao menos os cenários de recebimento presencial, AR entregue, recusa, ausência de ciência e intimação da decisão.
+9. Executar backup recuperável, anexar os relatórios de teste e solicitar aprovação institucional para produção.
 
 ## Comandos de validação local
 
@@ -54,3 +64,7 @@ Para Cloud Functions, instale as dependências a partir de `functions/` e valide
 ## Limites conscientes
 
 O código não publica regras, Cloud Functions, jobs, dados ou segredos em produção. Essas operações dependem da conta institucional, projeto Firebase correto, habilitação de cobrança/Cloud Scheduler quando exigido e aprovação dos portões previstos no plano autônomo. A automação e os testes estão preparados para reduzir intervenção humana, mas não substituem a autorização de segurança e negócio.
+
+## Referência
+
+[1] [Câmara Municipal de Bento Gonçalves — Lei Complementar nº 6/1996, texto atual](https://sapl.camarabento.rs.gov.br/norma/4045)

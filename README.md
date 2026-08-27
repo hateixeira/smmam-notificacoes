@@ -82,6 +82,17 @@ Os perfis dependem de um documento em `usuarios/{uid}` com, no mínimo, `setor`,
 | `configuracoes` | URM, lista de exceções e parâmetros. | Deve ter separação entre configurações administrativas e operacionais. |
 | `logs_auditoria` | Eventos de operação. | A próxima evolução deve registrar eventos no backend. |
 
+## Prazos legais de fiscalização
+
+O sistema calcula os prazos abaixo a partir da data de ciência efetivamente informada pelo servidor. A notificação não é tratada como defesa: seu prazo é de **regularização**. A data de entrega de AR sem data certificada permanece pendente de confirmação para evitar a presunção de um fato jurídico.
+
+| Documento | Prazo no sistema | Marco de contagem | Referência |
+|---|---:|---|---|
+| Notificação | 60 dias corridos para regularização | Recebimento da notificação | Art. 25 da LC Municipal nº 6/1996, em redação alterada pela LC nº 245/2023. [3] |
+| Auto de Infração | 8 dias corridos para defesa escrita | Ciência do Auto | Art. 28 da LC Municipal nº 6/1996. [3] |
+
+> A implementação conta dias corridos a partir do dia seguinte à data de recebimento ou ciência. A aplicabilidade para ciência postal, recusa, edital, feriados e procedimentos setoriais deve ser homologada pelo jurídico e pela gestão municipal antes do uso em produção. Consulte `BASE_LEGAL_PRAZOS_DEFESA.md` para a fonte e a interpretação registrada.
+
 ## Operação local e validação
 
 ### Pré-requisitos
@@ -129,3 +140,5 @@ Consulte o plano completo para critérios de aceite, automações e bloqueios de
 [1] [Firebase — Firestore Security Rules](https://firebase.google.com/docs/firestore/security/get-started)
 
 [2] [Firebase — Cloud Storage Security Rules](https://firebase.google.com/docs/storage/security)
+
+[3] [Câmara Municipal de Bento Gonçalves — Lei Complementar nº 6/1996, texto atual](https://sapl.camarabento.rs.gov.br/norma/4045)

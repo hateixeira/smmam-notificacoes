@@ -223,15 +223,16 @@
                             <div class="form-group"><label>Observações</label><input type="text" id="obs"></div>
                         </div>
 
-                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Ciência e Prazos Matemáticos (Dias Corridos)</div>
-                        <p style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">O prazo só começa a contar a partir da Data de Recebimento. Em caso de AR, a API injetará a data sozinha quando entregue.</p>
+                        <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Ciência e prazo legal de regularização</div>
+                        <p style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">Art. 25 da LC Municipal nº 6/1996: 60 dias corridos para regularização, contados da ciência/recebimento. Em caso de AR, a data pode ser atualizada após entrega.</p>
                         
                         <div class="form-row">
                             <div class="form-group"><label>Código AR (Opcional)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
                             <div class="form-group"><label>Data de Recebimento / Ciência</label><input type="date" id="dataRecebimento"></div>
-                            <div class="form-group"><label>Prazo p/ Regularizar (Dias)</label><input type="number" id="prazoDias" value="15" style="font-weight: bold; color: #1b365d;"></div>
+                            <div class="form-group"><label>Prazo legal p/ regularizar</label><input type="text" id="prazoDias" value="60 dias corridos" disabled style="font-weight: bold; color: #1b365d; background:#eff6ff;"></div>
                             <input type="hidden" id="statusRetornoAR" value="aguardando">
                         </div>
+                        <div id="prazoRegularizacaoAviso" style="font-size:11px; color:#1e3a8a; margin-top:-2px; margin-bottom:10px;"></div>
                         <div class="form-row">
                             <div class="form-group"><label for="statusTramitacaoNotif">Etapa de tramitação</label><select id="statusTramitacaoNotif"><option value="recebido">Recebido</option><option value="triagem">Triagem</option><option value="analise_tecnica">Análise técnica</option><option value="vistoria">Vistoria</option><option value="aguardando_complementacao">Aguardando complementação</option><option value="parecer">Parecer</option><option value="decisao">Decisão</option></select></div>
                             <div class="form-group"><label>Equipe territorial</label><input id="territorioEquipeNotif" type="text" disabled value="Será identificada pelo bairro"></div>
@@ -276,7 +277,9 @@
                                 </div>
                             </div>
                             <div class="form-group"><label>Data da Autuação *</label><input type="date" id="autoData" required></div>
+                            <div class="form-group"><label>Data de ciência do auto</label><input type="date" id="dataCienciaAuto"></div>
                         </div>
+                        <div style="font-size:11px; color:#991b1b; margin:-8px 0 14px 0;">Art. 28 da LC Municipal nº 6/1996: o autuado possui 8 dias corridos, a partir da ciência, para apresentar defesa escrita. <span id="prazoDefesaAviso"></span></div>
                         
                         <div class="form-row">
                             <div class="form-group" style="flex: 2;"><label>Nome do Infrator *</label><input type="text" id="autoNome" required></div>
