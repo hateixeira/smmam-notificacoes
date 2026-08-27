@@ -627,15 +627,12 @@ window.verificarRotinaCorreios = async function(forcar = false, candidatos = nul
             if (!item.ok) continue;
             const status = interpretarStatusAR(item.tracking.descricao, item.tracking.entregue);
             const atual = (window.DB || []).find(registro => registro.firebaseId === item.id) || {};
-            const dados = {
-                statusRetornoAR: status.statusRetornoAR,
-                statusCorreiosTexto: status.texto.toUpperCase(),
-                statusNotificacao: status.statusNotificacao
-            };
+            const dados = { statusRetornoAR: status.statusRetornoAR, statusCorreiosTexto: status.texto.toUpperCase(), statusNotificacao: status.statusNotificacao };
             // A entrega do AR não é, por si só, uma certidão de data para a contagem legal.
-            // A data de recebimento deve ser confirmada pelo servidor no formulário.
+            // O rastreio é anexado como evento auditável; a ciência é confirmada separadamente.
             if (dados.statusRetornoAR !== atual.statusRetornoAR || dados.statusCorreiosTexto !== atual.statusCorreiosTexto || dados.statusNotificacao !== atual.statusNotificacao) {
-                await updateDoc(doc(db, 'notificacoes', item.id), dados);
+                const dataEvento = /^\d{4}-\d{2}-\d{2}/.test(String(item.tracking.dataEvento || '')) ? String(item.tracking.dataEvento).slice(0, 10) : new Date().toISOString().slice(0, 10);
+                await chamarFuncaoSegura('recordNotificationFollowUp', { documentId: item.id, eventType: 'atualizacao_rastreio_ar', eventDate: dataEvento, note: `Atualização automática dos Correios: ${status.texto || 'sem descrição'}`, trackingStatus: status.statusRetornoAR, trackingText: status.texto });
                 alterados++;
             }
         }
@@ -1201,7 +1198,7 @@ window.carregarDadosNuvem = async function({ reset = true } = {}) {
             let data = documento.data(); data.firebaseId = documento.id; 
             if(!data.tipoDocumento) data.tipoDocumento = 'notificacao';
             if(!data.statusProcesso) data.statusProcesso = 'ativo'; 
-            ['prazoRegularizacaoEm', 'prazoDefesaEm'].forEach((campo) => {
+            ['prazoRegularizacaoEm', 'prazoRegularizacaoProrrogadoEm', 'prazoDefesaEm'].forEach((campo) => {
                 if (data[campo] && typeof data[campo].toDate === 'function') data[campo] = data[campo].toDate().toISOString().slice(0, 10);
             });
             
@@ -1383,15 +1380,8 @@ window.arquivarDocumento = async function(id) {
     mostrarLoading(false);
 }
 
-window.excluirSelecionadas = async function() {
-    const m = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value); if(m.length === 0) return alert('Selecione.');
-    if(confirm(`Apagar ${m.length} registro(s) PARA SEMPRE?`)) {
-        mostrarLoading(true, "Excluindo...");
-        try {
-            for (let id of m) { const snaps = await getDocs(collection(db, "notificacoes", id, "evidencias")); for (let f of snaps.docs) { await deleteEvidence(storage, f.data().storagePath).catch(() => {}); await deleteDoc(f.ref); } await deleteDoc(doc(db, "notificacoes", id)); }
-            await window.carregarDadosNuvem(); window.mostrarToast("Excluído!"); await registrarLog("Excluiu Lote", m.join(", "));
-        } catch(e) { alert("Erro"); } mostrarLoading(false);
-    }
+window.excluirSelecionadas = function() {
+    alert('A exclusão definitiva foi desativada para preservar a rastreabilidade. Utilize Arquivar em cada registro quando for necessário encerrar o processo.');
 }
 
 window.fotoModalAtual = null;
@@ -1454,6 +1444,62 @@ window.moverEtapaTramitacao = async function(id) {
     } catch (error) { alert(`Não foi possível movimentar a etapa: ${error.message}`); }
 }
 
+window.abrirAcompanhamentoNotificacao = function(id) {
+    const item = window.DB.find(registro => registro.firebaseId === id);
+    if (!item || item.tipoDocumento !== 'notificacao') return;
+    const modal = document.getElementById('modal-acompanhamento-notificacao');
+    if (!modal) return;
+    const prazo = legalDeadlineForRecord(item);
+    document.getElementById('acompanhamentoDocumentoId').value = id;
+    document.getElementById('acompanhamentoData').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('acompanhamentoObservacao').value = '';
+    document.getElementById('acompanhamentoDiasProrrogacao').value = '';
+    document.getElementById('acompanhamentoTextoAR').value = item.statusCorreiosTexto || '';
+    const tipo = document.getElementById('acompanhamentoTipo');
+    Array.from(tipo.options).forEach(opcao => {
+        const eventoAR = ['ar_postado', 'atualizacao_rastreio_ar'].includes(opcao.value);
+        opcao.disabled = eventoAR && !item.tipoAR;
+    });
+    tipo.value = item.tipoAR ? 'atualizacao_rastreio_ar' : 'vistoria_retorno';
+    document.getElementById('acompanhamentoResumo').textContent = `${item.numNotif || 'Notificação'} · etapa atual: ${workflowLabel(item.statusTramitacao)} · prazo ${prazo.prorrogado ? 'prorrogado' : 'legal'}: ${formatDeadline(prazo.due)}${item.terrenoLimpo ? ' · limpeza já confirmada' : ''}.`;
+    window.atualizarCamposAcompanhamento();
+    modal.style.display = 'flex';
+};
+
+window.fecharAcompanhamentoNotificacao = function() {
+    const modal = document.getElementById('modal-acompanhamento-notificacao');
+    if (modal) modal.style.display = 'none';
+};
+
+window.atualizarCamposAcompanhamento = function() {
+    const tipo = document.getElementById('acompanhamentoTipo')?.value;
+    const camposAR = document.getElementById('camposRastreioAcompanhamento');
+    const campoDias = document.getElementById('campoDiasProrrogacao');
+    if (camposAR) camposAR.style.display = tipo === 'atualizacao_rastreio_ar' ? 'flex' : 'none';
+    if (campoDias) campoDias.style.display = tipo === 'prorrogacao_deferida' ? 'block' : 'none';
+};
+
+window.registrarAcompanhamentoNotificacao = async function() {
+    const documentId = document.getElementById('acompanhamentoDocumentoId')?.value;
+    const eventType = document.getElementById('acompanhamentoTipo')?.value;
+    const eventDate = document.getElementById('acompanhamentoData')?.value;
+    const note = document.getElementById('acompanhamentoObservacao')?.value.trim();
+    const extensionDays = Number(document.getElementById('acompanhamentoDiasProrrogacao')?.value || 0);
+    const trackingStatus = document.getElementById('acompanhamentoStatusAR')?.value;
+    const trackingText = document.getElementById('acompanhamentoTextoAR')?.value.trim();
+    if (!documentId || !eventDate || !note) return alert('Data e justificativa são obrigatórias para registrar o acompanhamento.');
+    if (eventType === 'prorrogacao_deferida' && (!Number.isInteger(extensionDays) || extensionDays < 1)) return alert('Informe a quantidade de dias deferidos para a prorrogação.');
+    try {
+        await chamarFuncaoSegura('recordNotificationFollowUp', { documentId, eventType, eventDate, note, extensionDays, trackingStatus, trackingText });
+        window.fecharAcompanhamentoNotificacao();
+        await window.carregarDadosNuvem();
+        window.mostrarToast('Evento de acompanhamento registrado sem alterar a notificação emitida.');
+    } catch (error) {
+        console.error('Falha no acompanhamento', error);
+        alert(`Não foi possível registrar o acompanhamento: ${error.message}`);
+    }
+};
+
 window.atualizarDashboardGraficos = function() {
     const hoje = new Date(); hoje.setHours(0,0,0,0); 
     let tAtivos = 0; let tArquivos = 0; let tRascunho = 0; let arEnv = 0; let venc = 0;
@@ -1498,13 +1544,13 @@ window.renderizarPainel = function() {
     if (window.filtroStatusAtual === 'No Prazo') { 
         filtrados = filtrados.filter(i => {
             if(!i.dataRecebimento) return false;
-            const dv = calcularDataVencimento(i.dataRecebimento, i.prazoDias);
+            const dv = legalDeadlineForRecord(i).due;
             return dv && new Date(dv + "T00:00:00") >= hoje;
         }); 
     } else if (window.filtroStatusAtual === 'Vencidos') { 
         filtrados = filtrados.filter(i => {
             if(!i.dataRecebimento) return false;
-            const dv = calcularDataVencimento(i.dataRecebimento, i.prazoDias);
+            const dv = legalDeadlineForRecord(i).due;
             return dv && new Date(dv + "T00:00:00") < hoje;
         }); 
     } else if (window.filtroStatusAtual === 'Com AR') { filtrados = filtrados.filter(i => i.codigoAR && i.codigoAR.trim() !== ""); }
@@ -1515,6 +1561,7 @@ window.renderizarPainel = function() {
     renderDocumentRows(corpo, filtrados, {
         onSelect: window.handleShiftClick,
         onEdit: window.carregarParaEditar,
+        onFollowUp: window.abrirAcompanhamentoNotificacao,
         onPrint: window.imprimirRegistro,
         onArchive: window.arquivarDocumento,
         onMoveStage: window.moverEtapaTramitacao,
@@ -1583,6 +1630,10 @@ window.renderizarPainel = function() {
 
 window.carregarParaEditar = async function(id) {
     const item = window.DB.find(i => i.firebaseId === id); if (!item) return;
+    if (item.tipoDocumento === 'notificacao' && item.statusNotificacao !== 'rascunho') {
+        window.abrirAcompanhamentoNotificacao(id);
+        return;
+    }
     
     if(item.tipoDocumento === 'auto') {
         window.navegarPara('autos'); window.scrollTo(0,0);

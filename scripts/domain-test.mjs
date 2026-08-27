@@ -10,6 +10,9 @@ assert.equal(resolveTerritory('São Vendelino').equipe, 1);
 assert.equal(resolveTerritory('Centro').equipe, 2);
 assert.equal(resolveTerritory('Tuiuty').tipo, 'distrito');
 assert.equal(workflowLabel('parecer'), 'Parecer');
+assert.equal(workflowLabel('ar_postado'), 'AR postado');
+assert.equal(workflowLabel('ar_entregue_pendente_ciencia'), 'AR entregue — confirmar ciência');
+assert.equal(workflowLabel('limpeza_confirmada'), 'Limpeza confirmada');
 assert.equal(allowedTransition('triagem', 'analise_tecnica'), true);
 assert.equal(allowedTransition('arquivado', 'triagem'), false);
 assert.match(calculateSlaDueDate('triagem'), /^\d{4}-\d{2}-\d{2}$/);
@@ -23,6 +26,8 @@ assert.equal(legalDeadlineForRecord({ tipoDocumento: 'notificacao', dataRecebime
 assert.equal(legalDeadlineForRecord({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24' }).due, '2026-03-04');
 assert.equal(legalDeadlineForRecord({ tipoDocumento: 'notificacao', dataRecebimento: '2026-08-01', prazoRegularizacaoDias: 15 }).due, '2026-08-16');
 assert.equal(legalDeadlineForRecord({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24', prazoDefesaDias: 10 }).due, '2026-03-06');
+assert.equal(legalDeadlineForRecord({ tipoDocumento: 'notificacao', dataRecebimento: '2026-08-01', prazoRegularizacaoEm: '2026-09-30', prazoRegularizacaoProrrogadoEm: '2026-10-15' }).due, '2026-10-15');
+assert.equal(legalDeadlineClassification({ tipoDocumento: 'notificacao', statusRegularizacao: 'regularizado' }, new Date('2026-08-01')), 'regularizado');
 assert.equal(legalDeadlineClassification({ tipoDocumento: 'auto' }, new Date('2026-03-01')), 'sem_ciencia');
 assert.equal(legalDeadlineClassification({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24' }, new Date('2026-03-01')), 'proximo');
 assert.equal(legalDeadlineClassification({ tipoDocumento: 'notificacao', dataRecebimento: '2026-01-01' }, new Date('2026-08-01')), 'vencido');

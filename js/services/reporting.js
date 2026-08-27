@@ -15,7 +15,7 @@ function download(name, content, mime = "text/csv;charset=utf-8;") {
 }
 
 export function exportManagementReport(records, sector) {
-  const header = ["Número", "Tipo", "Etapa", "SLA", "Prazo SLA", "Prazo legal", "Data limite legal", "Situação prazo legal", "Base legal", "Bairro", "Equipe", "Fiscal", "Situação", "Data de emissão"];
+  const header = ["Número", "Tipo", "Etapa", "SLA", "Prazo SLA", "Prazo legal", "Data limite original", "Data limite vigente", "Prorrogação", "Situação prazo legal", "Código AR", "Status AR", "Postagem AR", "Último rastreio", "Limpeza confirmada", "Data da limpeza", "Base legal", "Bairro", "Equipe", "Fiscal", "Situação", "Data de emissão"];
   const rows = records.map((record) => { const legal = legalDeadlineForRecord(record); return [
     record.numNotif,
     record.tipoDocumento,
@@ -23,8 +23,16 @@ export function exportManagementReport(records, sector) {
     slaClassification(record),
     record.prazoSlaEm,
     legal.label,
+    legal.originalDue || legal.due,
     legal.due,
+    record.prorrogacaoSolicitada ? `${record.statusProrrogacao || "solicitada"}${record.prorrogacaoDiasDeferidos ? ` (${record.prorrogacaoDiasDeferidos} dias)` : ""}` : "Não solicitada",
     legalDeadlineClassification(record),
+    record.codigoAR,
+    record.statusRetornoAR,
+    record.dataPostagemAR,
+    record.dataUltimoRastreioAR,
+    record.terrenoLimpo ? "Sim" : "Não",
+    record.limpezaConfirmadaEm,
     legal.article,
     record.bairro,
     record.territorioEquipe ? `Equipe ${record.territorioEquipe}` : "Não definida",

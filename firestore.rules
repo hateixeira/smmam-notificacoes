@@ -19,9 +19,9 @@ service cloud.firestore {
       allow read: if approved() && sameSector(resource.data);
       // A criação inicial passa por função de backend para reservar numeração atômica.
       allow create: if false;
-      allow update: if approved() && sameSector(resource.data) && request.resource.data.setor == sector() && profile().data.nivel != 'leitor'
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['setor', 'numNotif', 'statusProcesso', 'statusTramitacao', 'prazoSlaEm', 'slaStatus', 'criadoPor', 'criadoPorId', 'dataCriacao', 'prazoDias', 'prazoRegularizacaoDias', 'prazoRegularizacaoEm', 'statusRegularizacao', 'dataCienciaAuto', 'prazoDefesaDias', 'prazoDefesaEm', 'statusDefesa', 'baseLegalPrazo']);
-      allow delete: if admin() && sameSector(resource.data);
+      // Documento principal é gravado e acompanhado somente por Functions auditáveis.
+      allow update: if false;
+      allow delete: if false;
 
       match /evidencias/{evidenceId} {
         allow read: if approved() && sameSector(get(/databases/$(database)/documents/notificacoes/$(documentId)).data);
@@ -32,6 +32,11 @@ service cloud.firestore {
           && !('imagemBinaria' in request.resource.data);
         allow update: if false;
         allow delete: if admin() && sameSector(get(/databases/$(database)/documents/notificacoes/$(documentId)).data);
+      }
+
+      match /acompanhamentos/{eventId} {
+        allow read: if approved() && sameSector(get(/databases/$(database)/documents/notificacoes/$(documentId)).data);
+        allow create, update, delete: if false;
       }
     }
 

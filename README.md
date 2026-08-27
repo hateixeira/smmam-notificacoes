@@ -26,6 +26,12 @@ Os prazos de regularização e defesa, a URM, os textos padrão de motivo, as or
 
 O novo modelo preserva integralmente os dados usados pelo CSV VIPP: nome, endereço, número, complemento, bairro, município, UF, CEP, telefone, CPF/CNPJ, modalidade de AR e número da notificação.
 
+### Acompanhamento após a emissão
+
+Depois de emitida, uma notificação não pode mais ter seu conteúdo documental alterado nem ser excluída. O painel passa a oferecer **Acompanhar**, que registra eventos auditáveis de postagem, trânsito, entrega ou devolução do AR, confirmação de ciência, pedido/decisão de prorrogação, vistoria de retorno e confirmação de limpeza. A entrega do AR não presume a ciência jurídica: a data de ciência deve ser confirmada em evento próprio. O acompanhamento altera apenas situação operacional, prazo derivado quando houver prorrogação deferida e dados de controle; o documento impresso original é preservado.
+
+O ciclo completo está especificado em `ACOMPANHAMENTO_NOTIFICACOES.md`.
+
 ## Arquitetura atual
 
 | Camada | Tecnologia atual | Responsabilidade |

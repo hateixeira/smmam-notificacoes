@@ -68,14 +68,19 @@ export function renderDocumentRows(body, records, callbacks) {
       const legal = legalDeadlineForRecord(record);
       const legalStatus = legalDeadlineClassification(record, today);
       const legalTag = document.createElement("div"); legalTag.style.marginTop = "5px";
-      legalTag.textContent = legal.due ? `${legal.label}: ${formatDeadline(legal.due)}${legalStatus === "vencido" ? " · vencido" : legalStatus === "proximo" ? " · próximo" : ""}` : `${legal.label}: aguarda ciência`;
+      legalTag.textContent = legalStatus === "regularizado" ? "Regularização concluída" : legal.due ? `${legal.label}: ${formatDeadline(legal.due)}${legal.prorrogado ? " · prorrogado" : ""}${legalStatus === "vencido" ? " · vencido" : legalStatus === "proximo" ? " · próximo" : ""}` : `${legal.label}: aguarda ciência`;
       legalTag.className = legalStatus === "vencido" ? "badge-vencido" : "badge-prazo"; statusCell.appendChild(legalTag);
-      if (record.tipoDocumento !== "auto" && legalStatus === "vencido") statusCell.appendChild(action("Autuar", callbacks.onAutuar, "btn-autuar"));
-      const workflow = document.createElement("div"); workflow.style.cssText = "margin-top:5px;font-size:10px;color:#334155;"; const sla = slaClassification(record); workflow.textContent = `Fluxo: ${workflowLabel(record.statusTramitacao)} · ${sla === "vencido" ? "SLA vencido" : sla === "proximo" ? "SLA próximo" : sla === "no_prazo" ? "SLA no prazo" : "SLA suspenso"}`; statusCell.append(workflow, action("Tramitar", () => callbacks.onMoveStage(record.firebaseId)));
+      if (record.tipoDocumento === "notificacao" && record.prorrogacaoSolicitada) statusCell.appendChild(statusBox(record.statusProrrogacao === "deferida" ? "⏱️ PRORROGAÇÃO DEFERIDA" : record.statusProrrogacao === "indeferida" ? "⏱️ PRORROGAÇÃO INDEFERIDA" : "⏱️ PRORROGAÇÃO SOLICITADA", { background: "#fef3c7", border: "#fde68a", color: "#92400e" }));
+      if (record.tipoDocumento === "notificacao" && record.terrenoLimpo) statusCell.appendChild(statusBox("🧹 LIMPEZA CONFIRMADA", { background: "#dcfce7", border: "#bbf7d0", color: "#166534" }));
+      if (record.tipoDocumento !== "auto" && legalStatus === "vencido" && !record.terrenoLimpo) statusCell.appendChild(action("Autuar", callbacks.onAutuar, "btn-autuar"));
+      const workflow = document.createElement("div"); workflow.style.cssText = "margin-top:5px;font-size:10px;color:#334155;"; const sla = slaClassification(record); workflow.textContent = `Fluxo: ${workflowLabel(record.statusTramitacao)} · ${sla === "vencido" ? "SLA vencido" : sla === "proximo" ? "SLA próximo" : sla === "no_prazo" ? "SLA no prazo" : "SLA suspenso"}`; statusCell.append(workflow);
+      if (record.tipoDocumento === "auto") statusCell.append(action("Tramitar", () => callbacks.onMoveStage(record.firebaseId)));
     }
 
     const actions = cell(row, "action-links");
-    actions.append(action("Editar", () => callbacks.onEdit(record.firebaseId)), action("Imprimir", () => callbacks.onPrint(record.firebaseId)));
+    if (record.tipoDocumento === "notificacao" && record.statusNotificacao !== "rascunho") actions.append(action("Acompanhar", () => callbacks.onFollowUp(record.firebaseId)));
+    else actions.append(action("Editar", () => callbacks.onEdit(record.firebaseId)));
+    actions.append(action("Imprimir", () => callbacks.onPrint(record.firebaseId)));
     if (record.statusProcesso !== "arquivado") actions.append(action("Arquivar", () => callbacks.onArchive(record.firebaseId)));
     body.appendChild(row);
   });

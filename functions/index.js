@@ -7,8 +7,8 @@ admin.initializeApp();
 const db = admin.firestore();
 const REGION = "southamerica-east1";
 const validTypes = new Set(["notificacao", "auto"]);
-const validStages = new Set(["recebido", "triagem", "analise_tecnica", "vistoria", "aguardando_complementacao", "parecer", "decisao", "deferido", "indeferido", "arquivado"]);
-const stageSlaDays = { recebido: 2, triagem: 5, analise_tecnica: 10, vistoria: 10, aguardando_complementacao: 0, parecer: 7, decisao: 5, deferido: 0, indeferido: 0, arquivado: 0 };
+const validStages = new Set(["rascunho", "aguardando_postagem_ar", "ar_postado", "ar_em_transito", "ar_entregue_pendente_ciencia", "ar_devolvido", "prazo_regularizacao", "prorrogacao_solicitada", "prazo_prorrogado", "vistoria_retorno", "limpeza_confirmada", "irregularidade_pendente", "recebido", "triagem", "analise_tecnica", "vistoria", "aguardando_complementacao", "parecer", "decisao", "deferido", "indeferido", "arquivado"]);
+const stageSlaDays = { rascunho: 0, aguardando_postagem_ar: 2, ar_postado: 5, ar_em_transito: 5, ar_entregue_pendente_ciencia: 2, ar_devolvido: 2, prazo_regularizacao: 0, prorrogacao_solicitada: 2, prazo_prorrogado: 0, vistoria_retorno: 5, limpeza_confirmada: 0, irregularidade_pendente: 2, recebido: 2, triagem: 5, analise_tecnica: 10, vistoria: 10, aguardando_complementacao: 0, parecer: 7, decisao: 5, deferido: 0, indeferido: 0, arquivado: 0 };
 const LEGAL_DEADLINES = { notificationRegularization: 60, autoDefense: 8 };
 const DEFAULT_DOCUMENT_PARAMETERS = Object.freeze({
   prazoRegularizacaoDias: 60,
@@ -46,6 +46,21 @@ function legalDueDate(dateString, days) {
   const due = new Date(year, month - 1, day, 12, 0, 0, 0);
   due.setDate(due.getDate() + days);
   return admin.firestore.Timestamp.fromDate(due);
+}
+
+function timestampWithAddedDays(timestamp, days) {
+  const source = timestamp?.toDate?.();
+  if (!source || !Number.isInteger(days) || days < 1) return null;
+  source.setHours(12, 0, 0, 0);
+  source.setDate(source.getDate() + days);
+  return admin.firestore.Timestamp.fromDate(source);
+}
+
+function initialDocumentStage(payload, type) {
+  if (type !== "notificacao") return payload.statusTramitacao;
+  if (payload.statusNotificacao === "rascunho") return "rascunho";
+  if (payload.tipoAR) return "aguardando_postagem_ar";
+  return payload.dataRecebimento ? "prazo_regularizacao" : "recebido";
 }
 
 function boundedNumber(value, fallback, min, max) {
@@ -144,7 +159,7 @@ exports.createDocument = onCall({ region: REGION }, async (request) => {
   if (!validTypes.has(type) || !payload || typeof payload !== "object") throw new HttpsError("invalid-argument", "Dados documentais inválidos.");
   const sector = profile.setor || "SMMAM";
   const safePayload = safeDocumentPayload(payload, type);
-  const stage = safePayload.statusTramitacao;
+  const stage = initialDocumentStage(safePayload, type);
   const parameters = await documentParametersForSector(sector);
   const legalFields = legalDeadlineFields(safePayload, type, parameters);
   const number = await nextDocumentNumber({ sector, type, year: new Date().getFullYear(), uid: request.auth.uid });
@@ -189,11 +204,14 @@ exports.updateDocument = onCall({ region: REGION }, async (request) => {
     const currentData = current.data();
     const sector = profile.setor || "SMMAM";
     if (currentData.setor !== sector || currentData.tipoDocumento !== type) throw new HttpsError("permission-denied", "Documento de outro setor ou tipo incompatível.");
+    if (type === "notificacao" && currentData.statusNotificacao !== "rascunho") throw new HttpsError("failed-precondition", "Notificações emitidas são imutáveis. Use o acompanhamento para AR, prorrogação, vistoria ou limpeza.");
     const safePayload = safeDocumentPayload(payload, type);
     delete safePayload.statusTramitacao;
     const parameters = normalizedDocumentParameters(currentData.parametrosDocumento || configuredParameters);
     const legalFields = legalDeadlineFields(safePayload, type, parameters);
-    transaction.update(documentRef, { ...safePayload, ...legalFields, parametrosDocumento: parameters, dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
+    const emitindoRascunho = type === "notificacao" && currentData.statusNotificacao === "rascunho" && safePayload.statusNotificacao !== "rascunho";
+    const stageDaEmissao = emitindoRascunho ? initialDocumentStage(safePayload, type) : null;
+    transaction.update(documentRef, { ...safePayload, ...legalFields, parametrosDocumento: parameters, ...(stageDaEmissao ? { statusTramitacao: stageDaEmissao, prazoSlaEm: dueDateFor(stageDaEmissao), dataUltimaMovimentacao: admin.firestore.FieldValue.serverTimestamp() } : {}), dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
     transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `atualizou ${type} e prazos legais`, documentoAlvo: currentData.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   });
   return { ok: true };
@@ -208,6 +226,74 @@ exports.updateDocumentParameters = onCall({ region: REGION }, async (request) =>
   await db.doc("configuracoes/sistema").set({ valorURM: parameters.valorURM, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPorId: request.auth.uid }, { merge: true });
   await db.collection("logs_auditoria").add({ setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Administrador", nivel: profile.nivel, acao: "atualizou parâmetros do modelo documental", documentoAlvo: `parametros_${sector}`, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   return { parameters };
+});
+
+exports.recordNotificationFollowUp = onCall({ region: REGION }, async (request) => {
+  const profile = await institutionalProfile(request);
+  if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de acompanhamento.");
+  const documentId = sanitizeText(request.data?.documentId, 150);
+  const eventType = sanitizeText(request.data?.eventType, 60);
+  const eventDate = sanitizeText(request.data?.eventDate, 20);
+  const note = sanitizeText(request.data?.note, 1000);
+  const extensionDays = Math.floor(Number(request.data?.extensionDays || 0));
+  const trackingStatus = sanitizeText(request.data?.trackingStatus, 30);
+  const trackingText = sanitizeText(request.data?.trackingText, 500);
+  const allowedEvents = new Set(["ar_postado", "atualizacao_rastreio_ar", "ciencia_confirmada", "prorrogacao_solicitada", "prorrogacao_deferida", "prorrogacao_indeferida", "vistoria_retorno", "limpeza_confirmada", "irregularidade_pendente"]);
+  if (!documentId || !allowedEvents.has(eventType) || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !note) throw new HttpsError("invalid-argument", "Documento, evento, data e justificativa são obrigatórios.");
+  const documentRef = db.doc(`notificacoes/${documentId}`);
+  const configuredParameters = await documentParametersForSector(profile.setor || "SMMAM");
+  const result = await db.runTransaction(async (transaction) => {
+    const current = await transaction.get(documentRef);
+    if (!current.exists) throw new HttpsError("not-found", "Notificação não localizada.");
+    const data = current.data();
+    const sector = profile.setor || "SMMAM";
+    if (data.setor !== sector || data.tipoDocumento !== "notificacao") throw new HttpsError("permission-denied", "Acompanhamento permitido somente para notificações do seu setor.");
+    const parameters = normalizedDocumentParameters(data.parametrosDocumento || configuredParameters);
+    const changes = { dataUltimaMovimentacao: admin.firestore.FieldValue.serverTimestamp(), responsavelAtual: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid };
+    let stage = data.statusTramitacao || "recebido";
+    if (eventType === "ar_postado") {
+      if (!data.tipoAR || !data.codigoAR) throw new HttpsError("failed-precondition", "Informe o código de AR antes de registrar a postagem.");
+      stage = "ar_postado";
+      Object.assign(changes, { statusNotificacao: "enviado_ar", statusRetornoAR: "postado", dataPostagemAR: eventDate });
+    } else if (eventType === "atualizacao_rastreio_ar") {
+      if (!data.tipoAR) throw new HttpsError("failed-precondition", "Atualização de rastreio aplica-se somente a notificações por AR.");
+      const statusToStage = { entregue: "ar_entregue_pendente_ciencia", devolvido: "ar_devolvido", transito: "ar_em_transito", saiu_entrega: "ar_em_transito", tentativa: "ar_em_transito", retirada: "ar_em_transito", aguardando: "ar_postado" };
+      stage = statusToStage[trackingStatus] || "ar_em_transito";
+      Object.assign(changes, { statusNotificacao: trackingStatus === "entregue" ? "recebido" : "enviado_ar", statusRetornoAR: trackingStatus || "aguardando", statusCorreiosTexto: trackingText.toUpperCase(), dataUltimoRastreioAR: eventDate });
+    } else if (eventType === "ciencia_confirmada") {
+      stage = "prazo_regularizacao";
+      Object.assign(changes, legalDeadlineFields({ dataRecebimento: eventDate }, "notificacao", parameters), { statusNotificacao: "recebido", dataRecebimento: eventDate, dataCienciaConfirmadaEm: eventDate });
+    } else if (eventType === "prorrogacao_solicitada") {
+      stage = "prorrogacao_solicitada";
+      Object.assign(changes, { prorrogacaoSolicitada: true, prorrogacaoSolicitadaEm: eventDate, statusProrrogacao: "solicitada", justificativaProrrogacao: note });
+    } else if (eventType === "prorrogacao_deferida") {
+      if (!Number.isInteger(extensionDays) || extensionDays < 1 || extensionDays > 3650) throw new HttpsError("invalid-argument", "Informe de 1 a 3650 dias de prorrogação aprovados.");
+      const originalDeadline = data.prazoRegularizacaoEm || legalDueDate(data.dataRecebimento, Number(data.prazoRegularizacaoDias || data.prazoDias) || parameters.prazoRegularizacaoDias);
+      const extendedDeadline = timestampWithAddedDays(originalDeadline, extensionDays);
+      if (!extendedDeadline) throw new HttpsError("failed-precondition", "Confirme a ciência antes de deferir a prorrogação.");
+      stage = "prazo_prorrogado";
+      Object.assign(changes, { prorrogacaoSolicitada: true, statusProrrogacao: "deferida", prorrogacaoDecididaEm: eventDate, prorrogacaoDiasDeferidos: extensionDays, prazoRegularizacaoProrrogadoEm: extendedDeadline, statusRegularizacao: "no_prazo", justificativaProrrogacao: note });
+    } else if (eventType === "prorrogacao_indeferida") {
+      stage = "prazo_regularizacao";
+      Object.assign(changes, { prorrogacaoSolicitada: true, statusProrrogacao: "indeferida", prorrogacaoDecididaEm: eventDate, justificativaProrrogacao: note });
+    } else if (eventType === "vistoria_retorno") {
+      stage = "vistoria_retorno";
+      Object.assign(changes, { vistoriaRetornoEm: eventDate, resultadoVistoria: note });
+    } else if (eventType === "limpeza_confirmada") {
+      stage = "limpeza_confirmada";
+      Object.assign(changes, { terrenoLimpo: true, limpezaConfirmadaEm: eventDate, statusRegularizacao: "regularizado", resultadoVistoria: note });
+    } else if (eventType === "irregularidade_pendente") {
+      stage = "irregularidade_pendente";
+      Object.assign(changes, { terrenoLimpo: false, vistoriaRetornoEm: eventDate, resultadoVistoria: note });
+    }
+    changes.statusTramitacao = stage;
+    changes.prazoSlaEm = dueDateFor(stage);
+    transaction.update(documentRef, changes);
+    transaction.set(documentRef.collection("acompanhamentos").doc(), { tipo: eventType, dataEvento: eventDate, observacao: note, diasProrrogados: eventType === "prorrogacao_deferida" ? extensionDays : null, statusRastreio: eventType === "atualizacao_rastreio_ar" ? trackingStatus : null, textoRastreio: eventType === "atualizacao_rastreio_ar" ? trackingText : null, setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", criadoEm: admin.firestore.FieldValue.serverTimestamp() });
+    transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `registrou acompanhamento: ${eventType}`, documentoAlvo: data.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+    return { stage };
+  });
+  return { ok: true, ...result };
 });
 
 exports.recordAuditEvent = onCall({ region: REGION }, async (request) => {
@@ -232,6 +318,7 @@ exports.moveProcessStage = onCall({ region: REGION }, async (request) => {
     if (!current.exists) throw new HttpsError("not-found", "Documento não localizado.");
     const data = current.data();
     if (data.setor !== (profile.setor || "SMMAM")) throw new HttpsError("permission-denied", "Documento de outro setor.");
+    if (data.tipoDocumento === "notificacao") throw new HttpsError("failed-precondition", "Notificações devem ser movimentadas pelo acompanhamento de AR, prorrogação, vistoria ou limpeza.");
     const previousStage = data.statusTramitacao || "recebido";
     const movementRef = documentRef.collection("movimentacoes").doc();
     transaction.update(documentRef, { statusTramitacao: stage, statusProcesso: stage === "arquivado" ? "arquivado" : data.statusProcesso || "ativo", prazoSlaEm: dueDateFor(stage), dataUltimaMovimentacao: admin.firestore.FieldValue.serverTimestamp(), responsavelAtual: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
@@ -313,7 +400,7 @@ exports.refreshSlaStatus = onSchedule({ region: REGION, schedule: "every day 06:
     const legalStart = isAuto ? data.dataCienciaAuto : data.dataRecebimento;
     const legalDays = isAuto ? Number(data.prazoDefesaDias) || LEGAL_DEADLINES.autoDefense : Number(data.prazoRegularizacaoDias || data.prazoDias) || LEGAL_DEADLINES.notificationRegularization;
     const calculatedLegalDeadline = legalDueDate(legalStart, legalDays);
-    const legalDeadline = (isAuto ? data.prazoDefesaEm : data.prazoRegularizacaoEm)?.toDate?.() || calculatedLegalDeadline?.toDate?.();
+    const legalDeadline = (isAuto ? data.prazoDefesaEm : data.prazoRegularizacaoProrrogadoEm || data.prazoRegularizacaoEm)?.toDate?.() || calculatedLegalDeadline?.toDate?.();
     let legalStatus = "sem_ciencia";
     if (legalDeadline) {
       legalDeadline.setHours(0, 0, 0, 0);
@@ -322,7 +409,7 @@ exports.refreshSlaStatus = onSchedule({ region: REGION, schedule: "every day 06:
     }
     const legalFields = isAuto
       ? { prazoDefesaDias: legalDays, prazoDefesaEm: calculatedLegalDeadline || null, statusDefesa: legalStatus, baseLegalPrazo: "Art. 28, LC Municipal nº 6/1996" }
-      : { prazoDias: legalDays, prazoRegularizacaoDias: legalDays, prazoRegularizacaoEm: calculatedLegalDeadline || null, statusRegularizacao: legalStatus, baseLegalPrazo: "Art. 25, LC Municipal nº 6/1996 (redação da LC nº 245/2023)" };
+      : { prazoDias: legalDays, prazoRegularizacaoDias: legalDays, prazoRegularizacaoEm: calculatedLegalDeadline || null, statusRegularizacao: data.terrenoLimpo ? "regularizado" : legalStatus, baseLegalPrazo: "Art. 25, LC Municipal nº 6/1996 (redação da LC nº 245/2023)" };
     writer.update(document.ref, { slaStatus, slaAtualizadoEm: admin.firestore.FieldValue.serverTimestamp(), ...legalFields });
   });
   await writer.close();

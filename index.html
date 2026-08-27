@@ -132,9 +132,6 @@
                                 <button class="btn-secondary" onclick="exportarRelatorioGerencial()" style="padding: 6px 12px; font-size: 12px;" title="Baixar relatório gerencial">📋 Relatório gerencial</button>
                             </div>
                         </div>
-                        <div class="btn-actions" id="areaBotoesAdminExcluir" style="display:none; margin-top:5px;">
-                            <button id="btnExcluirLote" class="btn-danger" onclick="excluirSelecionadas()">🗑️ Excluir Selecionadas</button>
-                        </div>
                     </div>
 
                     <div class="table-container">
@@ -236,7 +233,7 @@
                         </div>
                         <div id="prazoRegularizacaoAviso" style="font-size:11px; color:#1e3a8a; margin-top:-2px; margin-bottom:10px;"></div>
                         <div class="form-row">
-                            <div class="form-group"><label for="statusTramitacaoNotif">Etapa de tramitação</label><select id="statusTramitacaoNotif"><option value="recebido">Recebido</option><option value="triagem">Triagem</option><option value="analise_tecnica">Análise técnica</option><option value="vistoria">Vistoria</option><option value="aguardando_complementacao">Aguardando complementação</option><option value="parecer">Parecer</option><option value="decisao">Decisão</option></select></div>
+                            <div class="form-group"><label for="statusTramitacaoNotif">Etapa de tramitação inicial</label><select id="statusTramitacaoNotif" disabled><option value="recebido">Definida automaticamente na emissão</option></select><small style="color:#64748b;">Após emitir, utilize a ação <strong>Acompanhar</strong> para registrar AR, prorrogação, vistoria e limpeza sem alterar o documento.</small></div>
                             <div class="form-group"><label>Equipe territorial</label><input id="territorioEquipeNotif" type="text" disabled value="Será identificada pelo bairro"></div>
                         </div>
 
@@ -650,6 +647,34 @@
                 <button type="button" class="btn-secondary" onclick="fecharPreviaDocumento()">Voltar e editar</button>
                 <button type="button" class="btn-primary" onclick="imprimirPreviaDocumento()">Imprimir / salvar em PDF</button>
                 <button type="button" class="btn-success" onclick="confirmarSalvarDaPrevia()">Confirmar e salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-acompanhamento-notificacao" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="titulo-acompanhamento-notificacao">
+        <div class="modal-content modal-cadastral" style="max-width:680px;">
+            <div class="preview-document-header">
+                <div><span class="preview-document-kicker">ACOMPANHAMENTO AUDITÁVEL</span><h3 id="titulo-acompanhamento-notificacao">Acompanhar Notificação</h3></div>
+                <button type="button" class="preview-close" aria-label="Fechar acompanhamento" onclick="fecharAcompanhamentoNotificacao()">&times;</button>
+            </div>
+            <div style="padding:18px 20px 8px; text-align:left; width:100%; box-sizing:border-box;">
+                <input type="hidden" id="acompanhamentoDocumentoId">
+                <p id="acompanhamentoResumo" style="margin:0 0 14px; color:#334155; font-size:12px; line-height:1.45;"></p>
+                <div style="padding:10px 12px; margin-bottom:14px; background:#eff6ff; border-left:3px solid #1b365d; color:#1e3a5f; font-size:11px; line-height:1.45;">Os dados impressos da notificação não serão alterados. Este registro cria somente um evento de acompanhamento com autoria e data.</div>
+                <div class="form-row">
+                    <div class="form-group" style="flex:1.8;"><label for="acompanhamentoTipo">Evento *</label><select id="acompanhamentoTipo" onchange="atualizarCamposAcompanhamento()"><option value="ar_postado">AR postado</option><option value="atualizacao_rastreio_ar">Atualização de rastreio do AR</option><option value="ciencia_confirmada">Ciência / recebimento confirmado</option><option value="prorrogacao_solicitada">Prorrogação solicitada</option><option value="prorrogacao_deferida">Prorrogação deferida</option><option value="prorrogacao_indeferida">Prorrogação indeferida</option><option value="vistoria_retorno">Vistoria de retorno realizada</option><option value="limpeza_confirmada">Terreno limpo — confirmado</option><option value="irregularidade_pendente">Irregularidade permanece</option></select></div>
+                    <div class="form-group"><label for="acompanhamentoData">Data do evento *</label><input type="date" id="acompanhamentoData" required></div>
+                </div>
+                <div id="camposRastreioAcompanhamento" class="form-row">
+                    <div class="form-group"><label for="acompanhamentoStatusAR">Status do rastreio</label><select id="acompanhamentoStatusAR"><option value="transito">Em trânsito</option><option value="saiu_entrega">Saiu para entrega</option><option value="tentativa">Tentativa de entrega</option><option value="retirada">Aguardando retirada</option><option value="entregue">Entregue — ciência ainda precisa ser confirmada</option><option value="devolvido">Devolvido</option></select></div>
+                    <div class="form-group"><label for="acompanhamentoTextoAR">Texto do rastreio</label><input type="text" id="acompanhamentoTextoAR" maxlength="500" placeholder="Ex.: Objeto entregue ao destinatário"></div>
+                </div>
+                <div id="campoDiasProrrogacao" class="form-group" style="display:none;"><label for="acompanhamentoDiasProrrogacao">Dias de prorrogação deferidos *</label><input type="number" id="acompanhamentoDiasProrrogacao" min="1" max="3650" step="1"></div>
+                <div class="form-group"><label for="acompanhamentoObservacao">Justificativa / observação *</label><textarea id="acompanhamentoObservacao" rows="4" maxlength="1000" placeholder="Registre a informação verificada, decisão ou resultado da vistoria."></textarea></div>
+            </div>
+            <div class="preview-document-actions">
+                <button type="button" class="btn-secondary" onclick="fecharAcompanhamentoNotificacao()">Cancelar</button>
+                <button type="button" class="btn-success" onclick="registrarAcompanhamentoNotificacao()">Registrar evento</button>
             </div>
         </div>
     </div>

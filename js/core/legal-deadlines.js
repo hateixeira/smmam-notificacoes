@@ -25,11 +25,13 @@ export function legalDeadlineForRecord(record) {
     return { ...LEGAL_DEADLINES.autoDefense, days, due, start: record.dataCienciaAuto || null, status: record.statusDefesa || null };
   }
   const days = Number(record?.prazoRegularizacaoDias || record?.prazoDias) || LEGAL_DEADLINES.notificationRegularization.days;
-  const due = record?.prazoRegularizacaoEm || addCalendarDays(record?.dataRecebimento, days);
-  return { ...LEGAL_DEADLINES.notificationRegularization, days, due, start: record?.dataRecebimento || null, status: record?.statusRegularizacao || null };
+  const originalDue = record?.prazoRegularizacaoEm || addCalendarDays(record?.dataRecebimento, days);
+  const due = record?.prazoRegularizacaoProrrogadoEm || originalDue;
+  return { ...LEGAL_DEADLINES.notificationRegularization, days, due, originalDue, prorrogado: Boolean(record?.prazoRegularizacaoProrrogadoEm), start: record?.dataRecebimento || null, status: record?.statusRegularizacao || null };
 }
 
 export function legalDeadlineClassification(record, today = new Date()) {
+  if (record?.tipoDocumento !== "auto" && record?.statusRegularizacao === "regularizado") return "regularizado";
   const deadline = legalDeadlineForRecord(record);
   if (!deadline.due) return "sem_ciencia";
   const due = localDate(deadline.due);
