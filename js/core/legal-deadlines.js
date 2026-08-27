@@ -20,11 +20,13 @@ export function addCalendarDays(isoDate, days) {
 
 export function legalDeadlineForRecord(record) {
   if (record?.tipoDocumento === "auto") {
-    const due = record.prazoDefesaEm || addCalendarDays(record.dataCienciaAuto, LEGAL_DEADLINES.autoDefense.days);
-    return { ...LEGAL_DEADLINES.autoDefense, due, start: record.dataCienciaAuto || null, status: record.statusDefesa || null };
+    const days = Number(record.prazoDefesaDias) || LEGAL_DEADLINES.autoDefense.days;
+    const due = record.prazoDefesaEm || addCalendarDays(record.dataCienciaAuto, days);
+    return { ...LEGAL_DEADLINES.autoDefense, days, due, start: record.dataCienciaAuto || null, status: record.statusDefesa || null };
   }
-  const due = record?.prazoRegularizacaoEm || addCalendarDays(record?.dataRecebimento, LEGAL_DEADLINES.notificationRegularization.days);
-  return { ...LEGAL_DEADLINES.notificationRegularization, due, start: record?.dataRecebimento || null, status: record?.statusRegularizacao || null };
+  const days = Number(record?.prazoRegularizacaoDias || record?.prazoDias) || LEGAL_DEADLINES.notificationRegularization.days;
+  const due = record?.prazoRegularizacaoEm || addCalendarDays(record?.dataRecebimento, days);
+  return { ...LEGAL_DEADLINES.notificationRegularization, days, due, start: record?.dataRecebimento || null, status: record?.statusRegularizacao || null };
 }
 
 export function legalDeadlineClassification(record, today = new Date()) {

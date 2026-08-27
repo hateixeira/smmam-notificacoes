@@ -137,6 +137,24 @@ table.data-table tr:hover { background-color: #f1f5f9; }
 .modal-close { position: absolute; top: -40px; right: -10px; font-size: 40px; color: #cbd5e1; cursor: pointer; transition: 0.2s; font-weight: bold; }
 .modal-close:hover { color: #fca5a5; }
 .modal-actions { margin-top: 20px; display: flex; gap: 10px; width: 100%; justify-content: center; }
+.preview-document-modal { width:min(1120px, 96vw); max-width:1120px; max-height:94vh; overflow:hidden; background:#eef2f5; align-items:stretch; }
+.preview-document-header { background:#173f5d; color:#fff; padding:15px 20px; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.preview-document-header h3 { margin:4px 0 0; font-size:17px; }
+.preview-document-kicker { color:#b9d8d1; font:800 9px 'DM Mono', monospace; letter-spacing:.11em; }
+.preview-close { flex:none; width:32px; height:32px; padding:0; background:transparent; color:#fff; font-size:28px; line-height:1; }
+.preview-document-note { margin:0; padding:10px 20px; background:#e8f3ef; color:#2e6255; font-size:11px; line-height:1.4; }
+.preview-document-frame { overflow:auto; padding:22px; min-height:0; background:repeating-linear-gradient(45deg, #e5ebed, #e5ebed 8px, #dfe6e8 8px, #dfe6e8 16px); }
+.preview-document-sheet { width:190mm; min-height:267mm; margin:0 auto; padding:0; background:#fff; box-shadow:0 12px 30px rgba(15,23,42,.22); transform-origin:top center; }
+.preview-document-sheet .main-grid { width:100%; border-collapse:collapse; table-layout:fixed; font-family:Arial,sans-serif; font-size:10.5px; color:#000; }
+.preview-document-sheet .main-grid td { border:1px solid #000; padding:5px 6px; vertical-align:top; box-sizing:border-box; word-wrap:break-word; }
+.preview-document-sheet .cell-label { font-size:8.5px; font-weight:bold; display:block; text-transform:uppercase; margin-bottom:3px; }
+.preview-document-sheet .cell-value { font-size:11.5px; font-weight:normal; }
+.preview-document-sheet .section-title { background:#e6e6e6; font-weight:bold; text-align:center; text-transform:uppercase; font-size:11px; letter-spacing:.5px; }
+.preview-document-sheet .bullet-rules { margin:6px 0 4px 15px; padding:0; line-height:1.35; }
+.preview-document-sheet .bullet-rules li { margin-bottom:3px; }
+.preview-document-sheet .signature-container { display:flex; justify-content:space-between; margin-top:35px; padding:0 10px; }
+.preview-document-sheet .sig-box { width:44%; text-align:center; border-top:1px solid #000; padding-top:4px; }
+.preview-document-actions { padding:13px 20px 16px; display:flex; gap:10px; background:#fff; border-top:1px solid #d8e1e5; }
 
 /* Espelho Cadastral Específico */
 .modal-cadastral { align-items: stretch; background: #f8fafc; border-radius: 8px; max-width: 800px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
@@ -169,6 +187,7 @@ table.data-table tr:hover { background-color: #f1f5f9; }
 .cell-value { font-size: 11.5px; font-weight: normal; }
 .alert-row { text-align: center; font-weight: bold; font-size: 9px; background-color: #fff; text-transform: uppercase; }
 .section-title { background-color: #e6e6e6; font-weight: bold; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+.main-grid #pMotivoNotificacao { white-space: pre-line; }
 .bullet-rules { margin: 6px 0 4px 15px; padding: 0; line-height: 1.35; }
 .bullet-rules li { margin-bottom: 3px; }
 .signature-container { display: flex; justify-content: space-between; margin-top: 35px; padding: 0 10px; }
@@ -207,4 +226,7 @@ table.data-table tr:hover { background-color: #f1f5f9; }
     .dashboard-cards { grid-template-columns:repeat(2, minmax(0,1fr)); gap:9px; }
     .card { padding:14px 9px; }
     #auth-container { margin:18px 14px; padding:24px; }
+    .preview-document-frame { padding:12px; }
+    .preview-document-sheet { transform:scale(.46); margin-bottom:-143mm; }
+    .preview-document-actions { flex-direction:column; }
 }

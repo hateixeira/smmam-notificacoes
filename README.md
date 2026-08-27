@@ -18,6 +18,14 @@ O sistema apoia o trabalho de fiscalização desde a identificação do imóvel 
 | Relatórios | Mostrar volume, evolução, bairro, fiscal, situação e valor estimado de multas. |
 | Administração | Gerenciar usuários, níveis, exceções de domínio, infrações, URM, importação de IPTU e auditoria. |
 
+### Modelo de notificação e prévia
+
+O formulário de notificação incorpora o modelo documental institucional, com RG/CNH, identificação completa do destinatário, endereço de correspondência, cadastro imobiliário, motivo, infrações, orientações, prazo, bases legais e assinaturas. **A gravação de notificação passa obrigatoriamente pela prévia**, que permite voltar para edição, imprimir/salvar em PDF ou confirmar a gravação. A numeração definitiva continua sendo atribuída exclusivamente no backend durante o salvamento.
+
+Os prazos de regularização e defesa, a URM, os textos padrão de motivo, as orientações e o endereço de apresentação podem ser definidos por administrador na área de configurações. Esses parâmetros ficam registrados como cópia no documento emitido, preservando o contexto histórico da emissão. Consulte `ADAPTACAO_NOVO_MODELO_NOTIFICACAO.md` para a especificação de adaptação.
+
+O novo modelo preserva integralmente os dados usados pelo CSV VIPP: nome, endereço, número, complemento, bairro, município, UF, CEP, telefone, CPF/CNPJ, modalidade de AR e número da notificação.
+
 ## Arquitetura atual
 
 | Camada | Tecnologia atual | Responsabilidade |

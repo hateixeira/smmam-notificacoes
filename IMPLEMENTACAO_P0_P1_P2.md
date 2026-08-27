@@ -38,6 +38,12 @@ Este documento registra as mudanças entregues no código e as ações necessár
 
 A fonte consultada é a compilação vigente da LC Municipal nº 6/1996 no SAPL da Câmara Municipal de Bento Gonçalves. A regra implantada conta dias corridos a partir do dia seguinte à data de recebimento ou ciência informada. O Art. 29, §1º, que trata de pagamento após ciência de decisão que mantém a penalidade, está registrado em `BASE_LEGAL_PRAZOS_DEFESA.md`, mas não foi automatizado nesta entrega, pois exige modelagem própria da fase decisória e confirmação jurídica. [1]
 
+## Novo modelo de notificação e parâmetros
+
+O modelo de notificação foi adaptado para incluir RG/CNH, motivo específico, orientações, texto de apresentação e uma prévia obrigatória antes da gravação. Administradores podem definir, por setor, o prazo de regularização, o prazo de defesa, textos padrão e endereço de apresentação; o valor de URM é atualizado juntamente com esses parâmetros. O backend grava uma cópia em cada nova emissão para preservar a forma e o conteúdo documental vigentes naquele momento.
+
+Antes da produção, validar em homologação: a configuração por cada setor autorizado, a restrição de operador/leitor, a prévia sem gravação, a confirmação que gera numeração atômica, a impressão em A4/PDF e o CSV VIPP. O CSV VIPP deve continuar contendo nome, endereço, número, complemento, bairro, cidade, UF, CEP, telefone, CPF/CNPJ, modalidade de AR e identificador da notificação.
+
 ## Sequência segura de publicação
 
 1. Criar projeto Firebase de homologação e configurar contas de teste aprovadas para pelo menos dois setores.

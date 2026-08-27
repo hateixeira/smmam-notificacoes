@@ -48,6 +48,15 @@ window.ordemCrescente = true;
 window.filtroStatusAtual = 'Todos';
 
 const AR_SYNC_SERVICE_URL = 'https://smmam-ar-sync.eu-ounico.workers.dev';
+const DEFAULT_DOCUMENT_PARAMETERS = Object.freeze({
+    prazoRegularizacaoDias: 60,
+    prazoDefesaDias: 8,
+    valorURM: 0,
+    textoMotivoPadrao: 'Verificação de irregularidade situada no endereço informado neste documento.',
+    textoOrientacoes: 'É proibido o emprego de fogo e de capina química para limpeza dos lotes. Todo entulho, resto ou material assemelhado deverá ser acondicionado e destinado ao local apropriado.',
+    textoApresentacao: 'Secretaria Municipal do Meio Ambiente (SMMAM) — Setor de Fiscalização\nRua 10 de Novembro, 190 — Cidade Alta\nFone/Whats: 54 3055-7211'
+});
+window.parametrosDocumento = { ...DEFAULT_DOCUMENT_PARAMETERS };
 
 function linkRastreamentoOficial(codigoAR) {
     const codigo = String(codigoAR || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -137,6 +146,75 @@ async function chamarFuncaoSegura(nome, dados) {
     const resposta = await callable(dados);
     return resposta.data;
 }
+
+function normalizarParametrosDocumento(valor = {}) {
+    const inteiro = (campo, padrao) => {
+        const numero = Number(valor[campo]);
+        return Number.isInteger(numero) && numero >= 1 && numero <= 3650 ? numero : padrao;
+    };
+    const decimal = Number(valor.valorURM);
+    return {
+        prazoRegularizacaoDias: inteiro('prazoRegularizacaoDias', DEFAULT_DOCUMENT_PARAMETERS.prazoRegularizacaoDias),
+        prazoDefesaDias: inteiro('prazoDefesaDias', DEFAULT_DOCUMENT_PARAMETERS.prazoDefesaDias),
+        valorURM: Number.isFinite(decimal) && decimal >= 0 ? decimal : DEFAULT_DOCUMENT_PARAMETERS.valorURM,
+        textoMotivoPadrao: String(valor.textoMotivoPadrao || DEFAULT_DOCUMENT_PARAMETERS.textoMotivoPadrao).slice(0, 1000),
+        textoOrientacoes: String(valor.textoOrientacoes || DEFAULT_DOCUMENT_PARAMETERS.textoOrientacoes).slice(0, 2000),
+        textoApresentacao: String(valor.textoApresentacao || DEFAULT_DOCUMENT_PARAMETERS.textoApresentacao).slice(0, 1000)
+    };
+}
+
+function refletirParametrosDocumentoNaTela() {
+    const parametros = window.parametrosDocumento;
+    const valor = (id, conteudo) => { const campo = document.getElementById(id); if (campo) campo.value = conteudo; };
+    valor('configPrazoRegularizacao', parametros.prazoRegularizacaoDias);
+    valor('configPrazoDefesa', parametros.prazoDefesaDias);
+    valor('configURM', parametros.valorURM.toFixed(2));
+    valor('configTextoMotivo', parametros.textoMotivoPadrao);
+    valor('configTextoOrientacoes', parametros.textoOrientacoes);
+    valor('configTextoApresentacao', parametros.textoApresentacao);
+    valor('autoValorURMAtual', parametros.valorURM.toFixed(2));
+    valor('prazoDias', `${parametros.prazoRegularizacaoDias} dias corridos`);
+    const textoRegularizacao = document.getElementById('textoPrazoRegularizacao');
+    if (textoRegularizacao) textoRegularizacao.textContent = `Art. 25 da LC Municipal nº 6/1996: ${parametros.prazoRegularizacaoDias} dias corridos para regularização, contados da ciência/recebimento. Em caso de AR, a data deve ser confirmada.`;
+    window.atualizarAvisosPrazosLegais?.();
+}
+
+window.carregarParametrosDocumento = async function() {
+    if (!perfilUsuario) return;
+    const setor = perfilUsuario.setor || 'SMMAM';
+    try {
+        const snapshot = await getDoc(doc(db, 'configuracoes', `parametros_${setor}`));
+        window.parametrosDocumento = normalizarParametrosDocumento({ valorURM: window.valorURMGlobal, ...(snapshot.exists() ? snapshot.data() : {}) });
+    } catch (erro) {
+        console.warn('Não foi possível carregar parâmetros documentais; usando configuração padrão.', erro);
+        window.parametrosDocumento = { ...DEFAULT_DOCUMENT_PARAMETERS };
+    }
+    window.valorURMGlobal = window.parametrosDocumento.valorURM;
+    refletirParametrosDocumentoNaTela();
+};
+
+window.salvarParametrosDocumento = async function() {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return alert('Somente administradores podem alterar parâmetros do setor.');
+    const parametros = normalizarParametrosDocumento({
+        prazoRegularizacaoDias: document.getElementById('configPrazoRegularizacao')?.value,
+        prazoDefesaDias: document.getElementById('configPrazoDefesa')?.value,
+        valorURM: document.getElementById('configURM')?.value,
+        textoMotivoPadrao: document.getElementById('configTextoMotivo')?.value,
+        textoOrientacoes: document.getElementById('configTextoOrientacoes')?.value,
+        textoApresentacao: document.getElementById('configTextoApresentacao')?.value
+    });
+    if (!confirm('Alterar parâmetros documentais afeta somente novas emissões e ficará registrado na auditoria. Confirmar?')) return;
+    try {
+        const retorno = await chamarFuncaoSegura('updateDocumentParameters', { parameters: parametros });
+        window.parametrosDocumento = normalizarParametrosDocumento(retorno.parameters);
+        window.valorURMGlobal = window.parametrosDocumento.valorURM;
+        refletirParametrosDocumentoNaTela();
+        window.mostrarToast('Parâmetros documentais atualizados para o setor.');
+    } catch (erro) {
+        console.error('Erro ao salvar parâmetros documentais', erro);
+        alert('Não foi possível salvar os parâmetros. Confirme se a atualização das Functions foi implantada em homologação.');
+    }
+};
 
 function obterHorario(valor) {
     if (valor && typeof valor.toDate === 'function') return valor.toDate().getTime();
@@ -362,11 +440,11 @@ window.atualizarAvisosPrazosLegais = function() {
     const avisoRegularizacao = document.getElementById('prazoRegularizacaoAviso');
     const avisoDefesa = document.getElementById('prazoDefesaAviso');
     if (avisoRegularizacao) {
-        const dataLimite = addCalendarDays(recebimento, LEGAL_DEADLINES.notificationRegularization.days);
+        const dataLimite = addCalendarDays(recebimento, window.parametrosDocumento.prazoRegularizacaoDias);
         avisoRegularizacao.textContent = dataLimite ? `Data-limite calculada: ${formatDeadline(dataLimite)}.` : 'Informe a data de recebimento para calcular a data-limite.';
     }
     if (avisoDefesa) {
-        const dataLimite = addCalendarDays(cienciaAuto, LEGAL_DEADLINES.autoDefense.days);
+        const dataLimite = addCalendarDays(cienciaAuto, window.parametrosDocumento.prazoDefesaDias);
         avisoDefesa.textContent = dataLimite ? `Data-limite calculada: ${formatDeadline(dataLimite)}.` : 'Informe a data de ciência para calcular a data-limite.';
     }
 }
@@ -511,7 +589,7 @@ window.removerEmailVip = async function(email) {
 window.carregarConfiguracoesAdmin = async function() {
     if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return;
     window.renderizarTabelaInfracoesAdmin();
-    await Promise.all([window.carregarUsuariosDoSetor(), window.carregarListaVip()]);
+    await Promise.all([window.carregarUsuariosDoSetor(), window.carregarListaVip(), window.carregarParametrosDocumento()]);
 };
 
 window.toggleAuthMode = function() {
@@ -596,6 +674,7 @@ onAuthStateChanged(auth, async (user) => {
                 if(!perfilUsuario.nivel) perfilUsuario.nivel = 'leitor';
                 
                 await window.carregarInfracoesGlobais(); 
+                await window.carregarParametrosDocumento();
 
                 if (perfilUsuario.status === 'pendente' || perfilUsuario.status === 'bloqueado') {
                     if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
@@ -1140,8 +1219,81 @@ window.carregarMaisDocumentos = async function() {
     await window.carregarDadosNuvem({ reset: false });
 }
 
+window.abrirPreviaNotificacao = function() {
+    const form = document.getElementById('notifForm');
+    if (!form) return;
+    if (!form.reportValidity()) return;
+    const parametros = normalizarParametrosDocumento(window.parametrosDocumento);
+    const territorio = resolveTerritory(document.getElementById('bairro').value);
+    const infracoesMarcadas = Array.from(document.querySelectorAll('.dinamico-chk-notificacao:checked')).map(chk => chk.value);
+    const numeroInformado = document.getElementById('numNotif').value.trim();
+    const previa = {
+        tipoDocumento: 'notificacao',
+        numNotif: numeroInformado && numeroInformado !== 'Gerado ao salvar' ? numeroInformado : 'PRÉVIA — NUMERAÇÃO NO SALVAMENTO',
+        dataNotif: document.getElementById('dataNotif').value,
+        procOuvidoria: document.getElementById('procOuvidoria').value,
+        tipoAR: document.getElementById('tipoAR').checked,
+        tipoPresencial: document.getElementById('tipoPresencial').checked,
+        dataRecebimento: document.getElementById('dataRecebimento').value,
+        prazoDias: parametros.prazoRegularizacaoDias,
+        prazoRegularizacaoDias: parametros.prazoRegularizacaoDias,
+        nome: document.getElementById('nome').value,
+        doc: document.getElementById('doc').value,
+        identidade: document.getElementById('identidade')?.value || '',
+        endereco: document.getElementById('endereco').value,
+        telefone: document.getElementById('telefone').value,
+        bairro: document.getElementById('bairro').value,
+        cep: document.getElementById('cep').value,
+        cidade: 'BENTO GONÇALVES',
+        uf: 'RS',
+        cadDistrito: document.getElementById('cadDistrito').value,
+        cadZona: document.getElementById('cadZona').value,
+        cadQuadra: document.getElementById('cadQuadra').value,
+        cadLote: document.getElementById('cadLote').value,
+        cadImob: document.getElementById('cadImob').value,
+        loteEndereco: document.getElementById('loteEndereco').value,
+        territorioNome: territorio.nome,
+        arrayInfracoes: infracoesMarcadas,
+        motivoNotificacao: document.getElementById('motivoNotificacao')?.value || '',
+        ref: document.getElementById('ref').value,
+        obs: document.getElementById('obs').value,
+        fiscal: perfilUsuario?.nome || '',
+        matricula: perfilUsuario?.matricula || '',
+        setor: perfilUsuario?.setor || 'SMMAM',
+        parametrosDocumento: parametros
+    };
+    preencherEspelhoDocumento(previa);
+    const tabela = document.querySelector('#print-area .main-grid');
+    const conteudo = document.getElementById('conteudo-previa-documento');
+    if (!tabela || !conteudo) return;
+    const folha = document.createElement('div');
+    folha.className = 'preview-document-sheet';
+    folha.appendChild(tabela.cloneNode(true));
+    conteudo.replaceChildren(folha);
+    document.getElementById('modal-previa-documento').style.display = 'flex';
+};
+
+window.fecharPreviaDocumento = function() {
+    const modal = document.getElementById('modal-previa-documento');
+    if (modal) modal.style.display = 'none';
+};
+
+window.imprimirPreviaDocumento = function() {
+    window.print();
+};
+
+window.confirmarSalvarDaPrevia = function() {
+    const form = document.getElementById('notifForm');
+    if (!form) return;
+    form.dataset.previaConfirmada = 'true';
+    window.fecharPreviaDocumento();
+    form.requestSubmit();
+};
+
 window.salvarDocumento = async function(event, tipoDoc) {
     event.preventDefault(); if(perfilUsuario.nivel === 'leitor') return alert("Leitores não salvam.");
+    if (tipoDoc === 'notificacao' && event.currentTarget?.dataset.previaConfirmada !== 'true') { window.abrirPreviaNotificacao(); return; }
+    if (tipoDoc === 'notificacao') delete event.currentTarget.dataset.previaConfirmada;
     mostrarLoading(true, "Verificando e Salvando...");
     
     let editId = ''; let dados = {}; let btnForm = null; let fotos = window.fotosTemp || [];
@@ -1173,7 +1325,7 @@ window.salvarDocumento = async function(event, tipoDoc) {
 
         const territorio = resolveTerritory(document.getElementById('bairro').value);
         const etapa = document.getElementById('statusTramitacaoNotif')?.value || 'recebido';
-        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: LEGAL_DEADLINES.notificationRegularization.days, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, territorioNome: territorio.nome, territorioEquipe: territorio.equipe, territorioTipo: territorio.tipo, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
+        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: window.parametrosDocumento.prazoRegularizacaoDias, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, identidade: document.getElementById('identidade')?.value || '', endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, territorioNome: territorio.nome, territorioEquipe: territorio.equipe, territorioTipo: territorio.tipo, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, motivoNotificacao: document.getElementById('motivoNotificacao')?.value || '', ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
     } else {
         btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value;
         numeroOriginal = document.getElementById('autoNum').value.trim();
@@ -1464,7 +1616,7 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('procOuvidoria')) document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; 
     if(document.getElementById('codigoAR')) document.getElementById('codigoAR').value = item.codigoAR || ''; 
     if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = item.statusRetornoAR || 'aguardando';
-    if(document.getElementById('prazoDias')) document.getElementById('prazoDias').value = '60 dias corridos';
+    if(document.getElementById('prazoDias')) document.getElementById('prazoDias').value = `${item.prazoRegularizacaoDias || item.prazoDias || window.parametrosDocumento.prazoRegularizacaoDias} dias corridos`;
     if(document.getElementById('statusTramitacaoNotif')) document.getElementById('statusTramitacaoNotif').value = item.statusTramitacao || 'recebido';
     if(document.getElementById('dataRecebimento')) document.getElementById('dataRecebimento').value = item.dataRecebimento || ''; 
     window.atualizarAvisosPrazosLegais();
@@ -1474,6 +1626,7 @@ window.carregarParaEditar = async function(id) {
     if(document.getElementById('tipoPresencial')) document.getElementById('tipoPresencial').checked = item.tipoPresencial; 
     if(document.getElementById('nome')) document.getElementById('nome').value = item.nome || ''; 
     if(document.getElementById('doc')) document.getElementById('doc').value = item.doc || ''; 
+    if(document.getElementById('identidade')) document.getElementById('identidade').value = item.identidade || '';
     if(document.getElementById('endereco')) document.getElementById('endereco').value = item.endereco || ''; 
     if(document.getElementById('telefone')) document.getElementById('telefone').value = item.telefone || ''; 
     if(document.getElementById('bairro')) document.getElementById('bairro').value = item.bairro || ''; 
@@ -1488,6 +1641,7 @@ window.carregarParaEditar = async function(id) {
     
     document.querySelectorAll('.dinamico-chk-notificacao').forEach(chk => { chk.checked = (item.arrayInfracoes || []).includes(chk.value); });
     
+    if(document.getElementById('motivoNotificacao')) document.getElementById('motivoNotificacao').value = item.motivoNotificacao || item.parametrosDocumento?.textoMotivoPadrao || window.parametrosDocumento.textoMotivoPadrao;
     if(document.getElementById('ref')) document.getElementById('ref').value = item.ref || ''; 
     if(document.getElementById('obs')) document.getElementById('obs').value = item.obs || ''; 
     
@@ -1509,7 +1663,7 @@ window.limparFormularios = function() {
     if(document.getElementById('territorioEquipeNotif')) document.getElementById('territorioEquipeNotif').value = 'Será identificada pelo bairro';
     if(document.getElementById('dataNotif')) document.getElementById('dataNotif').valueAsDate = new Date(); 
     if(document.getElementById('autoData')) document.getElementById('autoData').valueAsDate = new Date(); 
-    if(document.getElementById('prazoDias')) document.getElementById('prazoDias').value = '60 dias corridos';
+    if(document.getElementById('prazoDias')) document.getElementById('prazoDias').value = `${window.parametrosDocumento.prazoRegularizacaoDias} dias corridos`;
     if(document.getElementById('autoMultaReais')) document.getElementById('autoMultaReais').value = ''; 
     window.atualizarAvisosPrazosLegais();
     if(perfilUsuario) { 
@@ -1534,20 +1688,24 @@ document.getElementById('dataRecebimento')?.addEventListener('change', window.at
 document.getElementById('dataCienciaAuto')?.addEventListener('change', window.atualizarAvisosPrazosLegais);
 window.atualizarAvisosPrazosLegais();
 
-window.imprimirRegistro = function(id) {
-    const item = window.DB.find(i => i.firebaseId === id); if (!item) return; const s = item.setor || 'SMMAM';
+function preencherEspelhoDocumento(item) {
+    const s = item.setor || 'SMMAM';
+    const parametros = normalizarParametrosDocumento(item.parametrosDocumento || window.parametrosDocumento);
     if(s === 'MOBILIDADE') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Obras e Posturas"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "Setor de Posturas"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Rua Mal Deodoro, 70"; } else { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "SMMAM / Fiscalização"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Rua 10 de Novembro, 190<br>Fone/whats: 54 3055-7211"; }
     
     const prazoLegal = legalDeadlineForRecord(item);
     const marcoCiencia = item.tipoDocumento === 'auto' ? item.dataCienciaAuto : item.dataRecebimento;
-    let pzTxt = `${prazoLegal.label}: ${prazoLegal.days} dias corridos a contar da ciência`;
-    if (prazoLegal.due) pzTxt += ` · data-limite: ${formatDeadline(prazoLegal.due)}`;
+    let pzTxt = item.tipoDocumento === 'auto'
+        ? `O AUTUADO dispõe de ${prazoLegal.days} dias corridos, contados da ciência, para apresentar defesa escrita.`
+        : `FICA NOTIFICADO(A) a regularizar a situação do lote em ${prazoLegal.days} dias corridos a partir do recebimento desta.`;
+    if (prazoLegal.due) pzTxt += ` Data-limite: ${formatDeadline(prazoLegal.due)}.`;
     
     if(document.getElementById('pNum')) document.getElementById('pNum').innerText = item.numNotif; 
     if(document.getElementById('pData')) document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); 
     
     if(document.getElementById('pNome')) document.getElementById('pNome').innerText = (item.nome || '_____________________________________________________').toUpperCase(); 
     if(document.getElementById('pDoc')) document.getElementById('pDoc').innerText = item.doc || '_________________________'; 
+    if(document.getElementById('pIdentidade')) document.getElementById('pIdentidade').innerText = item.identidade || '_________________________';
     if(document.getElementById('pDataRecebimentoPrint')) document.getElementById('pDataRecebimentoPrint').innerText = marcoCiencia ? `${item.tipoDocumento === 'auto' ? 'Data de ciência do auto' : 'Data de recebimento'}: ${marcoCiencia.split('-').reverse().join('/')}` : `${item.tipoDocumento === 'auto' ? 'Data de ciência do auto' : 'Data de recebimento'}: _____/_____/_________`;
 
     if(document.getElementById('pEndereco')) document.getElementById('pEndereco').innerText = item.endereco || '---'; 
@@ -1560,6 +1718,9 @@ window.imprimirRegistro = function(id) {
     if(document.getElementById('pCadLote')) document.getElementById('pCadLote').innerText = item.cadLote || '---'; 
     if(document.getElementById('pCadImob')) document.getElementById('pCadImob').innerText = item.cadImob || ''; 
     if(document.getElementById('pLoteEndereco')) document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; 
+    const localNotificado = [item.loteEndereco, item.bairro ? `bairro ${item.bairro}` : '', `${item.cidade || 'Bento Gonçalves'}/${item.uf || 'RS'}`, item.cep ? `CEP ${item.cep}` : ''].filter(Boolean).join(', ');
+    const motivoPadrao = `${parametros.textoMotivoPadrao}\n\nVerificação de irregularidade situada no endereço: ${localNotificado || 'não informado'}${item.ref ? `, tendo como ponto de referência: ${item.ref}.` : '.'}`;
+    if(document.getElementById('pMotivoNotificacao')) document.getElementById('pMotivoNotificacao').innerText = item.motivoNotificacao || motivoPadrao;
     if(document.getElementById('pRef')) document.getElementById('pRef').innerText = item.ref || '---'; 
     if(document.getElementById('pObs')) document.getElementById('pObs').innerText = item.obs || '---'; 
     if(document.getElementById('pFiscal')) document.getElementById('pFiscal').innerText = item.fiscal || ''; 
@@ -1569,6 +1730,8 @@ window.imprimirRegistro = function(id) {
     if(document.getElementById('pUfPrint')) document.getElementById('pUfPrint').innerText = item.uf || 'RS';
     if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Notificação Presencial' : '( ) Notificação Presencial'; 
     if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Notificado por AR' : '( ) Notificado por AR'; 
+    if(document.getElementById('pOrientacoesImpressao')) document.getElementById('pOrientacoesImpressao').innerText = `ORIENTAÇÕES:\n${parametros.textoOrientacoes}`;
+    if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerText = parametros.textoApresentacao;
 
     const boxInfr = document.getElementById('boxInfracoesImpresso');
     const listTextos = document.getElementById('listaTextosLegaisImpresso');
@@ -1594,7 +1757,11 @@ window.imprimirRegistro = function(id) {
     }
 
     if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
-    
+}
+
+window.imprimirRegistro = function(id) {
+    const item = window.DB.find(i => i.firebaseId === id); if (!item) return;
+    preencherEspelhoDocumento(item);
     setTimeout(() => {
         window.print();
     }, 500);

@@ -10,6 +10,14 @@ const validTypes = new Set(["notificacao", "auto"]);
 const validStages = new Set(["recebido", "triagem", "analise_tecnica", "vistoria", "aguardando_complementacao", "parecer", "decisao", "deferido", "indeferido", "arquivado"]);
 const stageSlaDays = { recebido: 2, triagem: 5, analise_tecnica: 10, vistoria: 10, aguardando_complementacao: 0, parecer: 7, decisao: 5, deferido: 0, indeferido: 0, arquivado: 0 };
 const LEGAL_DEADLINES = { notificationRegularization: 60, autoDefense: 8 };
+const DEFAULT_DOCUMENT_PARAMETERS = Object.freeze({
+  prazoRegularizacaoDias: 60,
+  prazoDefesaDias: 8,
+  valorURM: 0,
+  textoMotivoPadrao: "Verificação de irregularidade situada no endereço informado neste documento.",
+  textoOrientacoes: "É proibido o emprego de fogo e de capina química para limpeza dos lotes. Todo entulho, resto ou material assemelhado deverá ser acondicionado e destinado ao local apropriado.",
+  textoApresentacao: "Secretaria Municipal do Meio Ambiente (SMMAM) — Setor de Fiscalização\nRua 10 de Novembro, 190 — Cidade Alta\nFone/Whats: 54 3055-7211",
+});
 
 async function institutionalProfile(request) {
   if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Autenticação institucional obrigatória.");
@@ -40,13 +48,37 @@ function legalDueDate(dateString, days) {
   return admin.firestore.Timestamp.fromDate(due);
 }
 
-function legalDeadlineFields(payload, type) {
+function boundedNumber(value, fallback, min, max) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= min && number <= max ? number : fallback;
+}
+
+function normalizedDocumentParameters(value = {}) {
+  return {
+    prazoRegularizacaoDias: boundedNumber(value.prazoRegularizacaoDias, DEFAULT_DOCUMENT_PARAMETERS.prazoRegularizacaoDias, 1, 3650),
+    prazoDefesaDias: boundedNumber(value.prazoDefesaDias, DEFAULT_DOCUMENT_PARAMETERS.prazoDefesaDias, 1, 3650),
+    valorURM: boundedNumber(value.valorURM, DEFAULT_DOCUMENT_PARAMETERS.valorURM, 0, 1000000),
+    textoMotivoPadrao: sanitizeText(value.textoMotivoPadrao || DEFAULT_DOCUMENT_PARAMETERS.textoMotivoPadrao, 1000),
+    textoOrientacoes: sanitizeText(value.textoOrientacoes || DEFAULT_DOCUMENT_PARAMETERS.textoOrientacoes, 2000),
+    textoApresentacao: sanitizeText(value.textoApresentacao || DEFAULT_DOCUMENT_PARAMETERS.textoApresentacao, 1000),
+  };
+}
+
+async function documentParametersForSector(sector) {
+  const [snapshot, systemSnapshot] = await Promise.all([db.doc(`configuracoes/parametros_${sector}`).get(), db.doc("configuracoes/sistema").get()]);
+  const system = systemSnapshot.exists ? systemSnapshot.data() : {};
+  return normalizedDocumentParameters({ valorURM: system.valorURM, ...(snapshot.exists ? snapshot.data() : {}) });
+}
+
+function legalDeadlineFields(payload, type, parameters = DEFAULT_DOCUMENT_PARAMETERS) {
   if (type === "auto") {
-    const due = legalDueDate(payload.dataCienciaAuto, LEGAL_DEADLINES.autoDefense);
-    return { dataCienciaAuto: payload.dataCienciaAuto, prazoDefesaDias: LEGAL_DEADLINES.autoDefense, prazoDefesaEm: due, statusDefesa: due ? "no_prazo" : "sem_ciencia", baseLegalPrazo: "Art. 28, LC Municipal nº 6/1996" };
+    const days = parameters.prazoDefesaDias;
+    const due = legalDueDate(payload.dataCienciaAuto, days);
+    return { dataCienciaAuto: payload.dataCienciaAuto, prazoDefesaDias: days, prazoDefesaEm: due, statusDefesa: due ? "no_prazo" : "sem_ciencia", baseLegalPrazo: "Art. 28, LC Municipal nº 6/1996" };
   }
-  const due = legalDueDate(payload.dataRecebimento, LEGAL_DEADLINES.notificationRegularization);
-  return { prazoDias: LEGAL_DEADLINES.notificationRegularization, prazoRegularizacaoDias: LEGAL_DEADLINES.notificationRegularization, prazoRegularizacaoEm: due, statusRegularizacao: due ? "no_prazo" : "sem_ciencia", baseLegalPrazo: "Art. 25, LC Municipal nº 6/1996 (redação da LC nº 245/2023)" };
+  const days = parameters.prazoRegularizacaoDias;
+  const due = legalDueDate(payload.dataRecebimento, days);
+  return { prazoDias: days, prazoRegularizacaoDias: days, prazoRegularizacaoEm: due, statusRegularizacao: due ? "no_prazo" : "sem_ciencia", baseLegalPrazo: "Art. 25, LC Municipal nº 6/1996 (redação da LC nº 245/2023)" };
 }
 
 function safeStringArray(value, maxItems = 30, maxLength = 100) {
@@ -77,7 +109,7 @@ function safeDocumentPayload(payload, type) {
     prazoDias: Math.min(Math.max(Number(payload.prazoDias) || 0, 0), 3650), dataRecebimento: sanitizeText(payload.dataRecebimento, 20), tipoAR: Boolean(payload.tipoAR), tipoPresencial: Boolean(payload.tipoPresencial),
     endereco: sanitizeText(payload.endereco, 300), telefone: sanitizeText(payload.telefone, 30), bairro: sanitizeText(payload.bairro, 100), cep: sanitizeText(payload.cep, 12),
     cadDistrito: sanitizeText(payload.cadDistrito, 30), cadZona: sanitizeText(payload.cadZona, 30), cadQuadra: sanitizeText(payload.cadQuadra, 30), cadLote: sanitizeText(payload.cadLote, 30), cadImob: sanitizeText(payload.cadImob, 60),
-    ref: sanitizeText(payload.ref, 250), obs: sanitizeText(payload.obs, 1000),
+    identidade: sanitizeText(payload.identidade, 80), ref: sanitizeText(payload.ref, 250), obs: sanitizeText(payload.obs, 1000), motivoNotificacao: sanitizeText(payload.motivoNotificacao, 1600),
   };
 }
 
@@ -113,12 +145,14 @@ exports.createDocument = onCall({ region: REGION }, async (request) => {
   const sector = profile.setor || "SMMAM";
   const safePayload = safeDocumentPayload(payload, type);
   const stage = safePayload.statusTramitacao;
-  const legalFields = legalDeadlineFields(safePayload, type);
+  const parameters = await documentParametersForSector(sector);
+  const legalFields = legalDeadlineFields(safePayload, type, parameters);
   const number = await nextDocumentNumber({ sector, type, year: new Date().getFullYear(), uid: request.auth.uid });
   const documentRef = db.collection("notificacoes").doc();
   const documentData = {
     ...safePayload,
     ...legalFields,
+    parametrosDocumento: parameters,
     tipoDocumento: type,
     numNotif: number,
     setor: sector,
@@ -148,6 +182,7 @@ exports.updateDocument = onCall({ region: REGION }, async (request) => {
   const payload = request.data?.document;
   if (!documentId || !validTypes.has(type) || !payload || typeof payload !== "object") throw new HttpsError("invalid-argument", "Dados de atualização inválidos.");
   const documentRef = db.doc(`notificacoes/${documentId}`);
+  const configuredParameters = await documentParametersForSector(profile.setor || "SMMAM");
   await db.runTransaction(async (transaction) => {
     const current = await transaction.get(documentRef);
     if (!current.exists) throw new HttpsError("not-found", "Documento não localizado.");
@@ -156,11 +191,23 @@ exports.updateDocument = onCall({ region: REGION }, async (request) => {
     if (currentData.setor !== sector || currentData.tipoDocumento !== type) throw new HttpsError("permission-denied", "Documento de outro setor ou tipo incompatível.");
     const safePayload = safeDocumentPayload(payload, type);
     delete safePayload.statusTramitacao;
-    const legalFields = legalDeadlineFields(safePayload, type);
-    transaction.update(documentRef, { ...safePayload, ...legalFields, dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
+    const parameters = normalizedDocumentParameters(currentData.parametrosDocumento || configuredParameters);
+    const legalFields = legalDeadlineFields(safePayload, type, parameters);
+    transaction.update(documentRef, { ...safePayload, ...legalFields, parametrosDocumento: parameters, dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
     transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `atualizou ${type} e prazos legais`, documentoAlvo: currentData.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   });
   return { ok: true };
+});
+
+exports.updateDocumentParameters = onCall({ region: REGION }, async (request) => {
+  const profile = await institutionalProfile(request);
+  if (profile.nivel !== "admin") throw new HttpsError("permission-denied", "Somente administradores podem alterar parâmetros documentais.");
+  const sector = profile.setor || "SMMAM";
+  const parameters = normalizedDocumentParameters(request.data?.parameters || {});
+  await db.doc(`configuracoes/parametros_${sector}`).set({ ...parameters, setor: sector, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPorId: request.auth.uid, atualizadoPor: profile.nome || request.auth.token.email || "Administrador" }, { merge: true });
+  await db.doc("configuracoes/sistema").set({ valorURM: parameters.valorURM, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPorId: request.auth.uid }, { merge: true });
+  await db.collection("logs_auditoria").add({ setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Administrador", nivel: profile.nivel, acao: "atualizou parâmetros do modelo documental", documentoAlvo: `parametros_${sector}`, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+  return { parameters };
 });
 
 exports.recordAuditEvent = onCall({ region: REGION }, async (request) => {
@@ -264,7 +311,7 @@ exports.refreshSlaStatus = onSchedule({ region: REGION, schedule: "every day 06:
     }
     const isAuto = data.tipoDocumento === "auto";
     const legalStart = isAuto ? data.dataCienciaAuto : data.dataRecebimento;
-    const legalDays = isAuto ? LEGAL_DEADLINES.autoDefense : LEGAL_DEADLINES.notificationRegularization;
+    const legalDays = isAuto ? Number(data.prazoDefesaDias) || LEGAL_DEADLINES.autoDefense : Number(data.prazoRegularizacaoDias || data.prazoDias) || LEGAL_DEADLINES.notificationRegularization;
     const calculatedLegalDeadline = legalDueDate(legalStart, legalDays);
     const legalDeadline = (isAuto ? data.prazoDefesaEm : data.prazoRegularizacaoEm)?.toDate?.() || calculatedLegalDeadline?.toDate?.();
     let legalStatus = "sem_ciencia";

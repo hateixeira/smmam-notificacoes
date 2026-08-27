@@ -59,7 +59,8 @@ service cloud.firestore {
     }
 
     match /configuracoes/{documentId} {
-      allow read, write: if admin();
+      allow read: if admin() || (approved() && documentId == "parametros_" + sector());
+      allow create, update, delete: if admin() && documentId != "parametros_" + sector();
     }
 
     match /iptu_import_jobs/{jobId} {

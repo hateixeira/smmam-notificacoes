@@ -21,6 +21,8 @@ assert.equal(addCalendarDays('2026-08-01', 60), '2026-09-30');
 assert.equal(addCalendarDays('2026-02-24', 8), '2026-03-04');
 assert.equal(legalDeadlineForRecord({ tipoDocumento: 'notificacao', dataRecebimento: '2026-08-01' }).due, '2026-09-30');
 assert.equal(legalDeadlineForRecord({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24' }).due, '2026-03-04');
+assert.equal(legalDeadlineForRecord({ tipoDocumento: 'notificacao', dataRecebimento: '2026-08-01', prazoRegularizacaoDias: 15 }).due, '2026-08-16');
+assert.equal(legalDeadlineForRecord({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24', prazoDefesaDias: 10 }).due, '2026-03-06');
 assert.equal(legalDeadlineClassification({ tipoDocumento: 'auto' }, new Date('2026-03-01')), 'sem_ciencia');
 assert.equal(legalDeadlineClassification({ tipoDocumento: 'auto', dataCienciaAuto: '2026-02-24' }, new Date('2026-03-01')), 'proximo');
 assert.equal(legalDeadlineClassification({ tipoDocumento: 'notificacao', dataRecebimento: '2026-01-01' }, new Date('2026-08-01')), 'vencido');

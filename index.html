@@ -188,6 +188,7 @@
                             <div class="form-row">
                                 <div class="form-group" style="flex: 2;"><label>Nome do Notificado</label><input type="text" id="nome"></div>
                                 <div class="form-group" style="flex: 1.2;"><label>CPF/CNPJ</label><input type="text" id="doc" maxlength="18"></div>
+                                <div class="form-group" style="flex: 1.2;"><label>RG / CNH</label><input type="text" id="identidade" maxlength="80"></div>
                             </div>
                         </div>
 
@@ -218,18 +219,19 @@
                             </div>
                         </div>
 
+                        <div class="form-group"><label>Motivo da Notificação</label><textarea id="motivoNotificacao" rows="3" placeholder="Descreva a irregularidade verificada no local."></textarea></div>
                         <div class="form-row">
                             <div class="form-group"><label>Ponto de Referência</label><input type="text" id="ref"></div>
-                            <div class="form-group"><label>Observações</label><input type="text" id="obs"></div>
+                            <div class="form-group"><label>Observações complementares</label><input type="text" id="obs"></div>
                         </div>
 
                         <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Ciência e prazo legal de regularização</div>
-                        <p style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">Art. 25 da LC Municipal nº 6/1996: 60 dias corridos para regularização, contados da ciência/recebimento. Em caso de AR, a data pode ser atualizada após entrega.</p>
+                        <p id="textoPrazoRegularizacao" style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">Art. 25 da LC Municipal nº 6/1996: 60 dias corridos para regularização, contados da ciência/recebimento. Em caso de AR, a data pode ser atualizada após entrega.</p>
                         
                         <div class="form-row">
                             <div class="form-group"><label>Código AR (Opcional)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
                             <div class="form-group"><label>Data de Recebimento / Ciência</label><input type="date" id="dataRecebimento"></div>
-                            <div class="form-group"><label>Prazo legal p/ regularizar</label><input type="text" id="prazoDias" value="60 dias corridos" disabled style="font-weight: bold; color: #1b365d; background:#eff6ff;"></div>
+                            <div class="form-group"><label>Prazo p/ regularizar</label><input type="text" id="prazoDias" value="60 dias corridos" disabled style="font-weight: bold; color: #1b365d; background:#eff6ff;"></div>
                             <input type="hidden" id="statusRetornoAR" value="aguardando">
                         </div>
                         <div id="prazoRegularizacaoAviso" style="font-size:11px; color:#1e3a8a; margin-top:-2px; margin-bottom:10px;"></div>
@@ -245,6 +247,7 @@
                         </div>
 
                         <div class="btn-actions" id="areaBotoesSalvarNotif">
+                            <button type="button" id="btnPreviaNotif" class="btn-primary" style="flex: 1;" onclick="abrirPreviaNotificacao()">Prévia antes de salvar</button>
                             <button type="submit" id="btnSalvarNotif" class="btn-success" style="flex: 2;">☁️ Salvar Notificação / Rascunho</button>
                             <button type="button" class="btn-secondary" onclick="limparFormularios()">🔄 Limpar</button>
                         </div>
@@ -544,13 +547,26 @@
                     </div>
 
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 20px;">
+
+                        <div class="panel-container" style="border: 2px solid #1f5261;">
+                            <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Parâmetros do modelo documental</h3>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.45;">Aplicam-se aos novos documentos do setor e ficam registrados no documento emitido. Alterações em prazos legais exigem validação jurídica e geram auditoria.</p>
+                            <div class="form-row">
+                                <div class="form-group"><label>Regularização (dias corridos)</label><input type="number" id="configPrazoRegularizacao" min="1" max="3650" value="60"></div>
+                                <div class="form-group"><label>Defesa escrita (dias corridos)</label><input type="number" id="configPrazoDefesa" min="1" max="3650" value="8"></div>
+                            </div>
+                            <div class="form-group"><label>Texto padrão do motivo</label><textarea id="configTextoMotivo" rows="3"></textarea></div>
+                            <div class="form-group"><label>Orientações impressas</label><textarea id="configTextoOrientacoes" rows="4"></textarea></div>
+                            <div class="form-group"><label>Endereço de apresentação</label><textarea id="configTextoApresentacao" rows="3"></textarea></div>
+                            <button type="button" class="btn-primary" onclick="salvarParametrosDocumento()" style="width: 100%;">Salvar parâmetros do setor</button>
+                        </div>
                         
                         <div class="panel-container">
                             <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Cotação Base (Financeiro)</h3>
                             <div class="form-group">
                                 <label>Valor da URM Atual (R$)</label>
                                 <input type="number" id="configURM" step="0.01" placeholder="Ex: 175.50">
-                                <button class="btn-primary" style="margin-top: 10px; width: 100%;">Salvar URM Oficial</button>
+                                <button type="button" class="btn-primary" onclick="salvarParametrosDocumento()" style="margin-top: 10px; width: 100%;">Salvar URM Oficial</button>
                             </div>
                         </div>
 
@@ -622,6 +638,22 @@
         </div>
     </div>
 
+    <div id="modal-previa-documento" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="titulo-previa-documento">
+        <div class="modal-content modal-cadastral preview-document-modal">
+            <div class="preview-document-header">
+                <div><span class="preview-document-kicker">CONFERÊNCIA ANTES DO SALVAMENTO</span><h3 id="titulo-previa-documento">Prévia da Notificação</h3></div>
+                <button type="button" class="preview-close" aria-label="Fechar prévia" onclick="fecharPreviaDocumento()">&times;</button>
+            </div>
+            <p class="preview-document-note">Esta é uma prévia não gravada. A numeração definitiva será atribuída somente após o salvamento.</p>
+            <div id="conteudo-previa-documento" class="preview-document-frame"></div>
+            <div class="preview-document-actions">
+                <button type="button" class="btn-secondary" onclick="fecharPreviaDocumento()">Voltar e editar</button>
+                <button type="button" class="btn-primary" onclick="imprimirPreviaDocumento()">Imprimir / salvar em PDF</button>
+                <button type="button" class="btn-success" onclick="confirmarSalvarDaPrevia()">Confirmar e salvar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-edicao-usuario" class="modal-overlay" style="display: none;">
         <div class="modal-content modal-cadastral" style="max-width: 400px;">
             <div style="background: #1b365d; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
@@ -679,7 +711,7 @@
             <tr><td colspan="6"><span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
             <tr>
                 <td colspan="4" style="width: 65%;"><span class="cell-label">6. CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
-                <td colspan="2" style="width: 35%;"><span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span><div class="cell-value">____________________</div></td>
+                <td colspan="2" style="width: 35%;"><span class="cell-label">7. CARTEIRA IDENTIDADE / CNH</span><div class="cell-value" id="pIdentidade">____________________</div></td>
             </tr>
             <tr>
                 <td colspan="4"><span class="cell-label">8. ENDEREÇO DE CORRESPONDÊNCIA</span><div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div></td>
@@ -698,15 +730,13 @@
                 <td style="width: 20%;"><span class="cell-label">LOTE</span><div class="cell-value" id="pCadLote" style="font-weight: bold; text-align: center;"></div></td>
                 <td colspan="2" style="width: 35%; background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
             </tr>
-            <tr><td colspan="6" class="alert-row">14. O NÃO ATENDIMENTO DO PRESENTE PODERÁ CONSTITUIR CRIME DE DESOBEDIÊNCIA CONFORME O ARTIGO 330 DO CÓDIGO PENAL</td></tr>
-            
-            <tr><td colspan="6" class="section-title">15. MOTIVO DO DOCUMENTO E BASE LEGAL (PREENCHIDO AUTOMATICAMENTE)</td></tr>
+            <tr><td colspan="6" class="section-title">14. MOTIVO DA NOTIFICAÇÃO</td></tr>
             <tr>
                 <td colspan="6" style="padding: 12px; line-height: 1.45;">
-                    <p style="margin: 0 0 10px 0;">Verificação de irregularidade, situada no endereço <strong><span id="pLoteEndereco" style="text-transform: uppercase;"></span></strong>, município de Bento Gonçalves/RS.</p>
+                    <p id="pMotivoNotificacao" style="margin: 0 0 10px 0;"></p>
                     <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
                     <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
-                    
+                    <p style="margin: 14px 0 8px 0; font-weight: bold;">INFRAÇÃO — NECESSITA A LIMPEZA DE:</p>
                     <div id="boxInfracoesImpresso" style="margin-top: 10px; display:flex; flex-wrap:wrap; gap:10px;">
                         <!-- O Javascript vai inserir os ( X ) Mato, ( ) Entulhos dinamicamente aqui -->
                     </div>
@@ -714,8 +744,9 @@
                     <p style="margin: 15px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
                         <strong><span id="pPrazoImpressao"></span></strong>
                     </p>
+                    <p style="margin: 9px 0; white-space: pre-line;" id="pOrientacoesImpressao"></p>
                     
-                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">OBSERVAÇÕES E TEXTOS LEGAIS:</p>
+                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">O OBJETIVO DESTA NOTIFICAÇÃO É ATENDER À CONFORMIDADE MUNICIPAL NAS LEIS:</p>
                     <ul class="bullet-rules" id="listaTextosLegaisImpresso">
                         <!-- O Javascript vai inserir as descrições legais das infrações que foram marcadas com (X) -->
                     </ul>
