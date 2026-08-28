@@ -1364,8 +1364,13 @@ window.salvarDocumento = async function(event, tipoDoc) {
             await addDoc(fotosSubRef, { ...metadados, setor: meuSetor, criadoEm: new Date().toISOString(), criadoPor: perfilUsuario.nome || 'Servidor' });
         }
         
-        await window.carregarDadosNuvem(); window.limparFormularios(); window.mostrarToast("Salvo na Nuvem!"); await registrarLog(editId ? `Editou ${tipoDoc}` : `Criou ${tipoDoc}`, dados.numNotif); window.navegarPara('inicio');
-    } catch (e) { alert("Erro ao salvar."); }
+        await window.carregarDadosNuvem(); window.limparFormularios(); window.mostrarToast("Salvo na Nuvem!"); await registrarLog(editId ? `Editou ${tipoDoc}` : `Criou ${tipoDoc}`, numeroOriginal || idDoDoc); window.navegarPara('inicio');
+    } catch (e) {
+        console.error('Erro ao salvar documento', e);
+        const codigo = e?.code || 'desconhecido';
+        const detalhe = e?.message || '';
+        alert(`Erro ao salvar.\n\n${codigo}${detalhe ? ` — ${detalhe}` : ''}`);
+    }
     if(btnForm) btnForm.disabled = false; mostrarLoading(false);
 }
 
