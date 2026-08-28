@@ -100,7 +100,6 @@ function safeStringArray(value, maxItems = 30, maxLength = 100) {
   return Array.isArray(value) ? value.slice(0, maxItems).map((item) => sanitizeText(item, maxLength)).filter(Boolean) : [];
 }
 
-
 function safeDocumentPayload(payload, type) {
   const shared = {
     dataNotif: sanitizeText(payload.dataNotif, 20),
@@ -306,34 +305,6 @@ exports.recordAuditEvent = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
-exports.deleteDocuments = onCall({ region: REGION }, async (request) => {
-  const profile = await institutionalProfile(request);
-  if (profile.nivel !== "admin") throw new HttpsError("permission-denied", "Somente administradores podem excluir registros.");
-  const ids = Array.isArray(request.data?.documentIds) ? request.data.documentIds.map((id) => sanitizeText(id, 150)).filter(Boolean).slice(0, 50) : [];
-  if (!ids.length) throw new HttpsError("invalid-argument", "Informe ao menos um documento para exclusão.");
-  const setor = profile.setor || "SMMAM";
-  const removidos = [];
-  for (const documentId of ids) {
-    const documentRef = db.doc(`notificacoes/${documentId}`);
-    const snapshot = await documentRef.get();
-    if (!snapshot.exists) continue;
-    const data = snapshot.data();
-    if (data.setor !== setor) throw new HttpsError("permission-denied", "Documento de outro setor.");
-    const numero = data.numNotif || documentId;
-    // A exclusão de desenvolvimento atua somente no Firestore. O Storage não é
-    // acessado aqui, pois a configuração do bucket não pode bloquear a operação.
-    const evidencias = await documentRef.collection("evidencias").get();
-    for (const evidencia of evidencias.docs) await evidencia.ref.delete();
-    for (const sub of ["movimentacoes", "acompanhamentos"]) {
-      const subDocs = await documentRef.collection(sub).get();
-      for (const subDoc of subDocs.docs) await subDoc.ref.delete();
-    }
-    await documentRef.delete();
-    removidos.push(numero);
-    await db.collection("logs_auditoria").add({ setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: "excluiu registro definitivamente", documentoAlvo: numero, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
-  }
-  return { ok: true, removidos };
-});
 exports.moveProcessStage = onCall({ region: REGION }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de tramitação.");

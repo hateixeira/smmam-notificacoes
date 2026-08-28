@@ -1380,39 +1380,8 @@ window.arquivarDocumento = async function(id) {
     mostrarLoading(false);
 }
 
-window.excluirSelecionadas = async function() {
-    if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return alert('Somente administradores podem excluir registros.');
-    const selecionados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
-    if (selecionados.length === 0) return alert('Marque a caixinha de pelo menos um registro na tabela para excluir.');
-    if (!confirm(`Excluir DEFINITIVAMENTE ${selecionados.length} registro(s)?\n\nEsta ação remove o documento, as evidências e o histórico, e fica registrada na auditoria. Use apenas durante o desenvolvimento/homologação.`)) return;
-    mostrarLoading(true, 'Excluindo registros...');
-    try {
-        const retorno = await chamarFuncaoSegura('deleteDocuments', { documentIds: selecionados });
-        window.mostrarToast(`${(retorno.removidos || []).length} registro(s) excluído(s).`);
-    } catch (erro) {
-        console.error('Erro ao excluir registros', erro);
-        const codigo = erro?.code || 'desconhecido';
-        const detalhe = erro?.message || '';
-        let orientacao;
-        if (codigo === 'functions/not-found' || codigo === 'not-found') {
-            orientacao = 'A função deleteDocuments ainda não existe no servidor. No Codespace, execute: firebase deploy --only functions';
-        } else if (codigo === 'functions/permission-denied' || codigo === 'permission-denied') {
-            orientacao = 'Permissão negada: sua conta precisa ser administrador aprovado no mesmo setor do registro.';
-        } else if (codigo === 'functions/unauthenticated' || codigo === 'unauthenticated') {
-            orientacao = 'Sessão expirada. Saia e entre novamente no sistema.';
-        } else {
-            orientacao = `Detalhe técnico: ${codigo} — ${detalhe}`;
-        }
-        alert(`Não foi possível excluir.\n\n${orientacao}`);
-        mostrarLoading(false);
-        return;
-    }
-    try {
-        await window.carregarDadosNuvem();
-    } catch (erro) {
-        console.warn('Exclusão concluída, mas não foi possível atualizar a tabela automaticamente.', erro);
-    }
-    mostrarLoading(false);
+window.excluirSelecionadas = function() {
+    alert('A exclusão definitiva foi desativada para preservar a rastreabilidade. Utilize Arquivar em cada registro quando for necessário encerrar o processo.');
 }
 
 window.fotoModalAtual = null;
