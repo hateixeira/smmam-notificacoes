@@ -1392,7 +1392,19 @@ window.excluirSelecionadas = async function() {
         await window.carregarDadosNuvem();
     } catch (erro) {
         console.error('Erro ao excluir registros', erro);
-        alert('Não foi possível excluir. Confirme se a Cloud Function deleteDocuments foi implantada (firebase deploy --only functions).');
+        const codigo = erro?.code || 'desconhecido';
+        const detalhe = erro?.message || '';
+        let orientacao;
+        if (codigo === 'functions/not-found' || codigo === 'not-found') {
+            orientacao = 'A função deleteDocuments ainda não existe no servidor. No Codespace, execute: firebase deploy --only functions';
+        } else if (codigo === 'functions/permission-denied' || codigo === 'permission-denied') {
+            orientacao = 'Permissão negada: sua conta precisa ser administrador aprovado no mesmo setor do registro.';
+        } else if (codigo === 'functions/unauthenticated' || codigo === 'unauthenticated') {
+            orientacao = 'Sessão expirada. Saia e entre novamente no sistema.';
+        } else {
+            orientacao = `Detalhe técnico: ${codigo} — ${detalhe}`;
+        }
+        alert(`Não foi possível excluir.\n\n${orientacao}`);
     }
     mostrarLoading(false);
 }
