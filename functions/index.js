@@ -100,6 +100,7 @@ function safeStringArray(value, maxItems = 30, maxLength = 100) {
   return Array.isArray(value) ? value.slice(0, maxItems).map((item) => sanitizeText(item, maxLength)).filter(Boolean) : [];
 }
 
+
 function safeDocumentPayload(payload, type) {
   const shared = {
     dataNotif: sanitizeText(payload.dataNotif, 20),
@@ -319,15 +320,13 @@ exports.deleteDocuments = onCall({ region: REGION }, async (request) => {
     const data = snapshot.data();
     if (data.setor !== setor) throw new HttpsError("permission-denied", "Documento de outro setor.");
     const numero = data.numNotif || documentId;
+    // A exclusão de desenvolvimento atua somente no Firestore. O Storage não é
+    // acessado aqui, pois a configuração do bucket não pode bloquear a operação.
     const evidencias = await documentRef.collection("evidencias").get();
-    for (const evidencia of evidencias.docs) {
-      const storagePath = evidencia.data()?.storagePath;
-      if (storagePath) await admin.storage().bucket().file(storagePath).delete().catch(() => {});
-      await evidencia.ref.delete().catch(() => {});
-    }
+    for (const evidencia of evidencias.docs) await evidencia.ref.delete();
     for (const sub of ["movimentacoes", "acompanhamentos"]) {
       const subDocs = await documentRef.collection(sub).get();
-      for (const subDoc of subDocs.docs) await subDoc.ref.delete().catch(() => {});
+      for (const subDoc of subDocs.docs) await subDoc.ref.delete();
     }
     await documentRef.delete();
     removidos.push(numero);

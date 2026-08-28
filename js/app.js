@@ -1389,7 +1389,6 @@ window.excluirSelecionadas = async function() {
     try {
         const retorno = await chamarFuncaoSegura('deleteDocuments', { documentIds: selecionados });
         window.mostrarToast(`${(retorno.removidos || []).length} registro(s) excluído(s).`);
-        await window.carregarDadosNuvem();
     } catch (erro) {
         console.error('Erro ao excluir registros', erro);
         const codigo = erro?.code || 'desconhecido';
@@ -1405,6 +1404,13 @@ window.excluirSelecionadas = async function() {
             orientacao = `Detalhe técnico: ${codigo} — ${detalhe}`;
         }
         alert(`Não foi possível excluir.\n\n${orientacao}`);
+        mostrarLoading(false);
+        return;
+    }
+    try {
+        await window.carregarDadosNuvem();
+    } catch (erro) {
+        console.warn('Exclusão concluída, mas não foi possível atualizar a tabela automaticamente.', erro);
     }
     mostrarLoading(false);
 }
