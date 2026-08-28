@@ -305,6 +305,36 @@ exports.recordAuditEvent = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
+exports.deleteDocuments = onCall({ region: REGION }, async (request) => {
+  const profile = await institutionalProfile(request);
+  if (profile.nivel !== "admin") throw new HttpsError("permission-denied", "Somente administradores podem excluir registros.");
+  const ids = Array.isArray(request.data?.documentIds) ? request.data.documentIds.map((id) => sanitizeText(id, 150)).filter(Boolean).slice(0, 50) : [];
+  if (!ids.length) throw new HttpsError("invalid-argument", "Informe ao menos um documento para exclusão.");
+  const setor = profile.setor || "SMMAM";
+  const removidos = [];
+  for (const documentId of ids) {
+    const documentRef = db.doc(`notificacoes/${documentId}`);
+    const snapshot = await documentRef.get();
+    if (!snapshot.exists) continue;
+    const data = snapshot.data();
+    if (data.setor !== setor) throw new HttpsError("permission-denied", "Documento de outro setor.");
+    const numero = data.numNotif || documentId;
+    const evidencias = await documentRef.collection("evidencias").get();
+    for (const evidencia of evidencias.docs) {
+      const storagePath = evidencia.data()?.storagePath;
+      if (storagePath) await admin.storage().bucket().file(storagePath).delete().catch(() => {});
+      await evidencia.ref.delete().catch(() => {});
+    }
+    for (const sub of ["movimentacoes", "acompanhamentos"]) {
+      const subDocs = await documentRef.collection(sub).get();
+      for (const subDoc of subDocs.docs) await subDoc.ref.delete().catch(() => {});
+    }
+    await documentRef.delete();
+    removidos.push(numero);
+    await db.collection("logs_auditoria").add({ setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: "excluiu registro definitivamente", documentoAlvo: numero, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+  }
+  return { ok: true, removidos };
+});
 exports.moveProcessStage = onCall({ region: REGION }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de tramitação.");

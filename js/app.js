@@ -1380,8 +1380,21 @@ window.arquivarDocumento = async function(id) {
     mostrarLoading(false);
 }
 
-window.excluirSelecionadas = function() {
-    alert('A exclusão definitiva foi desativada para preservar a rastreabilidade. Utilize Arquivar em cada registro quando for necessário encerrar o processo.');
+window.excluirSelecionadas = async function() {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return alert('Somente administradores podem excluir registros.');
+    const selecionados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
+    if (selecionados.length === 0) return alert('Marque a caixinha de pelo menos um registro na tabela para excluir.');
+    if (!confirm(`Excluir DEFINITIVAMENTE ${selecionados.length} registro(s)?\n\nEsta ação remove o documento, as evidências e o histórico, e fica registrada na auditoria. Use apenas durante o desenvolvimento/homologação.`)) return;
+    mostrarLoading(true, 'Excluindo registros...');
+    try {
+        const retorno = await chamarFuncaoSegura('deleteDocuments', { documentIds: selecionados });
+        window.mostrarToast(`${(retorno.removidos || []).length} registro(s) excluído(s).`);
+        await window.carregarDadosNuvem();
+    } catch (erro) {
+        console.error('Erro ao excluir registros', erro);
+        alert('Não foi possível excluir. Confirme se a Cloud Function deleteDocuments foi implantada (firebase deploy --only functions).');
+    }
+    mostrarLoading(false);
 }
 
 window.fotoModalAtual = null;
