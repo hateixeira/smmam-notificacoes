@@ -708,99 +708,96 @@
         </div>
     </div>
 
-    <!-- ESPELHO IMPRESSÃO COM BRASÃO OFICIAL DA PREFEITURA -->
+    <!-- ESPELHO IMPRESSÃO — NOVO MODELO OFICIAL (NOVOMODELO.docx, 2026) COM BRASÃO DA PREFEITURA -->
     <div id="print-area">
         <table class="main-grid">
+            <colgroup>
+                <col style="width: 18.6%;"><col style="width: 18.4%;"><col style="width: 18.6%;"><col style="width: 18.4%;"><col style="width: 26%;">
+            </colgroup>
             <tr>
-                <td style="width: 15%; text-align: center; vertical-align: middle; padding: 10px;">
-                    <img src="img/brasao.png" alt="Brasão Bento Gonçalves" style="max-width: 60px;">
+                <td style="text-align: center; vertical-align: middle; padding: 8px 4px;">
+                    <img src="img/brasao.png.webp" alt="Brasão Bento Gonçalves" style="max-width: 52px;">
                 </td>
-                <td colspan="3" style="width: 50%; padding: 10px; vertical-align: middle;">
-                    <div style="font-weight: bold; font-size: 14px; text-transform: uppercase; letter-spacing: 0.3px;">Prefeitura de Bento Gonçalves</div>
-                    <div id="printSecretaria" style="font-size: 11px; margin-top: 3px; font-weight: bold;">Secretaria de Meio Ambiente</div>
-                    <div style="font-size: 11px; margin-top: 2px;">Setor de Fiscalização</div>
+                <td colspan="3" style="padding: 8px; vertical-align: middle; text-align: center;">
+                    <div style="font-weight: bold; font-size: 13px; text-transform: uppercase; letter-spacing: 0.3px;">Prefeitura de Bento Gonçalves</div>
+                    <div id="printSecretaria" style="font-size: 10.5px; margin-top: 2px; font-weight: bold;">Secretaria de Meio Ambiente</div>
+                    <div style="font-size: 10.5px; margin-top: 1px;">Setor de Fiscalização</div>
                 </td>
-                <td colspan="2" style="width: 35%; background-color: #fafafa; vertical-align: middle;">
-                    <span class="cell-label">2. DOCUMENTO N°</span>
-                    <div class="cell-value" id="pNum" style="font-weight: bold; font-size: 16px; color: #d32f2f; margin-top: 2px;"></div>
+                <td style="background-color: #fafafa; vertical-align: middle;">
+                    <span class="cell-label">2. NOTIFICAÇÃO N°</span>
+                    <div class="cell-value" id="pNum" style="font-weight: bold; font-size: 15px; color: #d32f2f; margin-top: 2px;"></div>
                 </td>
             </tr>
             <tr>
-                <td colspan="4"><span class="cell-label">3. DATA DE EMISSÃO</span><div class="cell-value" id="pData"></div></td>
-                <td colspan="2" style="vertical-align: middle;">
-                    <div style="display: flex; justify-content: space-around; font-size: 9.5px; font-weight: bold;">
-                        <span id="pTipoPresencial">( ) Notificação Presencial</span><span id="pTipoAR">( ) Notificado por AR</span>
+                <td colspan="4"><span class="cell-label">3. DATA DA NOTIFICAÇÃO</span><div class="cell-value" id="pData"></div></td>
+                <td style="vertical-align: middle;">
+                    <div style="font-size: 9px; font-weight: bold; line-height: 1.5;">
+                        <span id="pTipoPresencial">( ) Notificação Presencial</span><br><span id="pTipoAR">( ) Notificado por AR</span>
                     </div>
                 </td>
             </tr>
-            <tr><td colspan="6"><span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
+            <tr><td colspan="5"><span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
             <tr>
-                <td colspan="4" style="width: 65%;"><span class="cell-label">6. CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
-                <td colspan="2" style="width: 35%;"><span class="cell-label">7. CARTEIRA IDENTIDADE / CNH</span><div class="cell-value" id="pIdentidade">____________________</div></td>
+                <td colspan="4"><span class="cell-label">6. CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
+                <td><span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span><div class="cell-value" id="pIdentidade">____________________</div></td>
             </tr>
             <tr>
                 <td colspan="4"><span class="cell-label">8. ENDEREÇO DE CORRESPONDÊNCIA</span><div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div></td>
-                <td colspan="2"><span class="cell-label">9. TELEFONE</span><div class="cell-value" id="pTelefone"></div></td>
+                <td><span class="cell-label">9. TELEFONE</span><div class="cell-value" id="pTelefone"></div></td>
             </tr>
             <tr>
-                <td colspan="2" style="width: 45%;"><span class="cell-label">10. BAIRRO/DISTRITO</span><div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div></td>
-                <td style="width: 20%;"><span class="cell-label">11. MUNICÍPIO</span><div class="cell-value" id="pCidadePrint" style="font-weight: bold;">BENTO GONÇALVES</div></td>
-                <td style="width: 25%;"><span class="cell-label">12. CEP</span><div class="cell-value" id="pCep"></div></td>
-                <td colspan="2" style="width: 10%;"><span class="cell-label">13. UF</span><div class="cell-value" id="pUfPrint" style="font-weight: bold;">RS</div></td>
+                <td colspan="2"><span class="cell-label">10. BAIRRO/DISTRITO</span><div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div></td>
+                <td><span class="cell-label">11. MUNICÍPIO</span><div class="cell-value" id="pCidadePrint" style="font-weight: bold;">BENTO GONÇALVES</div></td>
+                <td><span class="cell-label">12. CEP</span><div class="cell-value" id="pCep"></div></td>
+                <td><span class="cell-label">13. UF</span><div class="cell-value" id="pUfPrint" style="font-weight: bold;">RS</div></td>
             </tr>
             <tr>
-                <td style="width: 15%;"><span class="cell-label">DISTRITO</span><div class="cell-value" id="pCadDistrito" style="font-weight: bold; text-align: center;"></div></td>
-                <td style="width: 15%;"><span class="cell-label">ZONA</span><div class="cell-value" id="pCadZona" style="font-weight: bold; text-align: center;"></div></td>
-                <td style="width: 15%;"><span class="cell-label">QUADRA</span><div class="cell-value" id="pCadQuadra" style="font-weight: bold; text-align: center;"></div></td>
-                <td style="width: 20%;"><span class="cell-label">LOTE</span><div class="cell-value" id="pCadLote" style="font-weight: bold; text-align: center;"></div></td>
-                <td colspan="2" style="width: 35%; background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
+                <td><span class="cell-label">DISTRITO</span><div class="cell-value" id="pCadDistrito" style="font-weight: bold; text-align: center;"></div></td>
+                <td><span class="cell-label">ZONA</span><div class="cell-value" id="pCadZona" style="font-weight: bold; text-align: center;"></div></td>
+                <td><span class="cell-label">QUADRA</span><div class="cell-value" id="pCadQuadra" style="font-weight: bold; text-align: center;"></div></td>
+                <td><span class="cell-label">LOTE</span><div class="cell-value" id="pCadLote" style="font-weight: bold; text-align: center;"></div></td>
+                <td style="background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
             </tr>
-            <tr><td colspan="6" class="section-title">14. MOTIVO DA NOTIFICAÇÃO</td></tr>
+            <tr><td colspan="5" class="alert-row" style="padding: 6px;">14. O não atendimento do presente poderá constituir crime de desobediência conforme o artigo 330 do Código Penal</td></tr>
+            <tr><td colspan="5" class="section-title">15. MOTIVO DA NOTIFICAÇÃO</td></tr>
             <tr>
-                <td colspan="6" style="padding: 12px; line-height: 1.45;">
+                <td colspan="5" style="padding: 10px; line-height: 1.45;">
                     <p id="pMotivoNotificacao" style="margin: 0 0 10px 0;"></p>
-                    <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
-                    <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
-                    <p style="margin: 14px 0 8px 0; font-weight: bold;">INFRAÇÃO — NECESSITA A LIMPEZA DE:</p>
-                    <div id="boxInfracoesImpresso" style="margin-top: 10px; display:flex; flex-wrap:wrap; gap:10px;">
+                    <div id="boxInfracoesImpresso" style="margin: 8px 0; display:flex; flex-wrap:wrap; gap:10px;">
                         <!-- O Javascript vai inserir os ( X ) Mato, ( ) Entulhos dinamicamente aqui -->
                     </div>
+                    <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
+                    <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
 
-                    <p style="margin: 15px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
+                    <p style="margin: 14px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
                         <strong><span id="pPrazoImpressao"></span></strong>
                     </p>
-                    <p style="margin: 9px 0; white-space: pre-line;" id="pOrientacoesImpressao"></p>
-                    
-                    <p style="margin: 14px 0 0 0; font-weight: bold; text-decoration: underline;">O OBJETIVO DESTA NOTIFICAÇÃO É ATENDER À CONFORMIDADE MUNICIPAL NAS LEIS:</p>
-                    <ul class="bullet-rules" id="listaTextosLegaisImpresso">
-                        <!-- O Javascript vai inserir as descrições legais das infrações que foram marcadas com (X) -->
+                    <ul class="bullet-rules" id="listaTextosLegaisImpresso" style="list-style: none; margin-left: 0;">
+                        <!-- O Javascript vai inserir as bases legais marcadas com (X) -->
                     </ul>
+                    <p style="margin: 12px 0 0 0; white-space: pre-line;" id="pOrientacoesImpressao"></p>
                 </td>
             </tr>
             <tr>
-                <td colspan="4" style="width: 65%;">
-                    <span class="cell-label">16. Nome do Servidor Responsável</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
-                    <span class="cell-label">17. RE / MATRÍCULA</span><div class="cell-value" id="pMatricula"></div>
+                <td colspan="4">
+                    <span class="cell-label">NOME DO NOTIFICANTE</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
+                    <span class="cell-label">RE / MATRÍCULA</span><div class="cell-value" id="pMatricula"></div>
                 </td>
-                <td colspan="2" style="width: 35%;">
-                    <span class="cell-label">18. Endereço de Apresentação</span>
-                    <div id="pEnderecoSecretaria" class="cell-value" style="font-size: 9.5px; line-height: 1.4;">
+                <td>
+                    <span class="cell-label">18. ENDEREÇO DE APRESENTAÇÃO</span>
+                    <div id="pEnderecoSecretaria" class="cell-value" style="font-size: 9px; line-height: 1.4;">
                         <strong id="pEnderecoSecretariaNome">SMMAM / Setor Fiscalização</strong><br>
                         <span id="pEnderecoSecretariaLocal">Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211</span>
                     </div>
                 </td>
             </tr>
-            <tr>
-                <td colspan="6" style="padding: 0; border: none;">
-                    <div class="signature-container">
-                        <div class="sig-box"><br><span class="cell-label">19. Assinatura do Responsável</span></div>
-                        <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;" id="pDataRecebimentoPrint">Data de Recebimento: _____/_____/_________</div><span class="cell-label">20. Assinatura do Munícipe</span></div>
-                    </div>
-                </td>
-            </tr>
         </table>
+        <div class="signature-container">
+            <div class="sig-box"><br><span class="cell-label">ASSINATURA DO NOTIFICANTE</span></div>
+            <div class="sig-box"><div style="text-align: left; margin-bottom: 12px; font-size: 9.5px;" id="pDataRecebimentoPrint">Recebi o presente em _____/_____/_________</div><span class="cell-label">ASSINATURA DO NOTIFICADO</span></div>
+        </div>
     </div>
 
-    <script type="module" src="js/app.js?v=20260826.1"></script>
+    <script type="module" src="js/app.js?v=20260828.1"></script>
 </body>
 </html>

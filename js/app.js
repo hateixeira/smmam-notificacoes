@@ -1748,7 +1748,7 @@ function preencherEspelhoDocumento(item) {
     const marcoCiencia = item.tipoDocumento === 'auto' ? item.dataCienciaAuto : item.dataRecebimento;
     let pzTxt = item.tipoDocumento === 'auto'
         ? `O AUTUADO dispõe de ${prazoLegal.days} dias corridos, contados da ciência, para apresentar defesa escrita.`
-        : `FICA NOTIFICADO(A) a regularizar a situação do lote em ${prazoLegal.days} dias corridos a partir do recebimento desta.`;
+        : `FICA NOTIFICADO POR ESTE INSTRUMENTO, a providenciar a regularização da situação descrita, no prazo de ${prazoLegal.days} dias corridos a partir do recebimento desta, em conformidade com o:`;
     if (prazoLegal.due) pzTxt += ` Data-limite: ${formatDeadline(prazoLegal.due)}.`;
     
     if(document.getElementById('pNum')) document.getElementById('pNum').innerText = item.numNotif; 
@@ -1757,7 +1757,7 @@ function preencherEspelhoDocumento(item) {
     if(document.getElementById('pNome')) document.getElementById('pNome').innerText = (item.nome || '_____________________________________________________').toUpperCase(); 
     if(document.getElementById('pDoc')) document.getElementById('pDoc').innerText = item.doc || '_________________________'; 
     if(document.getElementById('pIdentidade')) document.getElementById('pIdentidade').innerText = item.identidade || '_________________________';
-    if(document.getElementById('pDataRecebimentoPrint')) document.getElementById('pDataRecebimentoPrint').innerText = marcoCiencia ? `${item.tipoDocumento === 'auto' ? 'Data de ciência do auto' : 'Data de recebimento'}: ${marcoCiencia.split('-').reverse().join('/')}` : `${item.tipoDocumento === 'auto' ? 'Data de ciência do auto' : 'Data de recebimento'}: _____/_____/_________`;
+    if(document.getElementById('pDataRecebimentoPrint')) document.getElementById('pDataRecebimentoPrint').innerText = marcoCiencia ? `Recebi o presente em ${marcoCiencia.split('-').reverse().join('/')}` : 'Recebi o presente em _____/_____/_________';
 
     if(document.getElementById('pEndereco')) document.getElementById('pEndereco').innerText = item.endereco || '---'; 
     if(document.getElementById('pTelefone')) document.getElementById('pTelefone').innerText = item.telefone || '---'; 
@@ -1781,7 +1781,7 @@ function preencherEspelhoDocumento(item) {
     if(document.getElementById('pUfPrint')) document.getElementById('pUfPrint').innerText = item.uf || 'RS';
     if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Notificação Presencial' : '( ) Notificação Presencial'; 
     if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Notificado por AR' : '( ) Notificado por AR'; 
-    if(document.getElementById('pOrientacoesImpressao')) document.getElementById('pOrientacoesImpressao').innerText = `ORIENTAÇÕES:\n${parametros.textoOrientacoes}`;
+    if(document.getElementById('pOrientacoesImpressao')) document.getElementById('pOrientacoesImpressao').innerText = `OBSERVAÇÕES:\n${parametros.textoOrientacoes}`;
     if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerText = parametros.textoApresentacao;
 
     const boxInfr = document.getElementById('boxInfracoesImpresso');
@@ -1802,7 +1802,7 @@ function preencherEspelhoDocumento(item) {
             boxInfr.innerHTML += `<div style="font-weight:bold; font-size:11px; margin-right:15px;">${marcaX} ${escaparHtml(inf.nome)}</div>`;
             
             if(isChecked) {
-                listTextos.innerHTML += `<li><strong>${escaparHtml(inf.baseLegal)}:</strong> ${escaparHtml(inf.textoPadrao)}</li>`;
+                listTextos.innerHTML += `<li><strong>( X )</strong> ${escaparHtml(inf.textoPadrao)}</li>`;
             }
         });
     }
