@@ -1739,6 +1739,23 @@ document.getElementById('dataRecebimento')?.addEventListener('change', window.at
 document.getElementById('dataCienciaAuto')?.addEventListener('change', window.atualizarAvisosPrazosLegais);
 window.atualizarAvisosPrazosLegais();
 
+const WHATSAPP_FISCALIZACAO_NUMERO = '555430557211';
+
+function gerarQrCodeWhatsappNotificacao(numeroDocumento) {
+    const container = document.getElementById('qrcodeWhats');
+    if (!container) return;
+    container.innerHTML = '';
+    const numeroLimpo = String(numeroDocumento || '').trim();
+    if (!numeroLimpo || numeroLimpo.includes('PRÉVIA') || numeroLimpo.includes('NUMERAÇÃO')) {
+        container.innerHTML = '<div style="width:96px;height:96px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;color:#555;border:1px dashed #999;">QR Code gerado após o salvamento</div>';
+        return;
+    }
+    if (typeof QRCode === 'undefined') return;
+    const mensagem = `Olá, estou entrando em contato sobre a notificação ${numeroLimpo}.`;
+    const link = `https://wa.me/${WHATSAPP_FISCALIZACAO_NUMERO}?text=${encodeURIComponent(mensagem)}`;
+    new QRCode(container, { text: link, width: 96, height: 96, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+}
+
 function preencherEspelhoDocumento(item) {
     const s = item.setor || 'SMMAM';
     const parametros = normalizarParametrosDocumento(item.parametrosDocumento || window.parametrosDocumento);
@@ -1808,6 +1825,7 @@ function preencherEspelhoDocumento(item) {
     }
 
     if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
+    gerarQrCodeWhatsappNotificacao(item.numNotif);
 }
 
 window.imprimirRegistro = function(id) {

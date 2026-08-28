@@ -152,8 +152,12 @@ table.data-table tr:hover { background-color: #f1f5f9; }
 .preview-document-sheet .section-title { background:#e6e6e6; font-weight:bold; text-align:center; text-transform:uppercase; font-size:11px; letter-spacing:.5px; }
 .preview-document-sheet .bullet-rules { margin:6px 0 4px 15px; padding:0; line-height:1.35; }
 .preview-document-sheet .bullet-rules li { margin-bottom:3px; }
-.preview-document-sheet .signature-container { display:flex; justify-content:space-between; margin-top:45px; padding:0 10px 6px; }
+.preview-document-sheet .signature-container { display:flex; justify-content:space-between; margin-top:35px; padding:0 10px 6px; }
 .preview-document-sheet .sig-box { width:44%; text-align:center; border-top:1px solid #000; padding-top:4px; }
+.preview-document-sheet .qrcode-whats-container { display:flex; align-items:center; gap:14px; margin:14px 4px 0; padding:8px 10px; border:1px solid #000; }
+.preview-document-sheet .qrcode-whats-box { flex:0 0 auto; width:96px; height:96px; }
+.preview-document-sheet .qrcode-whats-box img, .preview-document-sheet .qrcode-whats-box canvas { width:96px !important; height:96px !important; display:block; }
+.preview-document-sheet .qrcode-whats-texto { margin:0; font-size:10px; line-height:1.45; }
 .preview-document-actions { padding:13px 20px 16px; display:flex; gap:10px; background:#fff; border-top:1px solid #d8e1e5; }
 
 /* Espelho Cadastral Específico */
@@ -181,7 +185,11 @@ table.data-table tr:hover { background-color: #f1f5f9; }
 }
 
 #print-area { display: none; width: 190mm; font-family: Arial, sans-serif; font-size: 10.5px; color: #000; background: white; box-sizing: border-box; }
-#print-area .signature-container { display: flex; justify-content: space-between; margin-top: 45px; padding: 0 10px 6px; }
+#print-area .signature-container { display: flex; justify-content: space-between; margin-top: 35px; padding: 0 10px 6px; }
+#print-area .qrcode-whats-container { display: flex; align-items: center; gap: 14px; margin: 14px 4px 0; padding: 8px 10px; border: 1px solid #000; }
+#print-area .qrcode-whats-box { flex: 0 0 auto; width: 96px; height: 96px; }
+#print-area .qrcode-whats-box img, #print-area .qrcode-whats-box canvas { width: 96px !important; height: 96px !important; display: block; }
+#print-area .qrcode-whats-texto { margin: 0; font-size: 10px; line-height: 1.45; }
 .main-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .main-grid td { border: 1px solid #000; padding: 5px 6px; vertical-align: top; box-sizing: border-box; word-wrap: break-word; }
 .cell-label { font-size: 8.5px; font-weight: bold; display: block; text-transform: uppercase; margin-bottom: 3px; }
