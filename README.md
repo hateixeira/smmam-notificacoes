@@ -70,6 +70,8 @@ Os perfis dependem de um documento em `usuarios/{uid}` com, no mínimo, `setor`,
 
 O procedimento oficial para trabalhar no projeto usando Google Antigravity, Codespaces ou outro computador está em [`GUIA_ANTIGRAVITY_GIT_MULTICOMPUTADOR.md`](GUIA_ANTIGRAVITY_GIT_MULTICOMPUTADOR.md). O manual define o GitHub como fonte única de verdade, exige branches e commits, descreve a sincronização entre máquinas e protege explicitamente a exportação VIPP.
 
+Para investigar os erros atuais de salvamento e exclusão, use [`ROTEIRO_ANTIGRAVITY_ERROS_SALVAMENTO_EXCLUSAO.md`](ROTEIRO_ANTIGRAVITY_ERROS_SALVAMENTO_EXCLUSAO.md). Ele contém o prompt pronto para colar no Antigravity, as restrições de segurança e o histórico das tentativas anteriores.
+
 ## Estrutura do repositório
 
 ```text
