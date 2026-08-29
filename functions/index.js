@@ -139,7 +139,7 @@ async function nextDocumentNumber({ sector, type, year, uid }) {
   return `${String(next).padStart(4, "0")}${type === "notificacao" ? "B" : ""}/${year}`;
 }
 
-exports.reserveDocumentNumber = onCall({ region: REGION }, async (request) => {
+exports.reserveDocumentNumber = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de emissão.");
   const type = sanitizeText(request.data?.type, 20);
@@ -151,7 +151,7 @@ exports.reserveDocumentNumber = onCall({ region: REGION }, async (request) => {
   return { number };
 });
 
-exports.createDocument = onCall({ region: REGION }, async (request) => {
+exports.createDocument = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de emissão.");
   const type = sanitizeText(request.data?.type, 20);
@@ -189,7 +189,7 @@ exports.createDocument = onCall({ region: REGION }, async (request) => {
   return { id: documentRef.id, number };
 });
 
-exports.updateDocument = onCall({ region: REGION }, async (request) => {
+exports.updateDocument = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de edição.");
   const documentId = sanitizeText(request.data?.documentId, 150);
@@ -217,7 +217,7 @@ exports.updateDocument = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
-exports.updateDocumentParameters = onCall({ region: REGION }, async (request) => {
+exports.updateDocumentParameters = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel !== "admin") throw new HttpsError("permission-denied", "Somente administradores podem alterar parâmetros documentais.");
   const sector = profile.setor || "SMMAM";
@@ -228,7 +228,7 @@ exports.updateDocumentParameters = onCall({ region: REGION }, async (request) =>
   return { parameters };
 });
 
-exports.recordNotificationFollowUp = onCall({ region: REGION }, async (request) => {
+exports.recordNotificationFollowUp = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de acompanhamento.");
   const documentId = sanitizeText(request.data?.documentId, 150);
@@ -296,7 +296,7 @@ exports.recordNotificationFollowUp = onCall({ region: REGION }, async (request) 
   return { ok: true, ...result };
 });
 
-exports.recordAuditEvent = onCall({ region: REGION }, async (request) => {
+exports.recordAuditEvent = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   const action = sanitizeText(request.data?.action, 180);
   const documentId = sanitizeText(request.data?.documentId, 150);
@@ -305,7 +305,7 @@ exports.recordAuditEvent = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
-exports.moveProcessStage = onCall({ region: REGION }, async (request) => {
+exports.moveProcessStage = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de tramitação.");
   const documentId = sanitizeText(request.data?.documentId, 150);
@@ -357,7 +357,7 @@ exports.processIptuImport = onDocumentCreated({ region: REGION, document: "iptu_
   }
 });
 
-exports.migrateLegacyEvidenceBatch = onCall({ region: REGION, timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
+exports.migrateLegacyEvidenceBatch = onCall({ region: REGION, invoker: "public", timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel !== "admin") throw new HttpsError("permission-denied", "Apenas administradores podem migrar evidências.");
   const sector = profile.setor || "SMMAM";
