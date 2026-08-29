@@ -66,6 +66,10 @@ flowchart LR
 
 Os perfis dependem de um documento em `usuarios/{uid}` com, no mínimo, `setor`, `status` e `nivel`. Para o acesso operacional, o perfil precisa estar com `status: "aprovado"`.
 
+## Manual de desenvolvimento em múltiplos computadores
+
+O procedimento oficial para trabalhar no projeto usando Google Antigravity, Codespaces ou outro computador está em [`GUIA_ANTIGRAVITY_GIT_MULTICOMPUTADOR.md`](GUIA_ANTIGRAVITY_GIT_MULTICOMPUTADOR.md). O manual define o GitHub como fonte única de verdade, exige branches e commits, descreve a sincronização entre máquinas e protege explicitamente a exportação VIPP.
+
 ## Estrutura do repositório
 
 ```text
