@@ -1333,24 +1333,34 @@ window.salvarDocumento = async function(event, tipoDoc) {
     
     if(btnForm) btnForm.disabled = true;
 
+    let etapaAtual = 'preparacao';
+    let idDoDoc = editId;
+    let docCriadoComSucesso = false;
+
     try {
-        let idDoDoc = editId;
         const etapaSelecionada = dados.statusTramitacao || 'recebido';
         if (editId) {
+            etapaAtual = 'updateDocument';
             const existente = window.DB.find(item => item.firebaseId === editId);
             const etapaAnterior = existente?.statusTramitacao || 'recebido';
             delete dados.statusTramitacao; delete dados.prazoSlaEm;
             await chamarFuncaoSegura('updateDocument', { documentId: editId, type: tipoDoc, document: dados });
-            if (etapaSelecionada !== etapaAnterior) await chamarFuncaoSegura('moveProcessStage', { documentId: editId, stage: etapaSelecionada, reason: 'Atualização do documento pelo formulário institucional.' });
+            if (etapaSelecionada !== etapaAnterior) {
+                etapaAtual = 'moveProcessStage';
+                await chamarFuncaoSegura('moveProcessStage', { documentId: editId, stage: etapaSelecionada, reason: 'Atualização do documento pelo formulário institucional.' });
+            }
         }
         else {
+            etapaAtual = 'createDocument';
             const criado = await chamarFuncaoSegura('createDocument', { type: tipoDoc, document: dados });
             idDoDoc = criado.id;
             numeroOriginal = criado.number;
+            docCriadoComSucesso = true;
             if (tipoDoc === 'notificacao') document.getElementById('numNotif').value = numeroOriginal;
             else document.getElementById('autoNum').value = numeroOriginal;
         }
         
+        etapaAtual = 'evidencias';
         const fotosSubRef = collection(db, "notificacoes", idDoDoc, "evidencias");
         const fotosAntigas = await getDocs(fotosSubRef);
         const mantidas = new Set(fotos.filter(foto => foto.persistedId).map(foto => foto.persistedId));
@@ -1364,12 +1374,21 @@ window.salvarDocumento = async function(event, tipoDoc) {
             await addDoc(fotosSubRef, { ...metadados, setor: meuSetor, criadoEm: new Date().toISOString(), criadoPor: perfilUsuario.nome || 'Servidor' });
         }
         
-        await window.carregarDadosNuvem(); window.limparFormularios(); window.mostrarToast("Salvo na Nuvem!"); await registrarLog(editId ? `Editou ${tipoDoc}` : `Criou ${tipoDoc}`, numeroOriginal || idDoDoc); window.navegarPara('inicio');
+        etapaAtual = 'sincronizacao';
+        await window.carregarDadosNuvem();
+        window.limparFormularios();
+        window.mostrarToast("Salvo na Nuvem!");
+        await registrarLog(editId ? `Editou ${tipoDoc}` : `Criou ${tipoDoc}`, numeroOriginal || idDoDoc);
+        window.navegarPara('inicio');
     } catch (e) {
-        console.error('Erro ao salvar documento', e);
+        console.error(`Erro ao salvar documento na etapa [${etapaAtual}]`, e);
         const codigo = e?.code || 'desconhecido';
         const detalhe = e?.message || '';
-        alert(`Erro ao salvar.\n\n${codigo}${detalhe ? ` — ${detalhe}` : ''}`);
+        if (docCriadoComSucesso) {
+            alert(`O documento institucional foi criado com sucesso (${numeroOriginal || idDoDoc}), porém ocorreu uma falha na etapa posterior [${etapaAtual}]:\n\n${codigo}${detalhe ? ` — ${detalhe}` : ''}\n\nNão tente salvar novamente para não gerar número duplicado. Recarregue a página e confira o registro na lista.`);
+        } else {
+            alert(`Erro ao salvar documento (etapa: ${etapaAtual}).\n\n${codigo}${detalhe ? ` — ${detalhe}` : ''}`);
+        }
     }
     if(btnForm) btnForm.disabled = false; mostrarLoading(false);
 }
@@ -1385,8 +1404,23 @@ window.arquivarDocumento = async function(id) {
     mostrarLoading(false);
 }
 
-window.excluirSelecionadas = function() {
-    alert('A exclusão definitiva foi desativada para preservar a rastreabilidade. Utilize Arquivar em cada registro quando for necessário encerrar o processo.');
+window.excluirSelecionadas = async function() {
+    if (!perfilUsuario || perfilUsuario.nivel !== 'admin') return alert('Somente administradores podem excluir registros.');
+    const selecionados = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.value);
+    if (selecionados.length === 0) return alert('Marque a caixinha de pelo menos um registro na tabela para excluir.');
+    if (!confirm(`Excluir DEFINITIVAMENTE ${selecionados.length} registro(s)?\n\nEsta ação remove o documento, as evidências e o histórico, e fica registrada na auditoria. Use apenas durante o desenvolvimento/homologação.`)) return;
+    mostrarLoading(true, 'Excluindo registros...');
+    try {
+        const retorno = await chamarFuncaoSegura('deleteDocuments', { documentIds: selecionados });
+        window.mostrarToast(`${(retorno.removidos || []).length} registro(s) excluído(s).`);
+        await window.carregarDadosNuvem();
+    } catch (erro) {
+        console.error('Erro ao excluir registros', erro);
+        const codigo = erro?.code || 'desconhecido';
+        const detalhe = erro?.message || '';
+        alert(`Não foi possível excluir (deleteDocuments).\n\n${codigo}${detalhe ? ` — ${detalhe}` : ''}`);
+    }
+    mostrarLoading(false);
 }
 
 window.fotoModalAtual = null;
