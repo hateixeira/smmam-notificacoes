@@ -670,6 +670,11 @@ onAuthStateChanged(auth, async (user) => {
                 if(!perfilUsuario.status) perfilUsuario.status = 'pendente';
                 if(!perfilUsuario.nivel) perfilUsuario.nivel = 'leitor';
                 
+                const areaBotoesAdminExcluir = document.getElementById('areaBotoesAdminExcluir');
+                if (areaBotoesAdminExcluir) {
+                    areaBotoesAdminExcluir.style.display = perfilUsuario.nivel === 'admin' ? 'inline-flex' : 'none';
+                }
+
                 await window.carregarInfracoesGlobais(); 
                 await window.carregarParametrosDocumento();
 
@@ -677,6 +682,7 @@ onAuthStateChanged(auth, async (user) => {
                     if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
                     if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none'; 
                     if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'block';
+                    if(document.getElementById('areaBotoesAdminExcluir')) document.getElementById('areaBotoesAdminExcluir').style.display = 'none';
                     if(perfilUsuario.status === 'bloqueado' && document.querySelector('#waiting-room h2')) document.querySelector('#waiting-room h2').innerText = '🚫 Acesso Bloqueado';
                 } else {
                     if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none'; 
@@ -690,6 +696,7 @@ onAuthStateChanged(auth, async (user) => {
                 }
             } else {
                 perfilUsuario = null;
+                if(document.getElementById('areaBotoesAdminExcluir')) document.getElementById('areaBotoesAdminExcluir').style.display = 'none';
                 if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'none';
                 if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none';
                 if(document.getElementById('waiting-room')) {
@@ -702,6 +709,7 @@ onAuthStateChanged(auth, async (user) => {
         } catch(e) { console.error(e); alert("Erro na inicialização: " + e.message); }
         mostrarLoading(false);
     } else {
+        if(document.getElementById('areaBotoesAdminExcluir')) document.getElementById('areaBotoesAdminExcluir').style.display = 'none';
         if(document.getElementById('auth-container')) document.getElementById('auth-container').style.display = 'flex'; 
         if(document.getElementById('app-layout')) document.getElementById('app-layout').style.display = 'none'; 
         if(document.getElementById('waiting-room')) document.getElementById('waiting-room').style.display = 'none';
@@ -796,7 +804,7 @@ function aplicarRestricoesDeTela() {
     if(perfilUsuario.nivel === 'leitor') { if(areaSalvarNotif) areaSalvarNotif.style.display = 'none'; if(areaSalvarAuto) areaSalvarAuto.style.display = 'none'; }
     
     const menuAdmin = document.getElementById('menu-admin-area'); const btnExcluir = document.getElementById('areaBotoesAdminExcluir');
-    if(perfilUsuario.nivel === 'admin') { if(menuAdmin) menuAdmin.style.display = 'block'; if(btnExcluir) btnExcluir.style.display = 'flex'; } else { if(menuAdmin) menuAdmin.style.display = 'none'; if(btnExcluir) btnExcluir.style.display = 'none'; }
+    if(perfilUsuario.nivel === 'admin') { if(menuAdmin) menuAdmin.style.display = 'block'; if(btnExcluir) btnExcluir.style.display = 'inline-flex'; } else { if(menuAdmin) menuAdmin.style.display = 'none'; if(btnExcluir) btnExcluir.style.display = 'none'; }
 }
 
 const cepInput = document.getElementById('cep');
