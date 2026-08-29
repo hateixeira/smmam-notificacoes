@@ -145,9 +145,9 @@ exports.reserveDocumentNumber = onCall({ region: REGION, invoker: "public" }, as
   const type = sanitizeText(request.data?.type, 20);
   const year = Number(request.data?.year || new Date().getFullYear());
   if (!validTypes.has(type) || year < 2020 || year > 2100) throw new HttpsError("invalid-argument", "Tipo ou ano inválido.");
-  const sector = profile.setor || "SMMAM";
-  const number = await nextDocumentNumber({ sector, type, year, uid: request.auth.uid });
-  await db.collection("logs_auditoria").add({ setor: sector, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: "reservou numeração institucional", documentoAlvo: number, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+  const setor = profile.setor || "SMMAM";
+  const number = await nextDocumentNumber({ sector: setor, type, year, uid: request.auth.uid });
+  await db.collection("logs_auditoria").add({ setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: "reservou numeração institucional", documentoAlvo: number, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   return { number };
 });
 
@@ -157,12 +157,12 @@ exports.createDocument = onCall({ region: REGION, invoker: "public" }, async (re
   const type = sanitizeText(request.data?.type, 20);
   const payload = request.data?.document;
   if (!validTypes.has(type) || !payload || typeof payload !== "object") throw new HttpsError("invalid-argument", "Dados documentais inválidos.");
-  const sector = profile.setor || "SMMAM";
+  const setor = profile.setor || "SMMAM";
   const safePayload = safeDocumentPayload(payload, type);
   const stage = initialDocumentStage(safePayload, type);
-  const parameters = await documentParametersForSector(sector);
+  const parameters = await documentParametersForSector(setor);
   const legalFields = legalDeadlineFields(safePayload, type, parameters);
-  const number = await nextDocumentNumber({ sector, type, year: new Date().getFullYear(), uid: request.auth.uid });
+  const number = await nextDocumentNumber({ sector: setor, type, year: new Date().getFullYear(), uid: request.auth.uid });
   const documentRef = db.collection("notificacoes").doc();
   const documentData = {
     ...safePayload,
@@ -170,7 +170,7 @@ exports.createDocument = onCall({ region: REGION, invoker: "public" }, async (re
     parametrosDocumento: parameters,
     tipoDocumento: type,
     numNotif: number,
-    setor: sector,
+    setor: setor,
     statusProcesso: "ativo",
     statusTramitacao: stage,
     prazoSlaEm: dueDateFor(stage),
@@ -183,8 +183,8 @@ exports.createDocument = onCall({ region: REGION, invoker: "public" }, async (re
   };
   await db.runTransaction(async (transaction) => {
     transaction.set(documentRef, documentData);
-    transaction.set(documentRef.collection("movimentacoes").doc(), { de: null, para: stage, motivo: "Criação do documento", setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", dataHora: admin.firestore.FieldValue.serverTimestamp() });
-    transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `criou ${type}`, documentoAlvo: number, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+    transaction.set(documentRef.collection("movimentacoes").doc(), { de: null, para: stage, motivo: "Criação do documento", setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", dataHora: admin.firestore.FieldValue.serverTimestamp() });
+    transaction.set(db.collection("logs_auditoria").doc(), { setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `criou ${type}`, documentoAlvo: number, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   });
   return { id: documentRef.id, number };
 });
@@ -197,13 +197,13 @@ exports.updateDocument = onCall({ region: REGION, invoker: "public" }, async (re
   const payload = request.data?.document;
   if (!documentId || !validTypes.has(type) || !payload || typeof payload !== "object") throw new HttpsError("invalid-argument", "Dados de atualização inválidos.");
   const documentRef = db.doc(`notificacoes/${documentId}`);
-  const configuredParameters = await documentParametersForSector(profile.setor || "SMMAM");
+  const setor = profile.setor || "SMMAM";
+  const configuredParameters = await documentParametersForSector(setor);
   await db.runTransaction(async (transaction) => {
     const current = await transaction.get(documentRef);
     if (!current.exists) throw new HttpsError("not-found", "Documento não localizado.");
     const currentData = current.data();
-    const sector = profile.setor || "SMMAM";
-    if (currentData.setor !== sector || currentData.tipoDocumento !== type) throw new HttpsError("permission-denied", "Documento de outro setor ou tipo incompatível.");
+    if (currentData.setor !== setor || currentData.tipoDocumento !== type) throw new HttpsError("permission-denied", "Documento de outro setor ou tipo incompatível.");
     if (type === "notificacao" && currentData.statusNotificacao !== "rascunho") throw new HttpsError("failed-precondition", "Notificações emitidas são imutáveis. Use o acompanhamento para AR, prorrogação, vistoria ou limpeza.");
     const safePayload = safeDocumentPayload(payload, type);
     delete safePayload.statusTramitacao;
@@ -212,7 +212,7 @@ exports.updateDocument = onCall({ region: REGION, invoker: "public" }, async (re
     const emitindoRascunho = type === "notificacao" && currentData.statusNotificacao === "rascunho" && safePayload.statusNotificacao !== "rascunho";
     const stageDaEmissao = emitindoRascunho ? initialDocumentStage(safePayload, type) : null;
     transaction.update(documentRef, { ...safePayload, ...legalFields, parametrosDocumento: parameters, ...(stageDaEmissao ? { statusTramitacao: stageDaEmissao, prazoSlaEm: dueDateFor(stageDaEmissao), dataUltimaMovimentacao: admin.firestore.FieldValue.serverTimestamp() } : {}), dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
-    transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `atualizou ${type} e prazos legais`, documentoAlvo: currentData.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+    transaction.set(db.collection("logs_auditoria").doc(), { setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `atualizou ${type} e prazos legais`, documentoAlvo: currentData.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   });
   return { ok: true };
 });
@@ -220,11 +220,11 @@ exports.updateDocument = onCall({ region: REGION, invoker: "public" }, async (re
 exports.updateDocumentParameters = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel !== "admin") throw new HttpsError("permission-denied", "Somente administradores podem alterar parâmetros documentais.");
-  const sector = profile.setor || "SMMAM";
+  const setor = profile.setor || "SMMAM";
   const parameters = normalizedDocumentParameters(request.data?.parameters || {});
-  await db.doc(`configuracoes/parametros_${sector}`).set({ ...parameters, setor: sector, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPorId: request.auth.uid, atualizadoPor: profile.nome || request.auth.token.email || "Administrador" }, { merge: true });
+  await db.doc(`configuracoes/parametros_${setor}`).set({ ...parameters, setor: setor, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPorId: request.auth.uid, atualizadoPor: profile.nome || request.auth.token.email || "Administrador" }, { merge: true });
   await db.doc("configuracoes/sistema").set({ valorURM: parameters.valorURM, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPorId: request.auth.uid }, { merge: true });
-  await db.collection("logs_auditoria").add({ setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Administrador", nivel: profile.nivel, acao: "atualizou parâmetros do modelo documental", documentoAlvo: `parametros_${sector}`, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+  await db.collection("logs_auditoria").add({ setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Administrador", nivel: profile.nivel, acao: "atualizou parâmetros do modelo documental", documentoAlvo: `parametros_${setor}`, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   return { parameters };
 });
 
@@ -241,13 +241,13 @@ exports.recordNotificationFollowUp = onCall({ region: REGION, invoker: "public" 
   const allowedEvents = new Set(["ar_postado", "atualizacao_rastreio_ar", "ciencia_confirmada", "prorrogacao_solicitada", "prorrogacao_deferida", "prorrogacao_indeferida", "vistoria_retorno", "limpeza_confirmada", "irregularidade_pendente"]);
   if (!documentId || !allowedEvents.has(eventType) || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !note) throw new HttpsError("invalid-argument", "Documento, evento, data e justificativa são obrigatórios.");
   const documentRef = db.doc(`notificacoes/${documentId}`);
-  const configuredParameters = await documentParametersForSector(profile.setor || "SMMAM");
+  const setor = profile.setor || "SMMAM";
+  const configuredParameters = await documentParametersForSector(setor);
   const result = await db.runTransaction(async (transaction) => {
     const current = await transaction.get(documentRef);
     if (!current.exists) throw new HttpsError("not-found", "Notificação não localizada.");
     const data = current.data();
-    const sector = profile.setor || "SMMAM";
-    if (data.setor !== sector || data.tipoDocumento !== "notificacao") throw new HttpsError("permission-denied", "Acompanhamento permitido somente para notificações do seu setor.");
+    if (data.setor !== setor || data.tipoDocumento !== "notificacao") throw new HttpsError("permission-denied", "Acompanhamento permitido somente para notificações do seu setor.");
     const parameters = normalizedDocumentParameters(data.parametrosDocumento || configuredParameters);
     const changes = { dataUltimaMovimentacao: admin.firestore.FieldValue.serverTimestamp(), responsavelAtual: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid };
     let stage = data.statusTramitacao || "recebido";
@@ -289,8 +289,8 @@ exports.recordNotificationFollowUp = onCall({ region: REGION, invoker: "public" 
     changes.statusTramitacao = stage;
     changes.prazoSlaEm = dueDateFor(stage);
     transaction.update(documentRef, changes);
-    transaction.set(documentRef.collection("acompanhamentos").doc(), { tipo: eventType, dataEvento: eventDate, observacao: note, diasProrrogados: eventType === "prorrogacao_deferida" ? extensionDays : null, statusRastreio: eventType === "atualizacao_rastreio_ar" ? trackingStatus : null, textoRastreio: eventType === "atualizacao_rastreio_ar" ? trackingText : null, setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", criadoEm: admin.firestore.FieldValue.serverTimestamp() });
-    transaction.set(db.collection("logs_auditoria").doc(), { setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `registrou acompanhamento: ${eventType}`, documentoAlvo: data.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+    transaction.set(documentRef.collection("acompanhamentos").doc(), { tipo: eventType, dataEvento: eventDate, observacao: note, diasProrrogados: eventType === "prorrogacao_deferida" ? extensionDays : null, statusRastreio: eventType === "atualizacao_rastreio_ar" ? trackingStatus : null, textoRastreio: eventType === "atualizacao_rastreio_ar" ? trackingText : null, setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", criadoEm: admin.firestore.FieldValue.serverTimestamp() });
+    transaction.set(db.collection("logs_auditoria").doc(), { setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `registrou acompanhamento: ${eventType}`, documentoAlvo: data.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
     return { stage };
   });
   return { ok: true, ...result };
@@ -402,9 +402,9 @@ exports.processIptuImport = onDocumentCreated({ region: REGION, document: "iptu_
 exports.migrateLegacyEvidenceBatch = onCall({ region: REGION, invoker: "public", timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel !== "admin") throw new HttpsError("permission-denied", "Apenas administradores podem migrar evidências.");
-  const sector = profile.setor || "SMMAM";
+  const setor = profile.setor || "SMMAM";
   const maxDocuments = Math.min(Math.max(Number(request.data?.limit || 20), 1), 50);
-  const documents = await db.collection("notificacoes").where("setor", "==", sector).limit(maxDocuments).get();
+  const documents = await db.collection("notificacoes").where("setor", "==", setor).limit(maxDocuments).get();
   const bucket = admin.storage().bucket();
   let migrated = 0;
   for (const document of documents.docs) {
@@ -414,13 +414,13 @@ exports.migrateLegacyEvidenceBatch = onCall({ region: REGION, invoker: "public",
       if (!data.imagemBinaria || data.storagePath) continue;
       const match = String(data.imagemBinaria).match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
       if (!match) continue;
-      const objectPath = `evidencias/${sector}/${document.id}/${evidence.id}.jpg`;
-      await bucket.file(objectPath).save(Buffer.from(match[2], "base64"), { metadata: { contentType: match[1], metadata: { sector, documentId: document.id } }, resumable: false });
+      const objectPath = `evidencias/${setor}/${document.id}/${evidence.id}.jpg`;
+      await bucket.file(objectPath).save(Buffer.from(match[2], "base64"), { metadata: { contentType: match[1], metadata: { sector: setor, documentId: document.id } }, resumable: false });
       await evidence.ref.update({ storagePath: objectPath, contentType: match[1], tamanhoBytes: Buffer.byteLength(match[2], "base64"), migradoEm: admin.firestore.FieldValue.serverTimestamp(), imagemBinaria: admin.firestore.FieldValue.delete() });
       migrated += 1;
     }
   }
-  await db.collection("logs_auditoria").add({ setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: "migrou evidências legadas para Storage", documentoAlvo: `${migrated} evidência(s)`, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
+  await db.collection("logs_auditoria").add({ setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: "migrou evidências legadas para Storage", documentoAlvo: `${migrated} evidência(s)`, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   return { migrated };
 });
 
