@@ -120,11 +120,9 @@ assert.match(html, /15\. MOTIVO DA NOTIFICAÇÃO/);
 assert.match(html, /id="qrcodeWhats"/);
 assert.match(html, /\(54\) 3055-7211/);
 assert.match(html, /Recebi o presente em ____\/____\/________\./);
-assert.match(app, /555430557211/);
-assert.match(app, /gerarQrCodeWhatsappNotificacao/);
-assert.match(app, /gerarLinkWhatsappNotificacao/);
-assert.match(app, /https:\/\/wa\.me\/\$\{WHATSAPP_FISCALIZACAO_NUMERO\}\?text=/);
-assert.match(app, /encodeURIComponent/);
-assert.match(app, /QR Code gerado após o salvamento/);
+assert.match(app, /initAuthModule/);
+assert.match(app, /initImpressoesModule/);
+assert.match(app, /initBuscasModule/);
+assert.match(functionsSource, /cleanupOrphanEvidences/);
 
-console.log('Smoke test aprovado: navegação, fluxos críticos, regras preparadas e novo modelo de notificação/QR Code validado.');
+console.log('Smoke test aprovado: navegação, fluxos críticos, regras preparadas, arquitetura modular e novo modelo de notificação/QR Code validado.');

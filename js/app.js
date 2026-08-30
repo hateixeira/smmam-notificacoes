@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, getDoc, query, where, orderBy, limit, startAfter, writeBatch, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
@@ -10,6 +11,9 @@ import { LEGAL_DEADLINES, addCalendarDays, formatDeadline, legalDeadlineForRecor
 import { uploadEvidence, deleteEvidence } from "./services/evidence.js";
 import { exportManagementReport } from "./services/reporting.js";
 import { renderDocumentRows } from "./services/document-table.js";
+import { initAuthModule } from "./modules/auth.js";
+import { initImpressoesModule, gerarLinkWhatsappNotificacao, gerarQrCodeWhatsappNotificacao, preencherEspelhoDocumento } from "./modules/impressoes.js";
+import { initBuscasModule } from "./modules/buscas.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAP56ee8ituvxypF_aPOVSClu0EfCJBhR8",
@@ -21,6 +25,17 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+try {
+    if (typeof window !== 'undefined' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        window.appCheck = initializeAppCheck(app, {
+            provider: new ReCaptchaEnterpriseProvider('6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI'),
+            isTokenAutoRefreshEnabled: true
+        });
+    }
+} catch (e) {
+    console.warn('App Check inicializado em modo compatibilidade:', e);
+}
 const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
@@ -252,6 +267,10 @@ window.mostrarToast = function(msg) {
         setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
     }
 }
+
+initAuthModule({ auth, db, mostrarLoading, mostrarToast: window.mostrarToast, registrarLog: (a, d) => registrarLog(a, d), navegarPara: (v) => window.navegarPara(v), carregarDadosNuvem: () => window.carregarDadosNuvem() });
+initImpressoesModule();
+initBuscasModule({ db, mostrarLoading, mostrarToast: window.mostrarToast });
 
 // MOTOR DINÂMICO COM BYPASS DE SEGURANÇA E INJEÇÃO DE LEIS
 window.carregarInfracoesGlobais = async function() {
@@ -669,6 +688,7 @@ onAuthStateChanged(auth, async (user) => {
                 if(!perfilUsuario.setor) perfilUsuario.setor = 'SMMAM';
                 if(!perfilUsuario.status) perfilUsuario.status = 'pendente';
                 if(!perfilUsuario.nivel) perfilUsuario.nivel = 'leitor';
+                window.perfilUsuarioAtual = perfilUsuario;
                 
                 const areaBotoesAdminExcluir = document.getElementById('areaBotoesAdminExcluir');
                 if (areaBotoesAdminExcluir) {
@@ -1193,14 +1213,33 @@ if(btnImportarIptu) {
 }
 
 window.carregarDadosNuvem = async function({ reset = true } = {}) {
-    mostrarLoading(true, "Baixando demandas do seu setor...");
+    mostrarLoading(true, "Consultando demandas do seu setor...");
     try {
-        const meuSetor = perfilUsuario.setor || 'SMMAM';
+        const meuSetor = perfilUsuario?.setor || 'SMMAM';
         if (reset) { window.DB = []; lastDocumentCursor = null; hasMoreDocuments = true; }
-        if (!hasMoreDocuments) return;
-        const constraints = [where("setor", "==", meuSetor), limit(PAGE_SIZE)];
+        if (!hasMoreDocuments) { mostrarLoading(false); return; }
+        
+        const constraints = [where("setor", "==", meuSetor)];
+        if (window.filtroProcessoAtual && window.filtroProcessoAtual !== 'Todos') {
+            constraints.push(where("statusProcesso", "==", window.filtroProcessoAtual));
+        }
+        if (window.filtroTipoDocumento && window.filtroTipoDocumento !== 'Todos') {
+            const tipoDocAlvo = window.filtroTipoDocumento === 'Notificacoes' ? 'notificacao' : window.filtroTipoDocumento === 'Autos' ? 'auto' : window.filtroTipoDocumento;
+            constraints.push(where("tipoDocumento", "==", tipoDocAlvo));
+        }
+        constraints.push(orderBy("dataCriacao", "desc"));
+        constraints.push(limit(PAGE_SIZE));
         if (lastDocumentCursor) constraints.push(startAfter(lastDocumentCursor));
-        const querySnapshot = await getDocs(query(notificacoesRef, ...constraints));
+        
+        let querySnapshot;
+        try {
+            querySnapshot = await getDocs(query(notificacoesRef, ...constraints));
+        } catch (queryErr) {
+            console.warn("Consulta composta com fallback:", queryErr);
+            const fallbackConstraints = [where("setor", "==", meuSetor), limit(PAGE_SIZE)];
+            if (lastDocumentCursor) fallbackConstraints.push(startAfter(lastDocumentCursor));
+            querySnapshot = await getDocs(query(notificacoesRef, ...fallbackConstraints));
+        }
         
         querySnapshot.forEach((documento) => { 
             let data = documento.data(); data.firebaseId = documento.id; 
@@ -1209,7 +1248,6 @@ window.carregarDadosNuvem = async function({ reset = true } = {}) {
             ['prazoRegularizacaoEm', 'prazoRegularizacaoProrrogadoEm', 'prazoDefesaEm'].forEach((campo) => {
                 if (data[campo] && typeof data[campo].toDate === 'function') data[campo] = data[campo].toDate().toISOString().slice(0, 10);
             });
-            
             window.DB.push(data);
         });
         lastDocumentCursor = querySnapshot.docs.at(-1) || lastDocumentCursor;
@@ -1217,7 +1255,10 @@ window.carregarDadosNuvem = async function({ reset = true } = {}) {
         const loadMore = document.getElementById('btnCarregarMais');
         if (loadMore) loadMore.style.display = hasMoreDocuments ? 'inline-flex' : 'none';
         window.renderizarPainel();
-    } catch (e) {} mostrarLoading(false);
+    } catch (e) {
+        console.error("Erro ao carregar dados do setor:", e);
+    }
+    mostrarLoading(false);
 }
 
 window.carregarMaisDocumentos = async function() {
@@ -1446,8 +1487,8 @@ window.renderizarPreviewFotos = function(containerId) { const container = docume
 window.removerFoto = function(i, cid) { window.fotosTemp.splice(i, 1); window.renderizarPreviewFotos(cid); }
 
 window.aplicarFiltro = function(status, btnElement) { window.filtroStatusAtual = status; document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
-window.aplicarFiltroTipo = function(tipo, btnElement) { window.filtroTipoDocumento = tipo; document.querySelectorAll('.filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
-window.aplicarFiltroProcesso = function(status, btnElement) { window.filtroProcessoAtual = status; document.querySelectorAll('#view-inicio .filter-group:first-child .filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.renderizarPainel(); }
+window.aplicarFiltroTipo = function(tipo, btnElement) { window.filtroTipoDocumento = tipo; document.querySelectorAll('.filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.carregarDadosNuvem({ reset: true }); }
+window.aplicarFiltroProcesso = function(status, btnElement) { window.filtroProcessoAtual = status; document.querySelectorAll('#view-inicio .filter-group:first-child .filter-type-btn').forEach(btn => btn.classList.remove('active')); btnElement.classList.add('active'); window.carregarDadosNuvem({ reset: true }); }
 window.ordenarTabela = function(coluna) { if (window.colunaOrdenacao === coluna) { window.ordemCrescente = !window.ordemCrescente; } else { window.colunaOrdenacao = coluna; window.ordemCrescente = true; } window.renderizarPainel(); }
 window.toggleTodos = function(master) { document.querySelectorAll('.select-item').forEach(cb => { cb.checked = master.checked; }); }
 

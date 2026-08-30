@@ -456,3 +456,31 @@ exports.refreshSlaStatus = onSchedule({ region: REGION, schedule: "every day 06:
   });
   await writer.close();
 });
+
+exports.cleanupOrphanEvidences = onSchedule({ region: REGION, schedule: "0 3 1 * *", timeZone: "America/Sao_Paulo" }, async () => {
+  const bucket = admin.storage().bucket();
+  const [files] = await bucket.getFiles({ prefix: "evidencias/" });
+  let deletedCount = 0;
+  for (const file of files) {
+    const parts = file.name.split("/");
+    if (parts.length >= 4) {
+      const documentId = parts[2];
+      const docSnapshot = await db.doc(`notificacoes/${documentId}`).get();
+      if (!docSnapshot.exists) {
+        await file.delete().catch(() => {});
+        deletedCount += 1;
+      }
+    }
+  }
+  await db.collection("logs_auditoria").add({
+    setor: "SISTEMA",
+    usuarioId: "sistema",
+    usuario: "Garbage Collector Automático",
+    nivel: "sistema",
+    acao: `limpeza mensal de evidências órfãs (${deletedCount} arquivos)`,
+    documentoAlvo: "Cloud Storage",
+    dataHora: admin.firestore.FieldValue.serverTimestamp(),
+    origem: "backend"
+  });
+});
+
