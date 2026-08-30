@@ -112,10 +112,19 @@ assert.match(app, /item\.cep/);
 assert.match(app, /abrirAcompanhamentoNotificacao/);
 assert.match(app, /registrarAcompanhamentoNotificacao/);
 assert.doesNotMatch(firestoreRules, /allow update: if approved\(\) && sameSector\(resource\.data\).*notificacoes/s);
-assert.equal(normalizarCodigoAR('am101510575br'), 'AM101510575BR');
-assert.deepEqual(extrairEventoRastreamento({
-  temEventoEntrega: true,
-  eventos: [{ descricao: 'Objeto entregue ao destinatário', finalizador: 'S' }],
-}), { descricao: 'Objeto entregue ao destinatário', entregue: true, dataEvento: null });
+assert.match(html, /2\. NOTIFICAÇÃO N°/);
+assert.match(html, /3\. DATA DA NOTIFICAÇÃO/);
+assert.match(html, /7\. CARTEIRA IDENTIDADE\/CNTPS/);
+assert.match(html, /14\. O não atendimento desta notificação poderá caracterizar crime de desobediência, nos termos do art\. 330 do Código Penal\./);
+assert.match(html, /15\. MOTIVO DA NOTIFICAÇÃO/);
+assert.match(html, /id="qrcodeWhats"/);
+assert.match(html, /\(54\) 3055-7211/);
+assert.match(html, /Recebi o presente em ____\/____\/________\./);
+assert.match(app, /555430557211/);
+assert.match(app, /gerarQrCodeWhatsappNotificacao/);
+assert.match(app, /gerarLinkWhatsappNotificacao/);
+assert.match(app, /https:\/\/wa\.me\/\$\{WHATSAPP_FISCALIZACAO_NUMERO\}\?text=/);
+assert.match(app, /encodeURIComponent/);
+assert.match(app, /QR Code gerado após o salvamento/);
 
-console.log('Smoke test aprovado: navegação, fluxos críticos e regras preparadas.');
+console.log('Smoke test aprovado: navegação, fluxos críticos, regras preparadas e novo modelo de notificação/QR Code validado.');

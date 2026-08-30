@@ -1268,13 +1268,19 @@ window.abrirPreviaNotificacao = function() {
         parametrosDocumento: parametros
     };
     preencherEspelhoDocumento(previa);
-    const tabela = document.querySelector('#print-area .main-grid');
+    const printArea = document.getElementById('print-area');
     const conteudo = document.getElementById('conteudo-previa-documento');
-    if (!tabela || !conteudo) return;
+    if (!printArea || !conteudo) return;
     const folha = document.createElement('div');
     folha.className = 'preview-document-sheet';
-    folha.appendChild(tabela.cloneNode(true));
+    Array.from(printArea.children).forEach(child => {
+        folha.appendChild(child.cloneNode(true));
+    });
     conteudo.replaceChildren(folha);
+    const qrcodePrevia = folha.querySelector('#qrcodeWhats');
+    if (qrcodePrevia) {
+        gerarQrCodeWhatsappNotificacao(previa.numNotif, qrcodePrevia);
+    }
     document.getElementById('modal-previa-documento').style.display = 'flex';
 };
 
@@ -1788,19 +1794,25 @@ window.atualizarAvisosPrazosLegais();
 
 const WHATSAPP_FISCALIZACAO_NUMERO = '555430557211';
 
-function gerarQrCodeWhatsappNotificacao(numeroDocumento) {
-    const container = document.getElementById('qrcodeWhats');
+window.gerarLinkWhatsappNotificacao = function(numeroDocumento) {
+    const numeroLimpo = String(numeroDocumento || '').trim();
+    if (!numeroLimpo) return '';
+    const mensagem = `Olá, estou entrando em contato sobre a notificação ${numeroLimpo}.`;
+    return `https://wa.me/${WHATSAPP_FISCALIZACAO_NUMERO}?text=${encodeURIComponent(mensagem)}`;
+};
+
+function gerarQrCodeWhatsappNotificacao(numeroDocumento, targetContainer = null) {
+    const container = targetContainer || document.getElementById('qrcodeWhats');
     if (!container) return;
     container.innerHTML = '';
     const numeroLimpo = String(numeroDocumento || '').trim();
-    if (!numeroLimpo || numeroLimpo.includes('PRÉVIA') || numeroLimpo.includes('NUMERAÇÃO')) {
-        container.innerHTML = '<div style="width:96px;height:96px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;color:#555;border:1px dashed #999;">QR Code gerado após o salvamento</div>';
+    if (!numeroLimpo || numeroLimpo.includes('PRÉVIA') || numeroLimpo.includes('NUMERAÇÃO') || numeroLimpo.includes('Gerado ao salvar') || numeroLimpo === '---') {
+        container.innerHTML = '<div style="width:90px;height:90px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:8px;color:#555;border:1px dashed #999;box-sizing:border-box;padding:4px;line-height:1.3;">QR Code gerado após o salvamento</div>';
         return;
     }
     if (typeof QRCode === 'undefined') return;
-    const mensagem = `Olá, estou entrando em contato sobre a notificação ${numeroLimpo}.`;
-    const link = `https://wa.me/${WHATSAPP_FISCALIZACAO_NUMERO}?text=${encodeURIComponent(mensagem)}`;
-    new QRCode(container, { text: link, width: 96, height: 96, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+    const link = window.gerarLinkWhatsappNotificacao(numeroLimpo);
+    new QRCode(container, { text: link, width: 90, height: 90, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
 }
 
 function preencherEspelhoDocumento(item) {
@@ -1808,6 +1820,11 @@ function preencherEspelhoDocumento(item) {
     const parametros = normalizarParametrosDocumento(item.parametrosDocumento || window.parametrosDocumento);
     if(s === 'MOBILIDADE') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Segurança e Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "Mobilidade Urbana"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Av. Osvaldo Aranha, 1075"; } else if(s === 'OBRAS') { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Obras e Posturas"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "Setor de Posturas"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Rua Mal Deodoro, 70"; } else { if(document.getElementById('printSecretaria')) document.getElementById('printSecretaria').innerText = "Municipal do Meio Ambiente"; if(document.getElementById('pEnderecoSecretariaNome')) document.getElementById('pEnderecoSecretariaNome').innerHTML = "SMMAM / Fiscalização"; if(document.getElementById('pEnderecoSecretariaLocal')) document.getElementById('pEnderecoSecretariaLocal').innerHTML = "Rua 10 de Novembro, 190<br>Fone/whats: 54 3055-7211"; }
     
+    const labelNum = document.getElementById('pLabelTipoNum');
+    if (labelNum) {
+        labelNum.innerText = item.tipoDocumento === 'auto' ? '2. AUTO DE INFRAÇÃO N°' : '2. NOTIFICAÇÃO N°';
+    }
+
     const prazoLegal = legalDeadlineForRecord(item);
     const marcoCiencia = item.tipoDocumento === 'auto' ? item.dataCienciaAuto : item.dataRecebimento;
     let pzTxt = item.tipoDocumento === 'auto'
@@ -1815,13 +1832,13 @@ function preencherEspelhoDocumento(item) {
         : `FICA NOTIFICADO POR ESTE INSTRUMENTO, a providenciar a regularização da situação descrita, no prazo de ${prazoLegal.days} dias corridos a partir do recebimento desta, em conformidade com o:`;
     if (prazoLegal.due) pzTxt += ` Data-limite: ${formatDeadline(prazoLegal.due)}.`;
     
-    if(document.getElementById('pNum')) document.getElementById('pNum').innerText = item.numNotif; 
-    if(document.getElementById('pData')) document.getElementById('pData').innerText = item.dataNotif.split('-').reverse().join('/'); 
-    
+    if(document.getElementById('pNum')) document.getElementById('pNum').innerText = item.numNotif;
+    if(document.getElementById('pData')) document.getElementById('pData').innerText = item.dataNotif ? item.dataNotif.split('-').reverse().join('/') : '';
+
     if(document.getElementById('pNome')) document.getElementById('pNome').innerText = (item.nome || '_____________________________________________________').toUpperCase(); 
     if(document.getElementById('pDoc')) document.getElementById('pDoc').innerText = item.doc || '_________________________'; 
     if(document.getElementById('pIdentidade')) document.getElementById('pIdentidade').innerText = item.identidade || '_________________________';
-    if(document.getElementById('pDataRecebimentoPrint')) document.getElementById('pDataRecebimentoPrint').innerText = marcoCiencia ? `Recebi o presente em ${marcoCiencia.split('-').reverse().join('/')}` : 'Recebi o presente em _____/_____/_________';
+    if(document.getElementById('pDataRecebimentoPrint')) document.getElementById('pDataRecebimentoPrint').innerText = marcoCiencia ? `Recebi o presente em ${marcoCiencia.split('-').reverse().join('/')}` : 'Recebi o presente em ____/____/________.';
 
     if(document.getElementById('pEndereco')) document.getElementById('pEndereco').innerText = item.endereco || '---'; 
     if(document.getElementById('pTelefone')) document.getElementById('pTelefone').innerText = item.telefone || '---'; 
@@ -1872,7 +1889,14 @@ function preencherEspelhoDocumento(item) {
     }
 
     if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
-    gerarQrCodeWhatsappNotificacao(item.numNotif);
+
+    const qrContainer = document.querySelector('#print-area .qrcode-whats-container');
+    if (qrContainer) {
+        qrContainer.style.display = item.tipoDocumento === 'auto' ? 'none' : 'flex';
+    }
+    if (item.tipoDocumento !== 'auto') {
+        gerarQrCodeWhatsappNotificacao(item.numNotif);
+    }
 }
 
 window.imprimirRegistro = function(id) {
