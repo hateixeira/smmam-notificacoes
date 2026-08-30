@@ -239,3 +239,113 @@ table.data-table tr:hover { background-color: #f1f5f9; }
     .preview-document-sheet { transform:scale(.46); margin-bottom:-143mm; }
     .preview-document-actions { flex-direction:column; }
 }
+
+@media (max-width: 768px) {
+    body { height: auto; overflow: auto; padding: 0; }
+    #app-layout { display: block; height: auto; min-height: 100vh; }
+    #sidebar { width: 100%; min-height: 0; box-shadow: none; position: relative; }
+    .sidebar-header { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; }
+    .sidebar-header img { width: 32px !important; margin: 0 !important; }
+    .sidebar-header h3 { font-size: 15px; margin: 0; }
+    .sidebar-kicker { display: none; }
+    .sidebar-nav { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 8px 10px; -webkit-overflow-scrolling: touch; }
+    .hub-return-link { flex: 0 0 auto; margin: 0 4px 0 0; min-height: 44px; display: inline-flex; align-items: center; }
+    .nav-section-title, #menu-admin-area .nav-section-title { display: none; }
+    .nav-item { flex: 0 0 auto; min-height: 44px; display: inline-flex; align-items: center; padding: 0 12px; font-size: 12px; white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; }
+    .nav-item.active { border-left: 0; border-bottom-color: #8cc5b9; }
+    #menu-admin-area { display: flex !important; gap: 4px; }
+    .sidebar-footer { display: none; }
+
+    #main-content { padding: 14px 10px 40px; overflow: visible; }
+    .workspace-header { align-items: flex-start; flex-direction: column; gap: 10px; margin-bottom: 15px; }
+    .workspace-header h1 { font-size: 22px; }
+    .workspace-security { width: 100%; box-sizing: border-box; }
+    .form-container, .panel-container { padding: 14px 12px; border-radius: 8px; }
+    .form-row { flex-direction: column; gap: 8px; }
+    .form-row .form-group { min-width: 100%; }
+    .checkbox-group { grid-template-columns: 1fr; }
+    .dashboard-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .card { padding: 12px 8px; }
+    .card .num { font-size: 22px; }
+
+    /* Touch Targets >= 44px */
+    button, .btn-primary, .btn-secondary, .btn-success, .btn-danger, .btn-outline, .btn-logout, .filter-btn, .filter-type-btn {
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 13px;
+        box-sizing: border-box;
+    }
+    .btn-actions { flex-direction: column; gap: 8px; }
+    .btn-actions button { width: 100%; flex: 1 1 100%; }
+
+    /* Modals 100% Width */
+    .modal-overlay { padding: 0; }
+    .modal-content, .modal-cadastral, .preview-document-modal {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 100vh;
+        border-radius: 0 !important;
+        box-sizing: border-box;
+        margin: 0 !important;
+        max-height: none !important;
+        overflow-y: auto;
+    }
+    .espelho-grid { grid-template-columns: 1fr; }
+    .preview-document-sheet { transform: scale(0.44); margin-bottom: -150mm; }
+
+    /* Tabelas em Cards Verticais */
+    .table-container { border: none; max-height: none; overflow: visible; }
+    table.data-table, table.data-table thead, table.data-table tbody, table.data-table th, table.data-table td, table.data-table tr {
+        display: block;
+    }
+    table.data-table thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+    table.data-table tbody tr {
+        background: #fff;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        padding: 14px 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    table.data-table tbody td {
+        border: none;
+        border-bottom: 1px dashed #e2e8f0;
+        padding: 8px 0;
+        position: relative;
+        text-align: left;
+    }
+    table.data-table tbody td:last-child {
+        border-bottom: none;
+        padding-top: 10px;
+    }
+    table.data-table tbody td.action-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    table.data-table tbody td.action-links button, table.data-table tbody td.action-links a {
+        min-height: 44px;
+        flex: 1 1 calc(50% - 8px);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1b365d;
+        text-decoration: none;
+        box-sizing: border-box;
+    }
+    table.data-table tbody td.action-links a.btn-autuar {
+        background: #fee2e2;
+        color: #991b1b;
+        border-color: #fca5a5;
+    }
+}
