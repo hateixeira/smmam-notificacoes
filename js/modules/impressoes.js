@@ -22,6 +22,7 @@ export function gerarQrCodeWhatsappNotificacao(numeroDocumento, targetContainer 
     }
     if (typeof QRCode === 'undefined') return;
     const link = gerarLinkWhatsappNotificacao(numeroLimpo);
+    container.dataset.whatsappUrl = link;
     new QRCode(container, { text: link, width: 90, height: 90, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
 }
 
@@ -212,7 +213,11 @@ export function initImpressoesModule() {
     };
 
     window.imprimirPreviaDocumento = function() {
-        window.print();
+        const numero = document.getElementById('pNum')?.textContent?.trim() || '';
+        const qrContainer = document.getElementById('qrcodeWhats');
+        if (qrContainer && numero && !qrContainer.querySelector('canvas, img')) gerarQrCodeWhatsappNotificacao(numero, qrContainer);
+        // Aguarda o canvas do QR Code estar no DOM antes de abrir a caixa de impressão/PDF.
+        setTimeout(() => window.print(), 80);
     };
 
     window.confirmarSalvarDaPrevia = function() {
@@ -228,6 +233,7 @@ export function initImpressoesModule() {
         if (!item) return;
         preencherEspelhoDocumento(item, window.parametrosDocumento);
         setTimeout(() => {
+            gerarQrCodeWhatsappNotificacao(item.numNotif, document.getElementById('qrcodeWhats'));
             window.print();
         }, 500);
     };

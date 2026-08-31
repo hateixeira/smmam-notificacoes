@@ -154,6 +154,62 @@ async function chamarFuncaoSegura(nome, dados) {
     return resposta.data;
 }
 
+function numeroLocalPersistido(valor, tipo, ano) {
+    const texto = String(valor || '').trim().toUpperCase();
+    const padrao = tipo === 'notificacao' ? /^(\d+)B?(?:\/(\d{4}))?$/ : /^(\d+)(?:\/(\d{4}))?$/;
+    const encontrado = texto.match(padrao);
+    if (!encontrado || (encontrado[2] && Number(encontrado[2]) !== Number(ano))) return 0;
+    return Number(encontrado[1]) || 0;
+}
+
+function proximoNumeroLocal(tipo) {
+    const ano = new Date().getFullYear();
+    const setor = perfilUsuario?.setor || 'SMMAM';
+    const maior = (window.DB || []).reduce((atual, item) => {
+        const mesmoSetor = (item.setor || 'SMMAM') === setor;
+        const mesmoTipo = item.tipoDocumento ? item.tipoDocumento === tipo : tipo === 'notificacao';
+        return mesmoSetor && mesmoTipo ? Math.max(atual, numeroLocalPersistido(item.numNotif, tipo, ano)) : atual;
+    }, 0);
+    return `${String(maior + 1).padStart(4, '0')}${tipo === 'notificacao' ? 'B' : ''}/${ano}`;
+}
+
+function definirNumeroSugerido(id, tipo) {
+    const campo = document.getElementById(id);
+    if (!campo) return proximoNumeroLocal(tipo);
+    const fallback = proximoNumeroLocal(tipo);
+    campo.value = fallback;
+    campo.dataset.manual = 'false';
+    // A consulta completa ao Firestore evita depender apenas da página carregada no navegador.
+    if (perfilUsuario) {
+        chamarFuncaoSegura('suggestDocumentNumber', { type: tipo, year: new Date().getFullYear() })
+            .then((retorno) => {
+                if (campo.dataset.manual !== 'true' && (!campo.value || campo.value === fallback || campo.value === 'Gerado ao salvar')) {
+                    campo.value = retorno.number;
+                }
+            })
+            .catch(() => {});
+    }
+    return fallback;
+}
+
+window.sugerirNumero = function(tipo) {
+    const id = tipo === 'notificacao' ? 'numNotif' : 'autoNum';
+    return definirNumeroSugerido(id, tipo);
+};
+
+function configurarCamposDeNumeracao() {
+    [['numNotif', 'notificacao'], ['autoNum', 'auto']].forEach(([id, tipo]) => {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        campo.dataset.manual = 'false';
+        campo.addEventListener('input', () => { campo.dataset.manual = 'true'; });
+        campo.addEventListener('blur', () => {
+            if (campo.dataset.manual === 'true' && campo.value.trim()) campo.value = campo.value.trim().toUpperCase();
+        });
+        if (!campo.value || campo.value === 'Gerado ao salvar') definirNumeroSugerido(id, tipo);
+    });
+}
+
 function normalizarParametrosDocumento(valor = {}) {
     const inteiro = (campo, padrao) => {
         const numero = Number(valor[campo]);
@@ -449,10 +505,10 @@ window.navegarPara = function(viewId) {
     if(viewId === 'auditoria' && perfilUsuario && perfilUsuario.nivel === 'admin') window.carregarAuditoria();
     
     if(viewId === 'notificacoes' && !document.getElementById('editFirebaseIdNotif').value) {
-        document.getElementById('numNotif').value = 'Gerado ao salvar';
+        definirNumeroSugerido('numNotif', 'notificacao');
     }
     if(viewId === 'autos' && !document.getElementById('editFirebaseIdAuto').value) {
-        document.getElementById('autoNum').value = 'Gerado ao salvar';
+        definirNumeroSugerido('autoNum', 'auto');
     }
 }
 
@@ -1344,13 +1400,13 @@ window.salvarDocumento = async function(event, tipoDoc) {
 
         const territorio = resolveTerritory(document.getElementById('bairro').value);
         const etapa = document.getElementById('statusTramitacaoNotif')?.value || 'recebido';
-        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: window.parametrosDocumento.prazoRegularizacaoDias, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, identidade: document.getElementById('identidade')?.value || '', endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, territorioNome: territorio.nome, territorioEquipe: territorio.equipe, territorioTipo: territorio.tipo, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, motivoNotificacao: document.getElementById('motivoNotificacao')?.value || '', ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
+        dados = { tipoDocumento: 'notificacao', statusProcesso: 'ativo', statusNotificacao: statusVida, procOuvidoria: document.getElementById('procOuvidoria').value, codigoAR: codAR, statusRetornoAR: stRetornoAR, prazoDias: window.parametrosDocumento.prazoRegularizacaoDias, dataRecebimento: dtRecebimento, dataNotif: document.getElementById('dataNotif').value, tipoAR: tipoAR, tipoPresencial: document.getElementById('tipoPresencial').checked, nome: nomeNotificado, doc: docNotificado, identidade: document.getElementById('identidade')?.value || '', endereco: document.getElementById('endereco').value, telefone: document.getElementById('telefone').value, bairro: document.getElementById('bairro').value, territorioNome: territorio.nome, territorioEquipe: territorio.equipe, territorioTipo: territorio.tipo, cep: document.getElementById('cep').value, cidade: "BENTO GONÇALVES", uf: "RS", cadDistrito: document.getElementById('cadDistrito').value, cadZona: document.getElementById('cadZona').value, cadQuadra: document.getElementById('cadQuadra').value, cadLote: document.getElementById('cadLote').value, cadImob: document.getElementById('cadImob').value, loteEndereco: document.getElementById('loteEndereco').value, arrayInfracoes: infracoesMarcadas, motivoNotificacao: document.getElementById('motivoNotificacao')?.value || '', ref: document.getElementById('ref').value, obs: document.getElementById('obs').value, fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor, numNotif: numeroOriginal, numNotifManual: document.getElementById(tipoDoc === 'notificacao' ? 'numNotif' : 'autoNum')?.dataset.manual === 'true' };
     } else {
         btnForm = document.getElementById('btnSalvarAuto'); editId = document.getElementById('editFirebaseIdAuto').value;
         numeroOriginal = document.getElementById('autoNum').value.trim();
 
         const etapa = document.getElementById('statusTramitacaoAuto')?.value || 'recebido';
-        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', dataNotif: document.getElementById('autoData').value, dataCienciaAuto: document.getElementById('dataCienciaAuto')?.value || '', nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, arrayInfracoes: infracoesMarcadas, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor };
+        dados = { tipoDocumento: 'auto', statusProcesso: 'ativo', dataNotif: document.getElementById('autoData').value, dataCienciaAuto: document.getElementById('dataCienciaAuto')?.value || '', nome: document.getElementById('autoNome').value, doc: document.getElementById('autoDoc').value, loteEndereco: document.getElementById('autoEndOcorrencia').value, autoDescricaoLei: document.getElementById('autoDescricaoLei').value, arrayInfracoes: infracoesMarcadas, autoMultaURM: document.getElementById('autoMultaURM').value, cidade: "BENTO GONÇALVES", uf: "RS", fiscal: perfilUsuario.nome, matricula: perfilUsuario.matricula, qtdFotosSalvas: fotos.length, statusTramitacao: etapa, prazoSlaEm: calculateSlaDueDate(etapa), editadoPor: perfilUsuario.nome, dataUltimaEdicao: new Date().toISOString(), setor: meuSetor, numNotif: numeroOriginal, numNotifManual: document.getElementById(tipoDoc === 'notificacao' ? 'numNotif' : 'autoNum')?.dataset.manual === 'true' };
     }
     
     if(btnForm) btnForm.disabled = true;
@@ -1801,6 +1857,7 @@ window.carregarDadosPerfil = function() {
 document.getElementById('bairro')?.addEventListener('input', window.atualizarTerritorioPeloBairro);
 document.getElementById('dataRecebimento')?.addEventListener('change', window.atualizarAvisosPrazosLegais);
 document.getElementById('dataCienciaAuto')?.addEventListener('change', window.atualizarAvisosPrazosLegais);
+configurarCamposDeNumeracao();
 window.atualizarAvisosPrazosLegais();
 
 window.imprimirRegistro = function(id) {

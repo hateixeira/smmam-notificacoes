@@ -137,13 +137,32 @@ function safeDocumentPayload(payload, type) {
 function numeroSequencialPersistido(valor, type, year) {
   const texto = String(valor || '').trim().toUpperCase();
   const padrao = type === 'notificacao'
-    ? /^(\d+)B(?:\/(\d{4}))?$/
+    ? /^(\d+)B?(?:\/(\d{4}))?$/
     : /^(\d+)(?:\/(\d{4}))?$/;
   const encontrado = texto.match(padrao);
   if (!encontrado) return 0;
   if (encontrado[2] && Number(encontrado[2]) !== Number(year)) return 0;
-  if (type === 'notificacao' && !texto.includes('B')) return 0;
   return Number(encontrado[1]) || 0;
+}
+
+function normalizarNumeroManual(valor, type, year) {
+  const texto = String(valor || '').trim().toUpperCase();
+  if (!texto || texto === 'GERADO AO SALVAR' || texto.includes('PRÉVIA') || texto.includes('NUMERAÇÃO')) return null;
+  const padrao = type === 'notificacao'
+    ? /^(\d{1,8})B?(?:\/(\d{4}))?$/
+    : /^(\d{1,8})(?:\/(\d{4}))?$/;
+  const encontrado = texto.match(padrao);
+  if (!encontrado || (encontrado[2] && Number(encontrado[2]) !== Number(year))) return null;
+  const valorNumerico = Number(encontrado[1]);
+  if (!Number.isInteger(valorNumerico) || valorNumerico < 1) return null;
+  return {
+    value: valorNumerico,
+    formatted: `${String(valorNumerico).padStart(4, '0')}${type === 'notificacao' ? 'B' : ''}/${year}`
+  };
+}
+
+function formatDocumentNumber(value, type, year) {
+  return `${String(value).padStart(4, '0')}${type === 'notificacao' ? 'B' : ''}/${year}`;
 }
 
 async function maiorNumeroPersistido({ sector, type, year }) {
@@ -151,25 +170,29 @@ async function maiorNumeroPersistido({ sector, type, year }) {
   const snapshot = await db.collection('notificacoes').where('setor', '==', sector).get();
   return snapshot.docs.reduce((maior, registro) => {
     const data = registro.data() || {};
-    return data.tipoDocumento === type
+    // Documentos antigos sem tipoDocumento são notificações legadas.
+    const mesmoTipo = data.tipoDocumento ? data.tipoDocumento === type : type === 'notificacao';
+    return mesmoTipo
       ? Math.max(maior, numeroSequencialPersistido(data.numNotif, type, year))
       : maior;
   }, 0);
 }
 
-async function nextDocumentNumber({ sector, type, year, uid }) {
-  // Faz a reconciliação fora da transação e usa o documento de sequência para
+async function nextDocumentNumber({ sector, type, year, uid, requestedNumber = null }) {
+  // Reconcilia o maior número persistido e usa o documento de sequência para
   // garantir atomicidade entre emissões simultâneas.
   const maiorExistente = await maiorNumeroPersistido({ sector, type, year });
   const sequenceRef = db.doc(`sequencias/${sector}_${year}_${type}`);
   const next = await db.runTransaction(async (transaction) => {
     const previous = await transaction.get(sequenceRef);
     const ultimoNumero = previous.exists ? Number(previous.data().ultimoNumero) || 0 : 0;
-    const value = Math.max(ultimoNumero, maiorExistente) + 1;
+    const value = requestedNumber
+      ? Math.max(ultimoNumero, maiorExistente, requestedNumber.value)
+      : Math.max(ultimoNumero, maiorExistente) + 1;
     transaction.set(sequenceRef, { setor: sector, ano: year, tipo: type, ultimoNumero: value, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPor: uid }, { merge: true });
     return value;
   });
-  return `${String(next).padStart(4, "0")}${type === "notificacao" ? "B" : ""}/${year}`;
+  return requestedNumber?.formatted || formatDocumentNumber(next, type, year);
 }
 
 exports.reserveDocumentNumber = onCall({ region: REGION, invoker: "public" }, async (request) => {
@@ -184,6 +207,21 @@ exports.reserveDocumentNumber = onCall({ region: REGION, invoker: "public" }, as
   return { number };
 });
 
+// Sugere o próximo número sem reservar nem consumir a sequência. A confirmação
+// definitiva continua sendo feita por createDocument no momento do salvamento.
+exports.suggestDocumentNumber = onCall({ region: REGION, invoker: "public" }, async (request) => {
+  const profile = await institutionalProfile(request);
+  if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de emissão.");
+  const type = sanitizeText(request.data?.type, 20);
+  const year = Number(request.data?.year || new Date().getFullYear());
+  if (!validTypes.has(type) || year < 2020 || year > 2100) throw new HttpsError("invalid-argument", "Tipo ou ano inválido.");
+  const setor = profile.setor || "SMMAM";
+  const maiorExistente = await maiorNumeroPersistido({ sector: setor, type, year });
+  const sequence = await db.doc(`sequencias/${setor}_${year}_${type}`).get();
+  const ultimoNumero = sequence.exists ? Number(sequence.data().ultimoNumero) || 0 : 0;
+  return { number: formatDocumentNumber(Math.max(maiorExistente, ultimoNumero) + 1, type, year) };
+});
+
 exports.createDocument = onCall({ region: REGION, invoker: "public" }, async (request) => {
   const profile = await institutionalProfile(request);
   if (profile.nivel === "leitor") throw new HttpsError("permission-denied", "Perfil sem permissão de emissão.");
@@ -195,7 +233,22 @@ exports.createDocument = onCall({ region: REGION, invoker: "public" }, async (re
   const stage = initialDocumentStage(safePayload, type);
   const parameters = await documentParametersForSector(setor);
   const legalFields = legalDeadlineFields(safePayload, type, parameters);
-  const number = await nextDocumentNumber({ sector: setor, type, year: new Date().getFullYear(), uid: request.auth.uid });
+  const year = new Date().getFullYear();
+  const rawManualNumber = sanitizeText(payload.numNotif, 40);
+  const requestedNumber = payload.numNotifManual ? normalizarNumeroManual(rawManualNumber, type, year) : null;
+  if (payload.numNotifManual && rawManualNumber && !requestedNumber) {
+    throw new HttpsError("invalid-argument", `Número manual inválido. Use ${type === "notificacao" ? "0001B/" : "0001/"}${year}.`);
+  }
+  if (requestedNumber) {
+    const existing = await db.collection("notificacoes").where("setor", "==", setor).get();
+    const duplicado = existing.docs.some((registro) => {
+      const data = registro.data() || {};
+      const mesmoTipo = data.tipoDocumento ? data.tipoDocumento === type : type === "notificacao";
+      return mesmoTipo && numeroSequencialPersistido(data.numNotif, type, year) === requestedNumber.value;
+    });
+    if (duplicado) throw new HttpsError("already-exists", `O número ${requestedNumber.formatted} já existe neste setor.`);
+  }
+  const number = await nextDocumentNumber({ sector: setor, type, year, uid: request.auth.uid, requestedNumber });
   const documentRef = db.collection("notificacoes").doc();
   const documentData = {
     ...safePayload,
