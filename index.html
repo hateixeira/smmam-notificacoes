@@ -168,9 +168,10 @@
                             <div class="form-group" style="flex: 1.2;">
                                 <label>Nº Notificação *</label>
                                 <div style="display: flex; gap: 5px;">
-                                    <input type="text" id="numNotif" placeholder="Ex: 0528B/2026" required style="width: 100%;">
-                                    <button type="button" class="btn-secondary" title="Sugerir Próximo Número" onclick="document.getElementById('numNotif').value = sugerirNumero('notificacao')" style="padding: 0 10px;">🪄</button>
+                                    <input type="text" id="numNotif" placeholder="Ex: 0541B/2026" required style="width: 100%;" aria-describedby="ajudaNumNotif">
+                                    <button type="button" class="btn-secondary" title="Sugerir próximo número após o maior já existente" onclick="sugerirNumero('notificacao')" style="padding: 0 10px;">🪄</button>
                                 </div>
+                                <small id="ajudaNumNotif" style="display:block; margin-top:4px; color:#64748b;">O sistema sugere o próximo número após o maior existente. Você pode substituir manualmente, se necessário.</small>
                             </div>
                             <div class="form-group" style="flex: 1.2;"><label>Proc. / Ouvidoria</label><input type="text" id="procOuvidoria"></div>
                             <div class="form-group" style="flex: 1.5;"><label>Data de Emissão *</label><input type="date" id="dataNotif" required></div>
@@ -275,9 +276,10 @@
                             <div class="form-group" style="flex: 1.2;">
                                 <label>Nº do Auto *</label>
                                 <div style="display: flex; gap: 5px;">
-                                    <input type="text" id="autoNum" placeholder="Ex: 105/2026" required style="width: 100%;">
-                                    <button type="button" class="btn-secondary" title="Sugerir Próximo" onclick="document.getElementById('autoNum').value = sugerirNumero('auto')" style="padding: 0 10px;">🪄</button>
+                                    <input type="text" id="autoNum" placeholder="Ex: 0105/2026" required style="width: 100%;" aria-describedby="ajudaAutoNum">
+                                    <button type="button" class="btn-secondary" title="Sugerir próximo número após o maior já existente" onclick="sugerirNumero('auto')" style="padding: 0 10px;">🪄</button>
                                 </div>
+                                <small id="ajudaAutoNum" style="display:block; margin-top:4px; color:#64748b;">A sugestão não reserva o número. A confirmação ocorre somente ao salvar.</small>
                             </div>
                             <div class="form-group"><label>Data da Autuação *</label><input type="date" id="autoData" required></div>
                             <div class="form-group"><label>Data de ciência do auto</label><input type="date" id="dataCienciaAuto"></div>
@@ -808,6 +810,6 @@
 
     <script src="js/vendor/qrcode.min.js"></script>
 
-    <script type="module" src="js/app.js?v=20260831.2"></script>
+    <script type="module" src="js/app.js?v=20260901.1"></script>
 </body>
 </html>
