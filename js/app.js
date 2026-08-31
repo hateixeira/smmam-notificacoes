@@ -188,7 +188,11 @@ function refletirParametrosDocumentoNaTela() {
     valor('autoValorURMAtual', parametros.valorURM.toFixed(2));
     valor('prazoDias', `${parametros.prazoRegularizacaoDias} dias corridos`);
     const textoRegularizacao = document.getElementById('textoPrazoRegularizacao');
-    if (textoRegularizacao) textoRegularizacao.textContent = `Art. 25 da LC Municipal nº 6/1996: ${parametros.prazoRegularizacaoDias} dias corridos para regularização, contados da ciência/recebimento. Em caso de AR, a data deve ser confirmada.`;
+    if (textoRegularizacao) {
+        const textoConfigurado = String(parametros.textoPrazoRegularizacao || '')
+            .replace(/\{dias\}/gi, String(parametros.prazoRegularizacaoDias));
+        textoRegularizacao.textContent = textoConfigurado || `Art. 25 da LC Municipal nº 6/1996: ${parametros.prazoRegularizacaoDias} dias corridos para regularização, contados da ciência/recebimento.`;
+    }
     window.atualizarAvisosPrazosLegais?.();
 }
 
@@ -290,25 +294,27 @@ window.carregarInfracoesGlobais = async function() {
         console.warn("Aviso: Permissão negada no Firebase. Carregando base legal direto da memória do código.", e); 
     }
 
-    if(window.bancoInfracoesGlobais.length === 0 && meuSetor === 'SMMAM') {
-        window.bancoInfracoesGlobais = [
-            { 
-                id: "dinamico_mato", 
-                nome: "Vegetação Rasteira / Mato", 
-                baseLegal: "artigo 6º, parágrafo 2o, da Lei Municipal n°. 5.198/2011", 
-                textoPadrao: "Limpeza de vegetação rasteira/mato, conforme o artigo 6º, parágrafo 2o, da Lei Municipal n°. 5.198/2011 e suas alterações.", 
-                multaUrm: 5, 
-                setor: "SMMAM" 
+    if (meuSetor === 'SMMAM') {
+        const infracoesPadraoSmmam = [
+            {
+                id: "dinamico_mato",
+                nome: "Vegetação Rasteira / Mato",
+                baseLegal: "artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011",
+                textoPadrao: "Limpeza de vegetação rasteira/mato, conforme o artigo 6º, parágrafo 2º, da Lei Municipal nº 5.198/2011 e suas alterações.",
+                multaUrm: 5,
+                setor: "SMMAM"
             },
-            { 
-                id: "dinamico_residuos", 
-                nome: "Resíduos Sólidos Diversos / Entulhos", 
-                baseLegal: "artigo 41, inciso III, LC n°. 56/2002", 
-                textoPadrao: "Recolhimento e destinação correta de resíduos sólidos diversos / entulhos, conforme o artigo 41, inciso III, da Lei Complementar Municipal n°. 56/2002.", 
-                multaUrm: 5, 
-                setor: "SMMAM" 
+            {
+                id: "dinamico_residuos",
+                nome: "Resíduos Sólidos Diversos / Entulhos",
+                baseLegal: "artigo 41, inciso III, da LC nº 56/2002",
+                textoPadrao: "Recolhimento e destinação correta de resíduos sólidos diversos/entulhos, conforme o artigo 41, inciso III, da Lei Complementar Municipal nº 56/2002.",
+                multaUrm: 5,
+                setor: "SMMAM"
             }
         ];
+        const idsExistentes = new Set(window.bancoInfracoesGlobais.map(infracao => infracao.id));
+        window.bancoInfracoesGlobais.push(...infracoesPadraoSmmam.filter(infracao => !idsExistentes.has(infracao.id)));
     }
     
     window.bancoInfracoesGlobais.sort((a,b) => a.nome.localeCompare(b.nome));
@@ -1361,7 +1367,9 @@ window.salvarDocumento = async function(event, tipoDoc) {
             const etapaAnterior = existente?.statusTramitacao || 'recebido';
             delete dados.statusTramitacao; delete dados.prazoSlaEm;
             await chamarFuncaoSegura('updateDocument', { documentId: editId, type: tipoDoc, document: dados });
-            if (etapaSelecionada !== etapaAnterior) {
+            // Notificações seguem o histórico próprio de AR/prorrogação/vistoria/limpeza.
+            // O backend rejeita moveProcessStage direto para notificações; não bloquear o salvamento.
+            if (tipoDoc !== 'notificacao' && etapaSelecionada !== etapaAnterior) {
                 etapaAtual = 'moveProcessStage';
                 await chamarFuncaoSegura('moveProcessStage', { documentId: editId, stage: etapaSelecionada, reason: 'Atualização do documento pelo formulário institucional.' });
             }
@@ -1770,6 +1778,7 @@ window.limparFormularios = function() {
     if(document.getElementById('dataNotif')) document.getElementById('dataNotif').valueAsDate = new Date(); 
     if(document.getElementById('autoData')) document.getElementById('autoData').valueAsDate = new Date(); 
     if(document.getElementById('prazoDias')) document.getElementById('prazoDias').value = `${window.parametrosDocumento.prazoRegularizacaoDias} dias corridos`;
+    if(document.getElementById('motivoNotificacao')) document.getElementById('motivoNotificacao').value = window.parametrosDocumento.textoMotivoPadrao || '';
     if(document.getElementById('autoMultaReais')) document.getElementById('autoMultaReais').value = ''; 
     window.atualizarAvisosPrazosLegais();
     if(perfilUsuario) { 

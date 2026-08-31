@@ -134,11 +134,38 @@ function safeDocumentPayload(payload, type) {
   };
 }
 
+function numeroSequencialPersistido(valor, type, year) {
+  const texto = String(valor || '').trim().toUpperCase();
+  const padrao = type === 'notificacao'
+    ? /^(\d+)B(?:\/(\d{4}))?$/
+    : /^(\d+)(?:\/(\d{4}))?$/;
+  const encontrado = texto.match(padrao);
+  if (!encontrado) return 0;
+  if (encontrado[2] && Number(encontrado[2]) !== Number(year)) return 0;
+  if (type === 'notificacao' && !texto.includes('B')) return 0;
+  return Number(encontrado[1]) || 0;
+}
+
+async function maiorNumeroPersistido({ sector, type, year }) {
+  // Filtra o tipo em memória para não exigir um índice composto novo durante a correção.
+  const snapshot = await db.collection('notificacoes').where('setor', '==', sector).get();
+  return snapshot.docs.reduce((maior, registro) => {
+    const data = registro.data() || {};
+    return data.tipoDocumento === type
+      ? Math.max(maior, numeroSequencialPersistido(data.numNotif, type, year))
+      : maior;
+  }, 0);
+}
+
 async function nextDocumentNumber({ sector, type, year, uid }) {
+  // Faz a reconciliação fora da transação e usa o documento de sequência para
+  // garantir atomicidade entre emissões simultâneas.
+  const maiorExistente = await maiorNumeroPersistido({ sector, type, year });
   const sequenceRef = db.doc(`sequencias/${sector}_${year}_${type}`);
   const next = await db.runTransaction(async (transaction) => {
     const previous = await transaction.get(sequenceRef);
-    const value = (previous.exists ? Number(previous.data().ultimoNumero) : 0) + 1;
+    const ultimoNumero = previous.exists ? Number(previous.data().ultimoNumero) || 0 : 0;
+    const value = Math.max(ultimoNumero, maiorExistente) + 1;
     transaction.set(sequenceRef, { setor: sector, ano: year, tipo: type, ultimoNumero: value, atualizadoEm: admin.firestore.FieldValue.serverTimestamp(), atualizadoPor: uid }, { merge: true });
     return value;
   });
