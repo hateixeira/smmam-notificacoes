@@ -60,9 +60,20 @@ export function preencherEspelhoDocumento(item, parametrosDocumento = {}) {
     if(document.getElementById('pCadLote')) document.getElementById('pCadLote').innerText = item.cadLote || '---'; 
     if(document.getElementById('pCadImob')) document.getElementById('pCadImob').innerText = item.cadImob || ''; 
     if(document.getElementById('pLoteEndereco')) document.getElementById('pLoteEndereco').innerText = item.loteEndereco || ''; 
-    const localNotificado = [item.loteEndereco, item.bairro ? `bairro ${item.bairro}` : '', `${item.cidade || 'Bento Gonçalves'}/${item.uf || 'RS'}`, item.cep ? `CEP ${item.cep}` : ''].filter(Boolean).join(', ');
-    const motivoPadrao = `${parametros.textoMotivoPadrao}\n\nVerificação de irregularidade situada no endereço: ${localNotificado || 'não informado'}${item.ref ? `, tendo como ponto de referência: ${item.ref}.` : '.'}`;
-    if(document.getElementById('pMotivoNotificacao')) document.getElementById('pMotivoNotificacao').innerText = item.motivoNotificacao || motivoPadrao;
+    const localNotificado = [item.loteEndereco, item.bairro ? `BAIRRO ${item.bairro}` : '', `${item.cidade || 'BENTO GONÇALVES'}/${item.uf || 'RS'}`, item.cep ? `CEP: ${item.cep}` : ''].filter(Boolean).join(', ');
+    const renderizarTemplate = (template, valores) => String(template || '').replace(/\{(endereco|bairro|cidade|uf|cep|referencia|dias)\}/gi, (_, chave) => valores[chave.toLowerCase()] ?? '');
+    const motivoPadrao = renderizarTemplate(parametros.textoMotivoPadrao, {
+        endereco: item.loteEndereco || item.endereco || 'não informado',
+        bairro: item.bairro || '',
+        cidade: item.cidade || 'BENTO GONÇALVES',
+        uf: item.uf || 'RS',
+        cep: item.cep || '',
+        referencia: item.ref || 'não informado'
+    });
+    const motivoComLocal = parametros.textoMotivoPadrao.includes('{')
+        ? motivoPadrao
+        : `${parametros.textoMotivoPadrao}\n\nVerificação de irregularidade situada no endereço: ${localNotificado || 'NÃO INFORMADO'}${item.ref ? `, tendo como ponto de referência: ${item.ref}.` : '.'}`;
+    if(document.getElementById('pMotivoNotificacao')) document.getElementById('pMotivoNotificacao').innerText = item.motivoNotificacao || motivoComLocal;
     if(document.getElementById('pRef')) document.getElementById('pRef').innerText = item.ref || '---'; 
     if(document.getElementById('pObs')) document.getElementById('pObs').innerText = item.obs || '---'; 
     if(document.getElementById('pFiscal')) document.getElementById('pFiscal').innerText = item.fiscal || ''; 
@@ -72,7 +83,9 @@ export function preencherEspelhoDocumento(item, parametrosDocumento = {}) {
     if(document.getElementById('pUfPrint')) document.getElementById('pUfPrint').innerText = item.uf || 'RS';
     if(document.getElementById('pTipoPresencial')) document.getElementById('pTipoPresencial').innerText = item.tipoPresencial ? '( X ) Notificação Presencial' : '( ) Notificação Presencial'; 
     if(document.getElementById('pTipoAR')) document.getElementById('pTipoAR').innerText = item.tipoAR ? '( X ) Notificado por AR' : '( ) Notificado por AR'; 
-    if(document.getElementById('pOrientacoesImpressao')) document.getElementById('pOrientacoesImpressao').innerText = `OBSERVAÇÕES:\n${parametros.textoOrientacoes}`;
+    if(document.getElementById('pOrientacoesImpressao')) document.getElementById('pOrientacoesImpressao').innerText = `ORIENTAÇÕES:\n${parametros.textoOrientacoes}`;
+    if(document.getElementById('pBaseLegalNotificacao')) document.getElementById('pBaseLegalNotificacao').innerText = parametros.textoBaseLegalNotificacao;
+    if(document.getElementById('pQrCodeTexto')) document.getElementById('pQrCodeTexto').innerText = parametros.textoQrCode;
     if(document.getElementById('pEnderecoSecretaria')) document.getElementById('pEnderecoSecretaria').innerText = parametros.textoApresentacao;
 
     const boxInfr = document.getElementById('boxInfracoesImpresso');
@@ -98,7 +111,12 @@ export function preencherEspelhoDocumento(item, parametrosDocumento = {}) {
         });
     }
 
-    if(document.getElementById('pPrazoImpressao')) document.getElementById('pPrazoImpressao').innerText = pzTxt;
+    if(document.getElementById('pPrazoImpressao')) {
+        const textoPrazo = item.tipoDocumento === 'auto'
+            ? pzTxt
+            : renderizarTemplate(parametros.textoPrazoRegularizacao, { dias: prazoLegal.days });
+        document.getElementById('pPrazoImpressao').innerText = textoPrazo;
+    }
 
     const qrContainer = document.querySelector('#print-area .qrcode-whats-container');
     if (qrContainer) {
@@ -111,11 +129,14 @@ export function preencherEspelhoDocumento(item, parametrosDocumento = {}) {
 
 function normalizarParametros(valor = {}) {
     return {
-        prazoRegularizacaoDias: Number(valor.prazoRegularizacaoDias) || 60,
+        prazoRegularizacaoDias: Number(valor.prazoRegularizacaoDias) || 15,
         prazoDefesaDias: Number(valor.prazoDefesaDias) || 8,
         valorURM: Number(valor.valorURM) || 0,
-        textoMotivoPadrao: valor.textoMotivoPadrao || 'Verificação de irregularidade situada no endereço informado neste documento.',
-        textoOrientacoes: valor.textoOrientacoes || 'É proibido o emprego de fogo e de capina química para limpeza dos lotes. Todo entulho, resto ou material assemelhado deverá ser acondicionado e destinado ao local apropriado.',
+        textoMotivoPadrao: valor.textoMotivoPadrao || 'Verificação de irregularidade situada no endereço: {endereco}, BAIRRO {bairro}, MUNICÍPIO DE {cidade}/{uf} – CEP: {cep}, tendo como ponto de referência: {referencia}.',
+        textoOrientacoes: valor.textoOrientacoes || 'É proibido o emprego de fogo e de capina química para a limpeza dos lotes.\nTodo o entulho/resto ou assemelhado deverá ser acondicionado; e destinado ao local apropriado.',
+        textoPrazoRegularizacao: valor.textoPrazoRegularizacao || 'FICA NOTIFICADO(A) a regularizar a situação do lote em {dias} dias corridos a partir do recebimento desta.',
+        textoBaseLegalNotificacao: valor.textoBaseLegalNotificacao || 'O OBJETIVO DESTA NOTIFICAÇÃO É ATENDER A CONFORMIDADE MUNICIPAL NAS LEIS:\n\nLei Ordinária nº. 5.198/2011 – Art. 6º. Os proprietários de terreno(s), edificados ou não, serão responsáveis pela limpeza dele(s), bem como da(s) calçada(s), mantendo-o(s) permanentemente em perfeito estado de limpeza e capinados, evitando que sejam utilizados como depósito de resíduos de qualquer natureza.\n\nLei Complementar nº. 06/1996 - Art. 28º - O infrator tem o prazo de oito (08) dias corridos para apresentar defesa escrita, que deve ser encaminhada para a SMMAM para decisão final. (Direito à ampla defesa e ao contraditório)',
+        textoQrCode: valor.textoQrCode || 'Após a limpeza do terreno, ou em caso de dúvidas, aponte a câmera do celular para o QR Code ao lado e envie as fotos da limpeza para o WhatsApp da Fiscalização (54) 3055-7211. A mensagem já vai pronta com o número desta notificação.',
         textoApresentacao: valor.textoApresentacao || 'Secretaria Municipal do Meio Ambiente (SMMAM) — Setor de Fiscalização\nRua 10 de Novembro, 190 — Cidade Alta\nFone/Whats: 54 3055-7211'
     };
 }

@@ -9,13 +9,16 @@ const REGION = "southamerica-east1";
 const validTypes = new Set(["notificacao", "auto"]);
 const validStages = new Set(["rascunho", "aguardando_postagem_ar", "ar_postado", "ar_em_transito", "ar_entregue_pendente_ciencia", "ar_devolvido", "prazo_regularizacao", "prorrogacao_solicitada", "prazo_prorrogado", "vistoria_retorno", "limpeza_confirmada", "irregularidade_pendente", "recebido", "triagem", "analise_tecnica", "vistoria", "aguardando_complementacao", "parecer", "decisao", "deferido", "indeferido", "arquivado"]);
 const stageSlaDays = { rascunho: 0, aguardando_postagem_ar: 2, ar_postado: 5, ar_em_transito: 5, ar_entregue_pendente_ciencia: 2, ar_devolvido: 2, prazo_regularizacao: 0, prorrogacao_solicitada: 2, prazo_prorrogado: 0, vistoria_retorno: 5, limpeza_confirmada: 0, irregularidade_pendente: 2, recebido: 2, triagem: 5, analise_tecnica: 10, vistoria: 10, aguardando_complementacao: 0, parecer: 7, decisao: 5, deferido: 0, indeferido: 0, arquivado: 0 };
-const LEGAL_DEADLINES = { notificationRegularization: 60, autoDefense: 8 };
+const LEGAL_DEADLINES = { notificationRegularization: 15, autoDefense: 8 };
 const DEFAULT_DOCUMENT_PARAMETERS = Object.freeze({
-  prazoRegularizacaoDias: 60,
+  prazoRegularizacaoDias: 15,
   prazoDefesaDias: 8,
   valorURM: 0,
-  textoMotivoPadrao: "Verificação de irregularidade situada no endereço informado neste documento.",
-  textoOrientacoes: "É proibido o emprego de fogo e de capina química para limpeza dos lotes. Todo entulho, resto ou material assemelhado deverá ser acondicionado e destinado ao local apropriado.",
+  textoMotivoPadrao: "Verificação de irregularidade situada no endereço: {endereco}, BAIRRO {bairro}, MUNICÍPIO DE {cidade}/{uf} – CEP: {cep}, tendo como ponto de referência: {referencia}.",
+  textoOrientacoes: "É proibido o emprego de fogo e de capina química para a limpeza dos lotes.\nTodo o entulho/resto ou assemelhado deverá ser acondicionado; e destinado ao local apropriado.",
+  textoPrazoRegularizacao: "FICA NOTIFICADO(A) a regularizar a situação do lote em {dias} dias corridos a partir do recebimento desta.",
+  textoBaseLegalNotificacao: "O OBJETIVO DESTA NOTIFICAÇÃO É ATENDER A CONFORMIDADE MUNICIPAL NAS LEIS:\n\nLei Ordinária nº. 5.198/2011 – Art. 6º. Os proprietários de terreno(s), edificados ou não, serão responsáveis pela limpeza dele(s), bem como da(s) calçada(s), mantendo-o(s) permanentemente em perfeito estado de limpeza e capinados, evitando que sejam utilizados como depósito de resíduos de qualquer natureza.\n\nLei Complementar nº. 06/1996 - Art. 28º - O infrator tem o prazo de oito (08) dias corridos para apresentar defesa escrita, que deve ser encaminhada para a SMMAM para decisão final. (Direito à ampla defesa e ao contraditório)",
+  textoQrCode: "Após a limpeza do terreno, ou em caso de dúvidas, aponte a câmera do celular para o QR Code ao lado e envie as fotos da limpeza para o WhatsApp da Fiscalização (54) 3055-7211. A mensagem já vai pronta com o número desta notificação.",
   textoApresentacao: "Secretaria Municipal do Meio Ambiente (SMMAM) — Setor de Fiscalização\nRua 10 de Novembro, 190 — Cidade Alta\nFone/Whats: 54 3055-7211",
 });
 
@@ -75,6 +78,9 @@ function normalizedDocumentParameters(value = {}) {
     valorURM: boundedNumber(value.valorURM, DEFAULT_DOCUMENT_PARAMETERS.valorURM, 0, 1000000),
     textoMotivoPadrao: sanitizeText(value.textoMotivoPadrao || DEFAULT_DOCUMENT_PARAMETERS.textoMotivoPadrao, 1000),
     textoOrientacoes: sanitizeText(value.textoOrientacoes || DEFAULT_DOCUMENT_PARAMETERS.textoOrientacoes, 2000),
+    textoPrazoRegularizacao: sanitizeText(value.textoPrazoRegularizacao || DEFAULT_DOCUMENT_PARAMETERS.textoPrazoRegularizacao, 1000),
+    textoBaseLegalNotificacao: sanitizeText(value.textoBaseLegalNotificacao || DEFAULT_DOCUMENT_PARAMETERS.textoBaseLegalNotificacao, 4000),
+    textoQrCode: sanitizeText(value.textoQrCode || DEFAULT_DOCUMENT_PARAMETERS.textoQrCode, 1500),
     textoApresentacao: sanitizeText(value.textoApresentacao || DEFAULT_DOCUMENT_PARAMETERS.textoApresentacao, 1000),
   };
 }

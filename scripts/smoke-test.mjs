@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { extrairEventoRastreamento, normalizarCodigoAR } from '../js/correios-provider.js';
 
-const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide, functionsSource, workflow, territory, evidence, legalDeadlines, legalBasis] = await Promise.all([
+const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privacyNotice, continuityGuide, functionsSource, workflow, territory, evidence, legalDeadlines, legalBasis, authModule] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../js/app.js', import.meta.url), 'utf8'),
   readFile(new URL('../workers/ar-sync-worker.mjs', import.meta.url), 'utf8'),
@@ -17,6 +17,7 @@ const [html, app, worker, firestoreRules, firestoreIndexes, storageRules, privac
   readFile(new URL('../js/services/evidence.js', import.meta.url), 'utf8'),
   readFile(new URL('../js/core/legal-deadlines.js', import.meta.url), 'utf8'),
   readFile(new URL('../BASE_LEGAL_PRAZOS_DEFESA.md', import.meta.url), 'utf8'),
+  readFile(new URL('../js/modules/auth.js', import.meta.url), 'utf8'),
 ]);
 
 assert.match(html, /Hub de aplicações/);
@@ -25,7 +26,7 @@ assert.match(html, /Nova Notificação/);
 assert.doesNotMatch(html, /Acesso Rápido \(Visitante\)/);
 assert.doesNotMatch(app, /const novoPerfil = \{ nome: "Humberto"/);
 assert.match(app, /where\("setor", "==", meuSetor\)/);
-assert.match(app, /acesso de demonstração foi desativado/i);
+assert.match(authModule, /acesso de demonstração foi desativado/i);
 assert.match(firestoreRules, /request\.auth != null/);
 assert.doesNotMatch(firestoreRules, /allow read, write: if true/);
 assert.match(storageRules, /iptu_backup/);
@@ -93,11 +94,14 @@ assert.match(functionsSource, /acompanhamentos/);
 assert.match(workflow, /WORKFLOW_STAGES/);
 assert.match(territory, /TEAM_1/);
 assert.match(evidence, /uploadEvidence/);
-assert.match(html, /60 dias corridos para regularização/);
+assert.match(html, /15 dias corridos para regularização/);
 assert.match(html, /8 dias corridos, a partir da ciência, para apresentar defesa escrita/);
 assert.match(app, /updateDocument/);
 assert.match(functionsSource, /prazoRegularizacaoDias/);
 assert.match(functionsSource, /prazoDefesaDias/);
+assert.match(functionsSource, /textoPrazoRegularizacao/);
+assert.match(functionsSource, /textoBaseLegalNotificacao/);
+assert.match(functionsSource, /textoQrCode/);
 assert.match(firestoreRules, /Documento principal é gravado e acompanhado somente por Functions auditáveis/);
 assert.match(firestoreRules, /allow update: if false/);
 assert.match(legalDeadlines, /notificationRegularization/);
@@ -114,13 +118,18 @@ assert.match(app, /registrarAcompanhamentoNotificacao/);
 assert.doesNotMatch(firestoreRules, /allow update: if approved\(\) && sameSector\(resource\.data\).*notificacoes/s);
 assert.match(html, /2\. NOTIFICAÇÃO N°/);
 assert.match(html, /3\. DATA DA NOTIFICAÇÃO/);
-assert.match(html, /7\. CARTEIRA IDENTIDADE\/CNTPS/);
-assert.match(html, /14\. O não atendimento desta notificação poderá caracterizar crime de desobediência, nos termos do art\. 330 do Código Penal\./);
-assert.match(html, /15\. MOTIVO DA NOTIFICAÇÃO/);
+assert.match(html, /CARTEIRA IDENTIDADE\/CNH/);
+assert.doesNotMatch(html, /O não atendimento desta notificação poderá caracterizar crime de desobediência/);
+assert.match(html, /MOTIVO DA NOTIFICAÇÃO/);
 assert.match(html, /id="qrcodeWhats"/);
+assert.match(html, /id="pQrCodeTexto"/);
 assert.match(html, /\(54\) 3055-7211/);
 assert.match(html, /Recebi o presente em ____\/____\/________\./);
+assert.match(html, /INFRAÇÃO - NECESSITA A LIMPEZA DE/);
+assert.match(html, /ENDEREÇO DE APRESENTAÇÃO:/);
 assert.match(app, /initAuthModule/);
+assert.doesNotMatch(app, /initializeAppCheck/);
+assert.doesNotMatch(app, /ReCaptchaEnterpriseProvider/);
 assert.match(app, /initImpressoesModule/);
 assert.match(app, /initBuscasModule/);
 assert.match(functionsSource, /cleanupOrphanEvidences/);

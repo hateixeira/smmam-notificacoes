@@ -226,12 +226,12 @@
                         </div>
 
                         <div style="font-weight: bold; margin: 15px 0 5px 0; color: #1b365d; font-size:13px; border-top: 1px solid #eee; padding-top: 10px;">Ciência e prazo legal de regularização</div>
-                        <p id="textoPrazoRegularizacao" style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">Art. 25 da LC Municipal nº 6/1996: 60 dias corridos para regularização, contados da ciência/recebimento. Em caso de AR, a data pode ser atualizada após entrega.</p>
+                        <p id="textoPrazoRegularizacao" style="font-size: 11px; color: #64748b; margin: 0 0 10px 0;">Art. 25 da LC Municipal nº 6/1996: 15 dias corridos para regularização, contados da ciência/recebimento. Em caso de AR, a data pode ser atualizada após entrega.</p>
                         
                         <div class="form-row">
                             <div class="form-group"><label>Código AR (Opcional)</label><input type="text" id="codigoAR" placeholder="BR123456789BR" maxlength="13"></div>
                             <div class="form-group"><label>Data de Recebimento / Ciência</label><input type="date" id="dataRecebimento"></div>
-                            <div class="form-group"><label>Prazo p/ regularizar</label><input type="text" id="prazoDias" value="60 dias corridos" disabled style="font-weight: bold; color: #1b365d; background:#eff6ff;"></div>
+                            <div class="form-group"><label>Prazo p/ regularizar</label><input type="text" id="prazoDias" value="15 dias corridos" disabled style="font-weight: bold; color: #1b365d; background:#eff6ff;"></div>
                             <input type="hidden" id="statusRetornoAR" value="aguardando">
                         </div>
                         <div id="prazoRegularizacaoAviso" style="font-size:11px; color:#1e3a8a; margin-top:-2px; margin-bottom:10px;"></div>
@@ -550,13 +550,16 @@
 
                         <div class="panel-container" style="border: 2px solid #1f5261;">
                             <h3 style="margin-top: 0; color: #1b365d; font-size: 15px;">Parâmetros do modelo documental</h3>
-                            <p style="font-size: 11px; color: #475569; line-height: 1.45;">Aplicam-se aos novos documentos do setor e ficam registrados no documento emitido. Alterações em prazos legais exigem validação jurídica e geram auditoria.</p>
+                            <p style="font-size: 11px; color: #475569; line-height: 1.45;">Aplicam-se aos novos documentos do setor e ficam registrados no documento emitido. O padrão do Tipo 1 segue o modelo institucional: <strong>15 dias corridos</strong> para regularização. Alterações em prazos legais exigem validação jurídica e geram auditoria.</p>
                             <div class="form-row">
-                                <div class="form-group"><label>Regularização (dias corridos)</label><input type="number" id="configPrazoRegularizacao" min="1" max="3650" value="60"></div>
+                                <div class="form-group"><label>Regularização (dias corridos)</label><input type="number" id="configPrazoRegularizacao" min="1" max="3650" value="15"></div>
                                 <div class="form-group"><label>Defesa escrita (dias corridos)</label><input type="number" id="configPrazoDefesa" min="1" max="3650" value="8"></div>
                             </div>
-                            <div class="form-group"><label>Texto padrão do motivo</label><textarea id="configTextoMotivo" rows="3"></textarea></div>
+                            <div class="form-group"><label>Texto padrão do motivo <small>(aceita {endereco}, {bairro}, {cidade}, {uf}, {cep} e {referencia})</small></label><textarea id="configTextoMotivo" rows="3"></textarea></div>
                             <div class="form-group"><label>Orientações impressas</label><textarea id="configTextoOrientacoes" rows="4"></textarea></div>
+                            <div class="form-group"><label>Texto do prazo de regularização <small>(aceita {dias})</small></label><textarea id="configTextoPrazo" rows="2"></textarea></div>
+                            <div class="form-group"><label>Texto das bases legais da notificação</label><textarea id="configTextoBaseLegal" rows="7"></textarea></div>
+                            <div class="form-group"><label>Texto explicativo do QR Code</label><textarea id="configTextoQrCode" rows="4"></textarea></div>
                             <div class="form-group"><label>Endereço de apresentação</label><textarea id="configTextoApresentacao" rows="3"></textarea></div>
                             <button type="button" class="btn-primary" onclick="salvarParametrosDocumento()" style="width: 100%;">Salvar parâmetros do setor</button>
                         </div>
@@ -723,7 +726,7 @@
                 </td>
                 <td colspan="3" style="padding: 8px; vertical-align: middle; text-align: center;">
                     <div style="font-weight: bold; font-size: 13px; text-transform: uppercase; letter-spacing: 0.3px;">Prefeitura de Bento Gonçalves</div>
-                    <div id="printSecretaria" style="font-size: 10.5px; margin-top: 2px; font-weight: bold;">Secretaria de Meio Ambiente</div>
+                    <div id="printSecretaria" style="font-size: 10.5px; margin-top: 2px; font-weight: bold;">Secretaria Municipal de Meio Ambiente - SMMAM</div>
                     <div style="font-size: 10.5px; margin-top: 1px;">Setor de Fiscalização</div>
                 </td>
                 <td style="background-color: #fafafa; vertical-align: middle;">
@@ -739,20 +742,20 @@
                     </div>
                 </td>
             </tr>
-            <tr><td colspan="5"><span class="cell-label">5. NOME DO NOTIFICADO (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
+            <tr><td colspan="5"><span class="cell-label">NOME DO NOTIFICADO(A) (OU RAZÃO SOCIAL)</span><div class="cell-value" id="pNome" style="font-weight: bold; text-transform: uppercase;"></div></td></tr>
             <tr>
-                <td colspan="4"><span class="cell-label">6. CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
-                <td><span class="cell-label">7. CARTEIRA IDENTIDADE/CNTPS</span><div class="cell-value" id="pIdentidade">____________________</div></td>
+                <td colspan="4"><span class="cell-label">CPF OU CNPJ</span><div class="cell-value" id="pDoc" style="font-weight: bold;"></div></td>
+                <td><span class="cell-label">CARTEIRA IDENTIDADE/CNH</span><div class="cell-value" id="pIdentidade">____________________</div></td>
             </tr>
             <tr>
-                <td colspan="4"><span class="cell-label">8. ENDEREÇO DE CORRESPONDÊNCIA</span><div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div></td>
-                <td><span class="cell-label">9. TELEFONE</span><div class="cell-value" id="pTelefone"></div></td>
+                <td colspan="4"><span class="cell-label">ENDEREÇO DE CORRESPONDÊNCIA</span><div class="cell-value" id="pEndereco" style="text-transform: uppercase;"></div></td>
+                <td><span class="cell-label">TELEFONE</span><div class="cell-value" id="pTelefone"></div></td>
             </tr>
             <tr>
-                <td colspan="2"><span class="cell-label">10. BAIRRO/DISTRITO</span><div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div></td>
-                <td><span class="cell-label">11. MUNICÍPIO</span><div class="cell-value" id="pCidadePrint" style="font-weight: bold;">BENTO GONÇALVES</div></td>
-                <td><span class="cell-label">12. CEP</span><div class="cell-value" id="pCep"></div></td>
-                <td><span class="cell-label">13. UF</span><div class="cell-value" id="pUfPrint" style="font-weight: bold;">RS</div></td>
+                <td colspan="2"><span class="cell-label">BAIRRO/DISTRITO</span><div class="cell-value" id="pBairro" style="text-transform: uppercase;"></div></td>
+                <td><span class="cell-label">MUNICÍPIO</span><div class="cell-value" id="pCidadePrint" style="font-weight: bold;">BENTO GONÇALVES</div></td>
+                <td><span class="cell-label">CEP</span><div class="cell-value" id="pCep"></div></td>
+                <td><span class="cell-label">UF</span><div class="cell-value" id="pUfPrint" style="font-weight: bold;">RS</div></td>
             </tr>
             <tr>
                 <td><span class="cell-label">DISTRITO</span><div class="cell-value" id="pCadDistrito" style="font-weight: bold; text-align: center;"></div></td>
@@ -761,33 +764,31 @@
                 <td><span class="cell-label">LOTE</span><div class="cell-value" id="pCadLote" style="font-weight: bold; text-align: center;"></div></td>
                 <td style="background-color: #fafafa;"><span class="cell-label">CADASTRO IMOBILIÁRIO</span><div class="cell-value" id="pCadImob" style="font-weight: bold; font-size: 12px;"></div></td>
             </tr>
-            <tr><td colspan="5" class="alert-row" style="padding: 6px;">14. O não atendimento desta notificação poderá caracterizar crime de desobediência, nos termos do art. 330 do Código Penal.</td></tr>
-            <tr><td colspan="5" class="section-title">15. MOTIVO DA NOTIFICAÇÃO</td></tr>
+            <tr><td colspan="5" class="section-title">MOTIVO DA NOTIFICAÇÃO</td></tr>
             <tr>
                 <td colspan="5" style="padding: 10px; line-height: 1.45;">
                     <p id="pMotivoNotificacao" style="margin: 0 0 10px 0;"></p>
+                    <div class="print-infracao-label">INFRAÇÃO - NECESSITA A LIMPEZA DE:</div>
                     <div id="boxInfracoesImpresso" style="margin: 8px 0; display:flex; flex-wrap:wrap; gap:10px;">
-                        <!-- O Javascript vai inserir os ( X ) Mato, ( ) Entulhos dinamicamente aqui -->
+                        <!-- O Javascript insere as opções marcadas com ( X ) conforme o cadastro do setor. -->
                     </div>
-                    <p style="margin: 6px 0;"><strong>Ponto de Referência:</strong> <span id="pRef"></span></p>
-                    <p style="margin: 6px 0;"><strong>OBS:</strong> <span id="pObs"></span></p>
-
-                    <p style="margin: 14px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
+                    <p style="margin: 8px 0 0 0; white-space: pre-line;" id="pOrientacoesImpressao"></p>
+                    <p style="margin: 12px 0 8px 0; border-top: 1px dashed #000; padding-top: 10px;">
                         <strong><span id="pPrazoImpressao"></span></strong>
                     </p>
-                    <ul class="bullet-rules" id="listaTextosLegaisImpresso" style="list-style: none; margin-left: 0;">
-                        <!-- O Javascript vai inserir as bases legais marcadas com (X) -->
+                    <p style="margin: 12px 0 0 0; white-space: pre-line;" id="pBaseLegalNotificacao"></p>
+                    <ul class="bullet-rules" id="listaTextosLegaisImpresso" style="list-style: none; margin: 6px 0 0 0; display:none;">
+                        <!-- Mantido para compatibilidade com infrações configuradas em versões anteriores. -->
                     </ul>
-                    <p style="margin: 12px 0 0 0; white-space: pre-line;" id="pOrientacoesImpressao"></p>
                 </td>
             </tr>
             <tr>
                 <td colspan="4">
-                    <span class="cell-label">NOME DO NOTIFICANTE</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
-                    <span class="cell-label">RE / MATRÍCULA</span><div class="cell-value" id="pMatricula"></div>
+                    <span class="cell-label">NOME DO SERVIDOR RESPONSÁVEL</span><div class="cell-value" id="pFiscal" style="font-weight: bold; text-transform: uppercase; margin-bottom: 5px;"></div>
+                    <span class="cell-label">RE / MATRÍCULA:</span><div class="cell-value" id="pMatricula"></div>
                 </td>
                 <td>
-                    <span class="cell-label">18. ENDEREÇO DE APRESENTAÇÃO</span>
+                    <span class="cell-label">ENDEREÇO DE APRESENTAÇÃO:</span>
                     <div id="pEnderecoSecretaria" class="cell-value" style="font-size: 9px; line-height: 1.4;">
                         <strong id="pEnderecoSecretariaNome">SMMAM / Setor Fiscalização</strong><br>
                         <span id="pEnderecoSecretariaLocal">Rua 10 de Novembro, 190 – Cidade Alta<br>Fone/whats: 54 3055-7211</span>
@@ -797,7 +798,7 @@
         </table>
         <div class="qrcode-whats-container">
             <div id="qrcodeWhats" class="qrcode-whats-box" aria-label="QR Code para contato via WhatsApp"></div>
-            <p class="qrcode-whats-texto">Após realizar a limpeza do terreno, ou em caso de dúvidas, aponte a câmera do celular para o QR Code ao lado e envie as fotos da limpeza para o WhatsApp da Fiscalização <strong>(54) 3055-7211</strong>. A mensagem já vai pronta com o número desta notificação.</p>
+            <p id="pQrCodeTexto" class="qrcode-whats-texto">Após a limpeza do terreno, ou em caso de dúvidas, aponte a câmera do celular para o QR Code ao lado e envie as fotos da limpeza para o WhatsApp da Fiscalização (54) 3055-7211. A mensagem já vai pronta com o número desta notificação.</p>
         </div>
         <div class="signature-container">
             <div class="sig-box"><br><span class="cell-label">ASSINATURA DO NOTIFICANTE</span></div>
@@ -807,6 +808,6 @@
 
     <script src="js/vendor/qrcode.min.js"></script>
 
-    <script type="module" src="js/app.js?v=20260828.1"></script>
+    <script type="module" src="js/app.js?v=20260831.2"></script>
 </body>
 </html>

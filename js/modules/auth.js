@@ -1,5 +1,19 @@
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+function mensagemErroAutenticacao(error) {
+    const mensagens = {
+        'auth/invalid-credential': 'e-mail ou senha incorretos.',
+        'auth/invalid-login-credentials': 'e-mail ou senha incorretos.',
+        'auth/user-not-found': 'usuário não encontrado.',
+        'auth/wrong-password': 'senha incorreta.',
+        'auth/user-disabled': 'esta conta está bloqueada no Firebase.',
+        'auth/too-many-requests': 'muitas tentativas. Aguarde alguns minutos e tente novamente.',
+        'auth/network-request-failed': 'falha de conexão. Verifique a internet.',
+        'auth/operation-not-allowed': 'o login por e-mail e senha não está habilitado no Firebase.',
+    };
+    return mensagens[error?.code] || error?.message || 'erro desconhecido de autenticação.';
+}
 
 export function initAuthModule({ auth, db, mostrarLoading, mostrarToast, registrarLog, navegarPara, carregarDadosNuvem }) {
     window.realizarLogin = function() {
@@ -11,7 +25,7 @@ export function initAuthModule({ auth, db, mostrarLoading, mostrarToast, registr
             .catch((err) => {
                 mostrarLoading(false);
                 console.error("Falha de autenticação:", err);
-                alert("Erro ao entrar. Verifique suas credenciais.");
+                alert(`Não foi possível entrar: ${mensagemErroAutenticacao(err)}`);
             });
     };
 
@@ -42,13 +56,23 @@ export function initAuthModule({ auth, db, mostrarLoading, mostrarToast, registr
         const nome = document.getElementById('regNome').value.trim();
         const cargo = document.getElementById('regCargo').value.trim();
         const setor = document.getElementById('regSetor').value;
+        const cpf = document.getElementById('regCpf')?.value.trim() || '';
         const matricula = document.getElementById('regMatricula').value.trim();
         const telefone = document.getElementById('regTelefone').value.trim();
-        const email = document.getElementById('regEmail').value.trim();
+        const email = document.getElementById('regEmail').value.trim().toLowerCase();
         const senha = document.getElementById('regPassword').value;
 
-        if (!nome || !cargo || !email || !senha || !matricula) return alert("Preencha todos os campos obrigatórios.");
+        if (!nome || !cargo || !setor || !email || !senha || !matricula) return alert("Preencha todos os campos obrigatórios.");
         if (senha.length < 6) return alert("A senha deve ter no mínimo 6 caracteres.");
+
+        try {
+            const vipSnap = await getDoc(doc(db, "configuracoes", "lista_vip"));
+            const listaVip = vipSnap.exists() && Array.isArray(vipSnap.data().emails) ? vipSnap.data().emails : [];
+            const dominioInstitucional = email.endsWith('@bentogoncalves.rs.gov.br');
+            if (!dominioInstitucional && !listaVip.includes(email)) return alert("Acesso negado: apenas e-mails @bentogoncalves.rs.gov.br ou previamente autorizados podem solicitar acesso.");
+        } catch (error) {
+            console.warn('Não foi possível verificar a lista de exceções de domínio.', error);
+        }
 
         mostrarLoading(true, "Enviando solicitação de acesso...");
         try {
@@ -58,13 +82,15 @@ export function initAuthModule({ auth, db, mostrarLoading, mostrarToast, registr
                 nome,
                 cargo,
                 setor,
+                cpf: cpf || null,
                 matricula,
-                telefone,
+                telefone: telefone || null,
                 email,
                 status: "pendente",
                 nivel: "leitor",
-                criadoEm: new Date().toISOString()
+                dataCadastro: new Date().toISOString()
             });
+            await sendEmailVerification(user);
             mostrarLoading(false);
             window.toggleAuthMode();
             mostrarToast("Cadastro realizado! Aguardando liberação da Chefia.");
@@ -80,7 +106,7 @@ export function initAuthModule({ auth, db, mostrarLoading, mostrarToast, registr
         if (!email) return alert("Digite seu e-mail institucional no campo de login para recuperar a senha.");
         sendPasswordResetEmail(auth, email.trim())
             .then(() => alert("E-mail de redefinição de senha enviado com sucesso!"))
-            .catch((err) => alert("Erro ao enviar e-mail: " + err.message));
+            .catch((err) => alert(`Não foi possível enviar o e-mail de recuperação: ${mensagemErroAutenticacao(err)}`));
     };
 
     window.realizarLogout = function() {
