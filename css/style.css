@@ -150,6 +150,9 @@ table.data-table tr:hover { background-color: #f1f5f9; }
 .preview-document-sheet .cell-label { font-size:8.5px; font-weight:bold; display:block; text-transform:uppercase; margin-bottom:3px; }
 .preview-document-sheet .cell-value { font-size:11.5px; font-weight:normal; }
 .preview-document-sheet .section-title { background:#e6e6e6; font-weight:bold; text-align:center; text-transform:uppercase; font-size:11px; letter-spacing:.5px; }
+.preview-document-sheet .print-infracao-label { font-weight:bold; text-transform:uppercase; margin-top:5px; }
+.preview-document-sheet #pMotivoNotificacao, .preview-document-sheet #pOrientacoesImpressao, .preview-document-sheet #pBaseLegalNotificacao { white-space:pre-line; }
+.preview-document-sheet #pBaseLegalNotificacao { font-size:9.5px; line-height:1.35; }
 .preview-document-sheet .bullet-rules { margin:6px 0 4px 15px; padding:0; line-height:1.35; }
 .preview-document-sheet .bullet-rules li { margin-bottom:3px; }
 .preview-document-sheet .signature-container { display:flex; justify-content:space-between; margin-top:20px; padding:0 10px 4px; }
@@ -196,7 +199,9 @@ table.data-table tr:hover { background-color: #f1f5f9; }
 .cell-value { font-size: 11.5px; font-weight: normal; }
 .alert-row { text-align: center; font-weight: bold; font-size: 9.5px; background-color: #fff; text-transform: uppercase; letter-spacing: 0.2px; }
 .section-title { background-color: #e6e6e6; font-weight: bold; text-align: center; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
-.main-grid #pMotivoNotificacao { white-space: pre-line; }
+.print-infracao-label { font-weight: bold; text-transform: uppercase; margin-top: 5px; }
+.main-grid #pMotivoNotificacao, .main-grid #pOrientacoesImpressao, .main-grid #pBaseLegalNotificacao { white-space: pre-line; }
+.main-grid #pBaseLegalNotificacao { font-size: 9.5px; line-height: 1.35; }
 .bullet-rules { margin: 6px 0 4px 15px; padding: 0; line-height: 1.35; }
 .bullet-rules li { margin-bottom: 3px; }
 .signature-container { display: flex; justify-content: space-between; margin-top: 20px; padding: 0 10px 4px; }

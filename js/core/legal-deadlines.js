@@ -1,5 +1,5 @@
 export const LEGAL_DEADLINES = Object.freeze({
-  notificationRegularization: { days: 60, article: "Art. 25, LC Municipal nº 6/1996 (redação da LC nº 245/2023)", label: "Regularização" },
+  notificationRegularization: { days: 15, article: "Art. 25, LC Municipal nº 6/1996 (padrão do modelo Tipo 1)", label: "Regularização" },
   autoDefense: { days: 8, article: "Art. 28, LC Municipal nº 6/1996", label: "Defesa escrita" },
   autoPayment: { days: 8, article: "Art. 29, §1º, LC Municipal nº 6/1996", label: "Pagamento da multa" },
 });
