@@ -295,8 +295,10 @@ exports.updateDocument = onCall({ region: REGION, invoker: "public" }, async (re
     delete safePayload.statusTramitacao;
     const year = new Date().getFullYear();
     let numeroAtualizado = currentData.numNotif || documentId;
-    if (payload.numNotifManual) {
-      const textoNumeroManual = sanitizeText(payload.numNotif, 40);
+    const textoNumeroInformado = sanitizeText(payload.numNotif, 40);
+    const numeroFoiAlterado = textoNumeroInformado && textoNumeroInformado.toUpperCase() !== String(currentData.numNotif || '').trim().toUpperCase();
+    if (payload.numNotifManual || numeroFoiAlterado) {
+      const textoNumeroManual = textoNumeroInformado;
       const numeroManual = normalizarNumeroManual(textoNumeroManual, type, year);
       if (!numeroManual) {
         throw new HttpsError("invalid-argument", `Número manual inválido. Use ${type === "notificacao" ? "0001B/" : "0001/"}${year}.`);
