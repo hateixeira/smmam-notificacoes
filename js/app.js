@@ -1636,6 +1636,18 @@ window.atualizarDashboardGraficos = function() {
     if(document.getElementById('dashVencidas')) document.getElementById('dashVencidas').innerText = venc; 
 }
 
+function numeroParaOrdenacao(valor) {
+    const encontrado = String(valor || '').trim().match(/^(\d+)/);
+    return encontrado ? Number(encontrado[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function compararDocumentosPorNumero(a, b) {
+    const numeroA = numeroParaOrdenacao(a.numNotif);
+    const numeroB = numeroParaOrdenacao(b.numNotif);
+    if (numeroA !== numeroB) return numeroA - numeroB;
+    return String(a.numNotif || '').localeCompare(String(b.numNotif || ''), 'pt-BR');
+}
+
 let searchTimeout;
 window.onBuscaKeyUp = function() {
     clearTimeout(searchTimeout);
@@ -1670,7 +1682,17 @@ window.renderizarPainel = function() {
         }); 
     } else if (window.filtroStatusAtual === 'Com AR') { filtrados = filtrados.filter(i => i.codigoAR && i.codigoAR.trim() !== ""); }
     
-    if (window.colunaOrdenacao) { filtrados.sort((a, b) => { let valA = (a[window.colunaOrdenacao] || '').toLowerCase(); let valB = (b[window.colunaOrdenacao] || '').toLowerCase(); if (valA < valB) return window.ordemCrescente ? -1 : 1; if (valA > valB) return window.ordemCrescente ? 1 : -1; return 0; }); }
+    if (window.colunaOrdenacao) {
+        filtrados.sort((a, b) => {
+            if (window.colunaOrdenacao === 'numNotif') {
+                const resultado = compararDocumentosPorNumero(a, b);
+                return window.ordemCrescente ? resultado : -resultado;
+            }
+            let valA = (a[window.colunaOrdenacao] || '').toLowerCase(); let valB = (b[window.colunaOrdenacao] || '').toLowerCase(); if (valA < valB) return window.ordemCrescente ? -1 : 1; if (valA > valB) return window.ordemCrescente ? 1 : -1; return 0;
+        });
+    } else {
+        filtrados.sort(compararDocumentosPorNumero);
+    }
     window.itensFiltradosAtual = filtrados; 
     
     renderDocumentRows(corpo, filtrados, {
