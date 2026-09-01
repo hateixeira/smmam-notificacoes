@@ -293,11 +293,29 @@ exports.updateDocument = onCall({ region: REGION, invoker: "public" }, async (re
     if (type === "notificacao" && currentData.statusNotificacao !== "rascunho") throw new HttpsError("failed-precondition", "Notificações emitidas são imutáveis. Use o acompanhamento para AR, prorrogação, vistoria ou limpeza.");
     const safePayload = safeDocumentPayload(payload, type);
     delete safePayload.statusTramitacao;
+    const year = new Date().getFullYear();
+    let numeroAtualizado = currentData.numNotif || documentId;
+    if (payload.numNotifManual) {
+      const textoNumeroManual = sanitizeText(payload.numNotif, 40);
+      const numeroManual = normalizarNumeroManual(textoNumeroManual, type, year);
+      if (!numeroManual) {
+        throw new HttpsError("invalid-argument", `Número manual inválido. Use ${type === "notificacao" ? "0001B/" : "0001/"}${year}.`);
+      }
+      const existentes = await db.collection("notificacoes").where("setor", "==", setor).get();
+      const duplicado = existentes.docs.some((registro) => {
+        if (registro.id === documentId) return false;
+        const data = registro.data() || {};
+        const mesmoTipo = data.tipoDocumento ? data.tipoDocumento === type : type === "notificacao";
+        return mesmoTipo && numeroSequencialPersistido(data.numNotif, type, year) === numeroManual.value;
+      });
+      if (duplicado) throw new HttpsError("already-exists", `O número ${numeroManual.formatted} já existe neste setor.`);
+      numeroAtualizado = numeroManual.formatted;
+    }
     const parameters = normalizedDocumentParameters(currentData.parametrosDocumento || configuredParameters);
     const legalFields = legalDeadlineFields(safePayload, type, parameters);
     const emitindoRascunho = type === "notificacao" && currentData.statusNotificacao === "rascunho" && safePayload.statusNotificacao !== "rascunho";
     const stageDaEmissao = emitindoRascunho ? initialDocumentStage(safePayload, type) : null;
-    transaction.update(documentRef, { ...safePayload, ...legalFields, parametrosDocumento: parameters, ...(stageDaEmissao ? { statusTramitacao: stageDaEmissao, prazoSlaEm: dueDateFor(stageDaEmissao), dataUltimaMovimentacao: admin.firestore.FieldValue.serverTimestamp() } : {}), dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
+    transaction.update(documentRef, { ...safePayload, ...legalFields, numNotif: numeroAtualizado, parametrosDocumento: parameters, ...(stageDaEmissao ? { statusTramitacao: stageDaEmissao, prazoSlaEm: dueDateFor(stageDaEmissao), dataUltimaMovimentacao: admin.firestore.FieldValue.serverTimestamp() } : {}), dataUltimaEdicao: admin.firestore.FieldValue.serverTimestamp(), editadoPor: profile.nome || request.auth.token.email || "Servidor", atualizadoPorId: request.auth.uid });
     transaction.set(db.collection("logs_auditoria").doc(), { setor: setor, usuarioId: request.auth.uid, usuario: profile.nome || request.auth.token.email || "Servidor", nivel: profile.nivel, acao: `atualizou ${type} e prazos legais`, documentoAlvo: currentData.numNotif || documentId, dataHora: admin.firestore.FieldValue.serverTimestamp(), origem: "backend" });
   });
   return { ok: true };

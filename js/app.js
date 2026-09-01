@@ -531,10 +531,6 @@ window.atualizarAvisosPrazosLegais = function() {
     }
 }
 
-window.sugerirNumero = function(tipo) {
-    return 'Gerado ao salvar';
-}
-
 async function registrarLog(acaoRealizada, alvo) {
     if(!perfilUsuario) return;
     try { await chamarFuncaoSegura('recordAuditEvent', { action: acaoRealizada, documentId: alvo }); } catch(e) { console.warn('Auditoria central indisponível.', e); }
@@ -1756,9 +1752,12 @@ window.carregarParaEditar = async function(id) {
     
     if(item.tipoDocumento === 'auto') {
         window.navegarPara('autos'); window.scrollTo(0,0);
-        if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = item.firebaseId; 
-        if(document.getElementById('autoNum')) document.getElementById('autoNum').value = item.numNotif || ''; 
-        if(document.getElementById('autoData')) document.getElementById('autoData').value = item.dataNotif || ''; 
+        if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = item.firebaseId;
+    if(document.getElementById('autoNum')) {
+        document.getElementById('autoNum').value = item.numNotif || '';
+        document.getElementById('autoNum').dataset.manual = 'false';
+    }
+        if(document.getElementById('autoData')) document.getElementById('autoData').value = item.dataNotif || '';
         if(document.getElementById('dataCienciaAuto')) document.getElementById('dataCienciaAuto').value = item.dataCienciaAuto || '';
         if(document.getElementById('autoNome')) document.getElementById('autoNome').value = item.nome || ''; 
         if(document.getElementById('autoDoc')) document.getElementById('autoDoc').value = item.doc || ''; 
@@ -1782,7 +1781,10 @@ window.carregarParaEditar = async function(id) {
 
     window.navegarPara('notificacoes'); window.scrollTo(0,0);
     if(document.getElementById('editFirebaseIdNotif')) document.getElementById('editFirebaseIdNotif').value = item.firebaseId; 
-    if(document.getElementById('numNotif')) document.getElementById('numNotif').value = item.numNotif || ''; 
+    if(document.getElementById('numNotif')) {
+        document.getElementById('numNotif').value = item.numNotif || '';
+        document.getElementById('numNotif').dataset.manual = 'false';
+    }
     if(document.getElementById('procOuvidoria')) document.getElementById('procOuvidoria').value = item.procOuvidoria || ''; 
     if(document.getElementById('codigoAR')) document.getElementById('codigoAR').value = item.codigoAR || ''; 
     if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = item.statusRetornoAR || 'aguardando';
@@ -1827,6 +1829,8 @@ window.limparFormularios = function() {
     if(document.getElementById('autoForm')) document.getElementById('autoForm').reset(); 
     if(document.getElementById('editFirebaseIdNotif')) document.getElementById('editFirebaseIdNotif').value = ''; 
     if(document.getElementById('editFirebaseIdAuto')) document.getElementById('editFirebaseIdAuto').value = ''; 
+    if(document.getElementById('numNotif')) document.getElementById('numNotif').dataset.manual = 'false';
+    if(document.getElementById('autoNum')) document.getElementById('autoNum').dataset.manual = 'false';
     if(document.getElementById('statusRetornoAR')) document.getElementById('statusRetornoAR').value = 'aguardando'; 
     if(document.getElementById('statusTramitacaoNotif')) document.getElementById('statusTramitacaoNotif').value = 'recebido';
     if(document.getElementById('statusTramitacaoAuto')) document.getElementById('statusTramitacaoAuto').value = 'recebido';
